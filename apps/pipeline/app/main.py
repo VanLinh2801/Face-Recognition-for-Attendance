@@ -1,0 +1,2 @@
+"""Pipeline service entrypoint."""
+

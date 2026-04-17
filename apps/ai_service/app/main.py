@@ -1,0 +1,2 @@
+"""AI service entrypoint."""
+
