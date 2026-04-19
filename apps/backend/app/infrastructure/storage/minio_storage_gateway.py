@@ -1,0 +1,1 @@
+"""MinIO storage gateway implementation."""

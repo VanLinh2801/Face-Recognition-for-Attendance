@@ -1,0 +1,1 @@
+"""Attendance exception use cases."""

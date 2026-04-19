@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/ai_backend/registration_processing_completed.v1.schema.json",
+  "allOf": [
+    {
+      "$ref": "../common/envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_name": {
+          "const": "registration_processing.completed"
+        },
+        "event_version": {
+          "const": "1.0.0"
+        },
+        "producer": {
+          "const": "ai_service"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "person_id",
+            "registration_id",
+            "status",
+            "event_source"
+          ],
+          "properties": {
+            "person_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "registration_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "validated",
+                "indexed",
+                "failed"
+              ]
+            },
+            "failure_code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "failure_message": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "validation_notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "embedding_model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "embedding_version": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "indexed_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "face_image_media_asset": {
+              "anyOf": [
+                {
+                  "$ref": "../common/media_asset_ref.schema.json"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source_media_asset_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            },
+            "event_source": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  ]
+}

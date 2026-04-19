@@ -1,0 +1,1 @@
+"""Person repository abstraction."""

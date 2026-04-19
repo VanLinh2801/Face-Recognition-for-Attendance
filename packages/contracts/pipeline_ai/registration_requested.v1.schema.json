@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/pipeline_ai/registration_requested.v1.schema.json",
+  "allOf": [
+    {
+      "$ref": "../common/envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_name": {
+          "const": "registration.requested"
+        },
+        "event_version": {
+          "const": "1.0.0"
+        },
+        "producer": {
+          "const": "pipeline"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "person_id",
+            "registration_id",
+            "source_media_asset"
+          ],
+          "properties": {
+            "person_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "registration_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "source_media_asset": {
+              "$ref": "../common/media_asset_ref.schema.json"
+            },
+            "prepared_face_media_asset": {
+              "anyOf": [
+                {
+                  "$ref": "../common/media_asset_ref.schema.json"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "captured_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "pipeline_metadata": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

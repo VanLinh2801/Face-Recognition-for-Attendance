@@ -1,0 +1,1 @@
+"""Face registration use cases."""

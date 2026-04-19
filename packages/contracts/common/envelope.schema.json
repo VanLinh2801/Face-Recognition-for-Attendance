@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/common/envelope.schema.json",
+  "title": "ContractEnvelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_name",
+    "event_version",
+    "message_id",
+    "correlation_id",
+    "producer",
+    "occurred_at",
+    "payload"
+  ],
+  "properties": {
+    "event_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "message_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "causation_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "producer": {
+      "type": "string",
+      "enum": [
+        "backend",
+        "pipeline",
+        "ai_service"
+      ]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}

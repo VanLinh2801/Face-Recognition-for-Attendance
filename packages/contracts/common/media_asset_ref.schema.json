@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/common/media_asset_ref.schema.json",
+  "title": "MediaAssetRef",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "storage_provider",
+    "bucket_name",
+    "object_key",
+    "original_filename",
+    "mime_type",
+    "file_size",
+    "asset_type"
+  ],
+  "properties": {
+    "media_asset_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "storage_provider": {
+      "type": "string",
+      "enum": [
+        "minio"
+      ]
+    },
+    "bucket_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "object_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "original_filename": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mime_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "file_size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "checksum": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "asset_type": {
+      "type": "string",
+      "enum": [
+        "registration_face",
+        "recognition_snapshot",
+        "unknown_snapshot",
+        "spoof_snapshot",
+        "face_crop"
+      ]
+    }
+  }
+}

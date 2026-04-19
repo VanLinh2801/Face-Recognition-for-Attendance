@@ -1,0 +1,1 @@
+"""Recognition event transport schemas."""

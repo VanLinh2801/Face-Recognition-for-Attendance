@@ -1,0 +1,1 @@
+"""Attendance exception ORM model."""

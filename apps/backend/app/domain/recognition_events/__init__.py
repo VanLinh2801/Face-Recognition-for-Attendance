@@ -1,0 +1,1 @@
+"""Recognition events domain package."""

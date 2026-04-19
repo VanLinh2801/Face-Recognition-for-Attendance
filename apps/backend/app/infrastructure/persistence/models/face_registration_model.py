@@ -1,0 +1,1 @@
+"""Face registration ORM model."""

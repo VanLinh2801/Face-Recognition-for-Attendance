@@ -1,0 +1,1 @@
+"""Departments API endpoints."""

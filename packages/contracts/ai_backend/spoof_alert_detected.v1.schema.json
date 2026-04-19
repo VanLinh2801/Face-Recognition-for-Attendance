@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/ai_backend/spoof_alert_detected.v1.schema.json",
+  "allOf": [
+    {
+      "$ref": "../common/envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_name": {
+          "const": "spoof_alert.detected"
+        },
+        "event_version": {
+          "const": "1.0.0"
+        },
+        "producer": {
+          "const": "ai_service"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stream_id",
+            "frame_id",
+            "frame_sequence",
+            "track_id",
+            "detected_at",
+            "spoof_score",
+            "severity",
+            "review_status",
+            "event_source",
+            "dedupe_key"
+          ],
+          "properties": {
+            "stream_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "frame_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "frame_sequence": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "track_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "person_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            },
+            "detected_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "spoof_score": {
+              "type": "number"
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            "review_status": {
+              "type": "string",
+              "enum": [
+                "new",
+                "reviewed",
+                "ignored"
+              ]
+            },
+            "event_source": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dedupe_key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "snapshot_media_asset": {
+              "anyOf": [
+                {
+                  "$ref": "../common/media_asset_ref.schema.json"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "raw_payload": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

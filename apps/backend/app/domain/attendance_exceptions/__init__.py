@@ -1,0 +1,1 @@
+"""Attendance exceptions domain package."""

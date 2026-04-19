@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/backend_pipeline/registration_requested.v1.schema.json",
+  "allOf": [
+    {
+      "$ref": "../common/envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_name": {
+          "const": "registration.requested"
+        },
+        "event_version": {
+          "const": "1.0.0"
+        },
+        "producer": {
+          "const": "backend"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "person_id",
+            "registration_id",
+            "requested_by_person_id",
+            "source_media_asset"
+          ],
+          "properties": {
+            "person_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "registration_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "requested_by_person_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "source_media_asset": {
+              "$ref": "../common/media_asset_ref.schema.json"
+            },
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

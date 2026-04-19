@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/pipeline_ai/recognition_requested.v1.schema.json",
+  "allOf": [
+    {
+      "$ref": "../common/envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_name": {
+          "const": "recognition.requested"
+        },
+        "event_version": {
+          "const": "1.0.0"
+        },
+        "producer": {
+          "const": "pipeline"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "frame_sequence",
+            "captured_at",
+            "frame_width",
+            "frame_height",
+            "frame_ref"
+          ],
+          "properties": {
+            "frame_sequence": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "captured_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "frame_width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "frame_height": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "frame_ref": {
+              "$ref": "../common/media_asset_ref.schema.json"
+            },
+            "pipeline_metadata": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

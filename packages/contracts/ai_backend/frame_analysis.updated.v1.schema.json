@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/ai_backend/frame_analysis.updated.v1.schema.json",
+  "allOf": [
+    {
+      "$ref": "../common/envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_name": {
+          "const": "frame_analysis.updated"
+        },
+        "event_version": {
+          "const": "1.0.0"
+        },
+        "producer": {
+          "const": "ai_service"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stream_id",
+            "frame_id",
+            "frame_sequence",
+            "captured_at",
+            "presentation_ts_ms",
+            "frame_width",
+            "frame_height",
+            "tracks"
+          ],
+          "properties": {
+            "stream_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "frame_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "frame_sequence": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "captured_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "presentation_ts_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "frame_width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "frame_height": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "tracks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "track_id",
+                  "bbox",
+                  "tracking_state",
+                  "classification",
+                  "display_label"
+                ],
+                "properties": {
+                  "track_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "bbox": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "x",
+                      "y",
+                      "width",
+                      "height"
+                    ],
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "width": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "height": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    }
+                  },
+                  "tracking_state": {
+                    "type": "string",
+                    "enum": [
+                      "new",
+                      "tracking",
+                      "lost"
+                    ]
+                  },
+                  "classification": {
+                    "type": "string",
+                    "enum": [
+                      "recognized",
+                      "unknown",
+                      "spoof",
+                      "ignored"
+                    ]
+                  },
+                  "person_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid"
+                  },
+                  "face_registration_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid"
+                  },
+                  "display_label": {
+                    "type": "string"
+                  },
+                  "match_score": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "spoof_score": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "quality_status": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "passed",
+                      "marginal",
+                      "failed",
+                      null
+                    ]
+                  },
+                  "ignore_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "embedding_preview": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "number"
+                    },
+                    "maxItems": 16
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

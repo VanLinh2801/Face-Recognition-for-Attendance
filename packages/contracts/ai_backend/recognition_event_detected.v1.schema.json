@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/ai_backend/recognition_event_detected.v1.schema.json",
+  "allOf": [
+    {
+      "$ref": "../common/envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_name": {
+          "const": "recognition_event.detected"
+        },
+        "event_version": {
+          "const": "1.0.0"
+        },
+        "producer": {
+          "const": "ai_service"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stream_id",
+            "frame_id",
+            "frame_sequence",
+            "track_id",
+            "person_id",
+            "face_registration_id",
+            "recognized_at",
+            "event_direction",
+            "event_source",
+            "dedupe_key"
+          ],
+          "properties": {
+            "stream_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "frame_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "frame_sequence": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "track_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "person_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "face_registration_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "recognized_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "event_direction": {
+              "type": "string",
+              "enum": [
+                "entry",
+                "exit",
+                "unknown"
+              ]
+            },
+            "match_score": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "spoof_score": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "event_source": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dedupe_key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "snapshot_media_asset": {
+              "anyOf": [
+                {
+                  "$ref": "../common/media_asset_ref.schema.json"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "raw_payload": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+"""ORM base metadata placeholder."""

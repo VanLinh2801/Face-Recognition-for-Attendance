@@ -1,0 +1,1 @@
+"""Media asset API endpoints."""
