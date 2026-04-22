@@ -4,34 +4,18 @@ Keep inter-service request and response schemas here.
 
 - `common/`: shared schemas reused by all message types
 - `backend_pipeline/`: backend -> pipeline commands
-- `pipeline_ai/`: pipeline -> AI commands for realtime recognition and registration input handoff
-- `ai_backend/`: AI -> backend realtime visualization and business events
-- `pipeline_backend/`: no active contracts; kept only as a marker that this path is no longer used
+- `pipeline_ai/`: pipeline -> AI commands for realtime recognition and onboarding handoff
+- `ai_backend/`: AI -> backend stream results and legacy event references
+- `pipeline_backend/`: legacy marker only
 
-These files should be the first artifacts created before implementation.
+Current sprint note:
 
-The team aligns on contracts first, while each service keeps freedom to choose its own internal folder structure.
+- Transport between `pipeline -> ai_service -> backend` uses Redis Streams.
+- Stream payloads are flat JSON with a required `task_type`.
+- Legacy envelope-based schemas are still kept as naming references for future normalization.
 
-Active phase 1 contracts after the boundary change:
+Realtime path for the current implementation:
 
-- `registration.requested`
-- `recognition.requested`
-- `frame_analysis.updated`
-- `recognition_event.detected`
-- `unknown_event.detected`
-- `spoof_alert.detected`
-- `registration_processing.completed`
-
-Realtime recognition path:
-
-1. `pipeline` publishes frame-level request to `pipeline_ai/recognition_requested.v1.schema.json`
-2. `ai_service` publishes realtime overlay event to `ai_backend/frame_analysis.updated.v1.schema.json`
-3. `ai_service` publishes business events to `ai_backend/*detected.v1.schema.json`
-4. `backend` persists business events and forwards realtime overlay data to frontend
-
-Registration path:
-
-1. `backend` publishes `backend_pipeline/registration_requested.v1.schema.json`
-2. `pipeline` publishes `pipeline_ai/registration_requested.v1.schema.json`
-3. `ai_service` publishes `ai_backend/registration_processing_completed.v1.schema.json`
-4. `backend` updates registration state in PostgreSQL
+1. `pipeline` publishes a Redis Stream task described in `pipeline_ai/stream_task.v1.schema.json`
+2. `ai_service` consumes it, runs ACCESS/ONBOARDING logic, then publishes a result described in `ai_backend/stream_result.v1.schema.json`
+3. `backend` consumes the result, applies debounce, persists to PostgreSQL, and forwards realtime data to frontend

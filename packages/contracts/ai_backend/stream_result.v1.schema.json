@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/ai_backend/stream_result.v1.schema.json",
+  "title": "AIToBackendStreamResult",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_type",
+        "event_id",
+        "camera_id",
+        "timestamp",
+        "image_url",
+        "status",
+        "is_new_vector",
+        "message"
+      ],
+      "properties": {
+        "task_type": {
+          "const": "ACCESS_RESULT"
+        },
+        "event_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "camera_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "image_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "SUCCESS",
+            "NO_FACE",
+            "MULTIPLE_FACES",
+            "LOW_QUALITY",
+            "ERROR"
+          ]
+        },
+        "qdrant_vector_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "is_new_vector": {
+          "type": "boolean"
+        },
+        "confidence_score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "bounding_box": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "integer"
+            },
+            "y": {
+              "type": "integer"
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "frame_resolution": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "width",
+            "height"
+          ],
+          "properties": {
+            "width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "matched_label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "EMPLOYEE_CANDIDATE",
+            "STRANGER",
+            null
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_type",
+        "employee_code",
+        "status",
+        "message"
+      ],
+      "properties": {
+        "task_type": {
+          "const": "ONBOARDING_RESULT"
+        },
+        "employee_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qdrant_vector_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "SUCCESS",
+            "ERROR"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  ]
+}

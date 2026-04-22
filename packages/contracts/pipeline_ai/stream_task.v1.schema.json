@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/pipeline_ai/stream_task.v1.schema.json",
+  "title": "PipelineToAIStreamTask",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_type",
+        "camera_id",
+        "image_url",
+        "timestamp"
+      ],
+      "properties": {
+        "task_type": {
+          "const": "ACCESS"
+        },
+        "event_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "camera_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_type",
+        "employee_code",
+        "image_url",
+        "timestamp"
+      ],
+      "properties": {
+        "task_type": {
+          "const": "ONBOARDING"
+        },
+        "event_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "employee_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  ]
+}
