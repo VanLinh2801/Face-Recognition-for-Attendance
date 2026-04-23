@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "packages/contracts/ai_backend/spoof_alert_detected.v1.schema.json",
+  "$id": "packages/contracts/pipeline_backend/spoof_alert_detected.v1.schema.json",
   "allOf": [
     {
       "$ref": "../common/envelope.schema.json"
@@ -15,7 +15,7 @@
           "const": "1.0.0"
         },
         "producer": {
-          "const": "ai_service"
+          "const": "pipeline"
         },
         "payload": {
           "type": "object",
@@ -81,7 +81,8 @@
             },
             "event_source": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "default": "pipeline"
             },
             "dedupe_key": {
               "type": "string",

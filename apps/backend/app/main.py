@@ -85,7 +85,15 @@ async def health_ready(request: Request) -> dict[str, str]:
 @app.exception_handler(AppError)
 async def handle_app_error(_: Request, exc: AppError) -> JSONResponse:
     payload = ErrorResponse(code=exc.code, message=str(exc), details=exc.details)
-    status_code = 404 if exc.code == "not_found" else 422 if exc.code == "validation_error" else 500
+    status_code = (
+        404
+        if exc.code == "not_found"
+        else 422
+        if exc.code == "validation_error"
+        else 409
+        if exc.code == "conflict"
+        else 500
+    )
     return JSONResponse(status_code=status_code, content=payload.model_dump())
 
 

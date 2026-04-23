@@ -8,6 +8,7 @@ from app.presentation.api.v1 import (
     face_registrations,
     media_assets,
     persons,
+    persons_registrations,
     recognition_events,
     spoof_alert_events,
     unknown_events,
@@ -15,6 +16,8 @@ from app.presentation.api.v1 import (
 
 router = APIRouter(prefix="/v1")
 router.include_router(persons.router)
+router.include_router(persons_registrations.router)
+router.include_router(persons_registrations.internal_router)
 router.include_router(departments.router)
 router.include_router(face_registrations.router)
 router.include_router(recognition_events.router)

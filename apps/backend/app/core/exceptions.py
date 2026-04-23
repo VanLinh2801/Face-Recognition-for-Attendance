@@ -25,3 +25,8 @@ class ValidationError(AppError):
 class InfrastructureError(AppError):
     def __init__(self, message: str = "Infrastructure failure", *, details: dict[str, str] | None = None) -> None:
         super().__init__(message, code="infrastructure_error", details=details)
+
+
+class ConflictError(AppError):
+    def __init__(self, message: str = "Conflict", *, details: dict[str, str] | None = None) -> None:
+        super().__init__(message, code="conflict", details=details)

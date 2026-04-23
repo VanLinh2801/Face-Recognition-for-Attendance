@@ -21,13 +21,24 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
+            "stream_id",
+            "frame_id",
             "frame_sequence",
             "captured_at",
+            "presentation_ts_ms",
             "frame_width",
             "frame_height",
-            "frame_ref"
+            "faces"
           ],
           "properties": {
+            "stream_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "frame_id": {
+              "type": "string",
+              "minLength": 1
+            },
             "frame_sequence": {
               "type": "integer",
               "minimum": 0
@@ -35,6 +46,10 @@
             "captured_at": {
               "type": "string",
               "format": "date-time"
+            },
+            "presentation_ts_ms": {
+              "type": "integer",
+              "minimum": 0
             },
             "frame_width": {
               "type": "integer",
@@ -44,14 +59,79 @@
               "type": "integer",
               "minimum": 1
             },
-            "frame_ref": {
-              "$ref": "../common/media_asset_ref.schema.json"
-            },
-            "pipeline_metadata": {
-              "type": [
-                "object",
-                "null"
-              ]
+            "faces": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "track_id",
+                  "bbox",
+                  "face_media_asset"
+                ],
+                "properties": {
+                  "track_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "bbox": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "x",
+                      "y",
+                      "width",
+                      "height"
+                    ],
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "width": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "height": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    }
+                  },
+                  "face_media_asset": {
+                    "$ref": "../common/media_asset_ref.schema.json"
+                  },
+                  "detection_confidence": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "quality_status": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "passed",
+                      "marginal",
+                      "failed",
+                      null
+                    ]
+                  },
+                  "pipeline_metadata": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  }
+                }
+              }
             }
           }
         }

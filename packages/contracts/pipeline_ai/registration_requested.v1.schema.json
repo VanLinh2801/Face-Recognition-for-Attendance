@@ -23,7 +23,7 @@
           "required": [
             "person_id",
             "registration_id",
-            "source_media_asset"
+            "face_media_asset"
           ],
           "properties": {
             "person_id": {
@@ -34,17 +34,26 @@
               "type": "string",
               "format": "uuid"
             },
-            "source_media_asset": {
+            "face_media_asset": {
               "$ref": "../common/media_asset_ref.schema.json"
             },
-            "prepared_face_media_asset": {
-              "anyOf": [
-                {
-                  "$ref": "../common/media_asset_ref.schema.json"
-                },
-                {
-                  "type": "null"
-                }
+            "source_media_asset_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            },
+            "quality_status": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "passed",
+                "marginal",
+                "failed",
+                null
               ]
             },
             "captured_at": {

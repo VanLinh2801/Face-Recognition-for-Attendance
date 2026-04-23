@@ -1,37 +1,47 @@
-# Contracts
+# Hợp đồng giao tiếp giữa service
 
-Keep inter-service request and response schemas here.
+Thư mục này chứa schema giao tiếp giữa các service trong hệ thống.
 
-- `common/`: shared schemas reused by all message types
-- `backend_pipeline/`: backend -> pipeline commands
-- `pipeline_ai/`: pipeline -> AI commands for realtime recognition and registration input handoff
-- `ai_backend/`: AI -> backend realtime visualization and business events
-- `pipeline_backend/`: no active contracts; kept only as a marker that this path is no longer used
+- `common/`: schema dùng chung cho mọi message.
+- `backend_pipeline/`: event/command do backend gửi sang pipeline.
+- `pipeline_ai/`: event/command do pipeline gửi sang AI.
+- `pipeline_backend/`: event do pipeline gửi về backend.
+- `ai_backend/`: event do AI gửi về backend.
 
-These files should be the first artifacts created before implementation.
+Các contract này là ranh giới tích hợp giữa service. Mỗi service được tự do tổ chức code nội bộ, nhưng khi giao tiếp qua event bus thì phải tuân thủ schema ở đây.
 
-The team aligns on contracts first, while each service keeps freedom to choose its own internal folder structure.
+## Boundary hiện tại
 
-Active phase 1 contracts after the boundary change:
+- Pipeline sở hữu realtime detection, tracking, quality filtering, spoof/liveness và chuẩn bị face crop.
+- AI service sở hữu feature extraction, vector search và indexing.
+- Backend sở hữu business state, PostgreSQL và API cho frontend.
+
+## Event đang dùng
 
 - `registration.requested`
 - `recognition.requested`
 - `frame_analysis.updated`
+- `spoof_alert.detected`
+- `registration_input.validated`
 - `recognition_event.detected`
 - `unknown_event.detected`
-- `spoof_alert.detected`
 - `registration_processing.completed`
 
-Realtime recognition path:
+## Luồng realtime recognition
 
-1. `pipeline` publishes frame-level request to `pipeline_ai/recognition_requested.v1.schema.json`
-2. `ai_service` publishes realtime overlay event to `ai_backend/frame_analysis.updated.v1.schema.json`
-3. `ai_service` publishes business events to `ai_backend/*detected.v1.schema.json`
-4. `backend` persists business events and forwards realtime overlay data to frontend
+1. Pipeline đọc frame từ camera hoặc video source.
+2. Pipeline detect face, track object, kiểm tra chất lượng và spoof/liveness.
+3. Pipeline crop face, upload face crop nếu cần, rồi phát `recognition.requested` sang AI theo `pipeline_ai/recognition_requested.v1.schema.json`.
+4. AI extract feature và search vector index.
+5. Nếu AI match được người đã đăng ký, AI phát `recognition_event.detected` về backend theo `ai_backend/recognition_event_detected.v1.schema.json`.
+6. Nếu AI không match được người đã đăng ký, AI phát `unknown_event.detected` về backend theo `ai_backend/unknown_event_detected.v1.schema.json`.
+7. Pipeline phát `frame_analysis.updated` về backend để phục vụ realtime overlay.
+8. Nếu pipeline phát hiện spoof/liveness fail, pipeline phát `spoof_alert.detected` về backend.
 
-Registration path:
+## Luồng registration
 
-1. `backend` publishes `backend_pipeline/registration_requested.v1.schema.json`
-2. `pipeline` publishes `pipeline_ai/registration_requested.v1.schema.json`
-3. `ai_service` publishes `ai_backend/registration_processing_completed.v1.schema.json`
-4. `backend` updates registration state in PostgreSQL
+1. Backend phát `registration.requested` sang pipeline theo `backend_pipeline/registration_requested.v1.schema.json`.
+2. Pipeline đọc ảnh nguồn, validate ảnh, detect/crop/normalize nếu cần.
+3. Pipeline phát `registration_input.validated` về backend để báo ảnh hợp lệ hoặc không hợp lệ.
+4. Nếu ảnh hợp lệ, pipeline phát `registration.requested` sang AI theo `pipeline_ai/registration_requested.v1.schema.json`.
+5. AI extract feature, index vào vector store, rồi phát `registration_processing.completed` về backend theo `ai_backend/registration_processing_completed.v1.schema.json`.

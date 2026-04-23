@@ -74,7 +74,8 @@
             },
             "event_source": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "default": "ai_service"
             },
             "dedupe_key": {
               "type": "string",

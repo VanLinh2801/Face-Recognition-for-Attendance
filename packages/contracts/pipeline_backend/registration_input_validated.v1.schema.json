@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/pipeline_backend/registration_input_validated.v1.schema.json",
+  "allOf": [
+    {
+      "$ref": "../common/envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "event_name": {
+          "const": "registration_input.validated"
+        },
+        "event_version": {
+          "const": "1.0.0"
+        },
+        "producer": {
+          "const": "pipeline"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "person_id",
+            "registration_id",
+            "status",
+            "validated_at",
+            "event_source"
+          ],
+          "properties": {
+            "person_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "registration_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "accepted",
+                "rejected"
+              ]
+            },
+            "validated_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "event_source": {
+              "type": "string",
+              "minLength": 1,
+              "default": "pipeline"
+            },
+            "failure_code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "failure_message": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_media_asset_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            },
+            "prepared_face_media_asset": {
+              "anyOf": [
+                {
+                  "$ref": "../common/media_asset_ref.schema.json"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "quality_status": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "passed",
+                "marginal",
+                "failed",
+                null
+              ]
+            },
+            "validation_notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pipeline_metadata": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

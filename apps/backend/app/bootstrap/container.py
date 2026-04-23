@@ -7,8 +7,36 @@ from dataclasses import dataclass
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.use_cases.media_assets import ListMediaAssetsUseCase
+from app.application.use_cases.face_registrations import (
+    CompleteFaceRegistrationUseCase,
+    CreateFaceRegistrationUseCase,
+    DeleteFaceRegistrationUseCase,
+    GetFaceRegistrationUseCase,
+    ListFaceRegistrationsUseCase,
+)
+from app.application.use_cases.persons import ListPersonsUseCase
+from app.application.use_cases.persons import (
+    BulkDeletePersonsUseCase,
+    CreatePersonUseCase,
+    DeletePersonUseCase,
+    GetPersonUseCase,
+    UpdatePersonUseCase,
+)
+from app.application.use_cases.recognition_events import ListRecognitionEventsUseCase
+from app.application.use_cases.spoof_alert_events import ListSpoofAlertEventsUseCase
+from app.application.use_cases.unknown_events import ListUnknownEventsUseCase
 from app.core.config import Settings, get_settings
 from app.core.db import create_db_engine, create_session_factory
+from app.infrastructure.persistence.repositories.read_repositories import (
+    SqlAlchemyFaceRegistrationRepository,
+    SqlAlchemyMediaAssetRepository,
+    SqlAlchemyPersonRepository,
+    SqlAlchemyRecognitionEventRepository,
+    SqlAlchemySpoofAlertEventRepository,
+    SqlAlchemyUnknownEventRepository,
+)
+from app.infrastructure.integrations.pipeline_client import PipelineEventPublisher
 from app.infrastructure.persistence.session import SessionProvider
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
@@ -24,6 +52,61 @@ class Container:
 
     def create_uow(self, session: Session) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(session)
+
+    def build_list_persons_use_case(self, session: Session) -> ListPersonsUseCase:
+        return ListPersonsUseCase(SqlAlchemyPersonRepository(session))
+
+    def build_create_person_use_case(self, session: Session) -> CreatePersonUseCase:
+        return CreatePersonUseCase(SqlAlchemyPersonRepository(session))
+
+    def build_get_person_use_case(self, session: Session) -> GetPersonUseCase:
+        return GetPersonUseCase(SqlAlchemyPersonRepository(session))
+
+    def build_update_person_use_case(self, session: Session) -> UpdatePersonUseCase:
+        return UpdatePersonUseCase(SqlAlchemyPersonRepository(session))
+
+    def build_delete_person_use_case(self, session: Session) -> DeletePersonUseCase:
+        return DeletePersonUseCase(SqlAlchemyPersonRepository(session))
+
+    def build_bulk_delete_persons_use_case(self, session: Session) -> BulkDeletePersonsUseCase:
+        return BulkDeletePersonsUseCase(SqlAlchemyPersonRepository(session))
+
+    def build_list_recognition_events_use_case(self, session: Session) -> ListRecognitionEventsUseCase:
+        return ListRecognitionEventsUseCase(SqlAlchemyRecognitionEventRepository(session))
+
+    def build_list_unknown_events_use_case(self, session: Session) -> ListUnknownEventsUseCase:
+        return ListUnknownEventsUseCase(SqlAlchemyUnknownEventRepository(session))
+
+    def build_list_spoof_alert_events_use_case(self, session: Session) -> ListSpoofAlertEventsUseCase:
+        return ListSpoofAlertEventsUseCase(SqlAlchemySpoofAlertEventRepository(session))
+
+    def build_list_media_assets_use_case(self, session: Session) -> ListMediaAssetsUseCase:
+        return ListMediaAssetsUseCase(SqlAlchemyMediaAssetRepository(session))
+
+    def build_create_face_registration_use_case(self, session: Session) -> CreateFaceRegistrationUseCase:
+        return CreateFaceRegistrationUseCase(
+            SqlAlchemyPersonRepository(session),
+            SqlAlchemyFaceRegistrationRepository(session),
+            SqlAlchemyMediaAssetRepository(session),
+        )
+
+    def build_list_face_registrations_use_case(self, session: Session) -> ListFaceRegistrationsUseCase:
+        return ListFaceRegistrationsUseCase(SqlAlchemyFaceRegistrationRepository(session))
+
+    def build_get_face_registration_use_case(self, session: Session) -> GetFaceRegistrationUseCase:
+        return GetFaceRegistrationUseCase(SqlAlchemyFaceRegistrationRepository(session))
+
+    def build_delete_face_registration_use_case(self, session: Session) -> DeleteFaceRegistrationUseCase:
+        return DeleteFaceRegistrationUseCase(SqlAlchemyFaceRegistrationRepository(session))
+
+    def build_complete_face_registration_use_case(self, session: Session) -> CompleteFaceRegistrationUseCase:
+        return CompleteFaceRegistrationUseCase(
+            SqlAlchemyFaceRegistrationRepository(session),
+            SqlAlchemyMediaAssetRepository(session),
+        )
+
+    def build_pipeline_event_publisher(self) -> PipelineEventPublisher:
+        return PipelineEventPublisher(self.settings)
 
 
 def build_container(settings: Settings | None = None) -> Container:

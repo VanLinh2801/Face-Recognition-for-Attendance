@@ -322,7 +322,7 @@ Pipeline service nên:
 - không ghi trực tiếp PostgreSQL
 - có thể upload snapshot lên MinIO
 - gửi event về backend
-- gọi AI service để xử lý nhận diện
+- detect/track/spoof trong realtime path và gửi face batch sang AI service để extract/search
 
 ---
 
@@ -332,24 +332,24 @@ Pipeline service nên:
 
 1. Pipeline đọc frame từ camera
 2. Pipeline chọn frame phù hợp để xử lý
-3. Pipeline gửi frame sang AI service
-4. AI service detect face
-5. AI service anti-spoofing
-6. AI service tạo embedding
-7. AI service search Qdrant
-8. AI service trả kết quả nhận diện
-9. Pipeline gom/lọc kết quả
-10. Pipeline gửi recognition event sang backend
-11. Backend áp dụng business rule attendance
-12. Backend lưu PostgreSQL
-13. Frontend lấy dữ liệu từ backend để hiển thị
+3. Pipeline detect face, tracking, quality filtering và spoof/liveness
+4. Pipeline crop face và gửi face batch sang AI service
+5. AI service tạo embedding
+6. AI service search Qdrant
+7. AI service trả `recognition_search.completed` về pipeline
+8. Pipeline gom/lọc kết quả
+9. Pipeline gửi recognition event sang backend
+10. Backend áp dụng business rule attendance
+11. Backend lưu PostgreSQL
+12. Frontend lấy dữ liệu từ backend để hiển thị
 
 ### 10.2 Use case: phát hiện người lạ
 
 1. Pipeline đọc frame
-2. Pipeline gửi sang AI service
-3. AI service detect + anti-spoof + embedding + search
-4. Kết quả trả về là `is_unknown = true`
+2. Pipeline detect face, tracking, quality filtering và spoof/liveness
+3. Pipeline gửi face batch sang AI service
+4. AI service embedding + search và trả `recognition_search.completed`
+5. Pipeline kết luận unknown khi AI trả `no_match`
 5. Pipeline crop hoặc lưu snapshot
 6. Pipeline upload snapshot lên MinIO nếu cần
 7. Pipeline gửi unknown event sang backend

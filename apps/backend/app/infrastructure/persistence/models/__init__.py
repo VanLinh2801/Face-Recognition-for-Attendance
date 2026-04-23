@@ -1,5 +1,21 @@
 """ORM models package."""
 
 from app.infrastructure.persistence.models.base import Base
+from app.infrastructure.persistence.models.department_model import DepartmentModel
+from app.infrastructure.persistence.models.face_registration_model import FaceRegistrationModel
+from app.infrastructure.persistence.models.media_asset_model import MediaAssetModel
+from app.infrastructure.persistence.models.person_model import PersonModel
+from app.infrastructure.persistence.models.recognition_event_model import RecognitionEventModel
+from app.infrastructure.persistence.models.spoof_alert_event_model import SpoofAlertEventModel
+from app.infrastructure.persistence.models.unknown_event_model import UnknownEventModel
 
-__all__ = ["Base"]
+__all__ = [
+    "Base",
+    "DepartmentModel",
+    "FaceRegistrationModel",
+    "MediaAssetModel",
+    "PersonModel",
+    "RecognitionEventModel",
+    "SpoofAlertEventModel",
+    "UnknownEventModel",
+]

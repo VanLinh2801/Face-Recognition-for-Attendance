@@ -7,7 +7,27 @@ from collections.abc import Generator
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from app.application.use_cases.media_assets import ListMediaAssetsUseCase
+from app.application.use_cases.face_registrations import (
+    CompleteFaceRegistrationUseCase,
+    CreateFaceRegistrationUseCase,
+    DeleteFaceRegistrationUseCase,
+    GetFaceRegistrationUseCase,
+    ListFaceRegistrationsUseCase,
+)
+from app.application.use_cases.persons import ListPersonsUseCase
+from app.application.use_cases.persons import (
+    BulkDeletePersonsUseCase,
+    CreatePersonUseCase,
+    DeletePersonUseCase,
+    GetPersonUseCase,
+    UpdatePersonUseCase,
+)
+from app.application.use_cases.recognition_events import ListRecognitionEventsUseCase
+from app.application.use_cases.spoof_alert_events import ListSpoofAlertEventsUseCase
+from app.application.use_cases.unknown_events import ListUnknownEventsUseCase
 from app.bootstrap.container import Container
+from app.infrastructure.integrations.pipeline_client import PipelineEventPublisher
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -24,3 +44,114 @@ def get_unit_of_work(
     container: Container = Depends(get_container),
 ) -> SqlAlchemyUnitOfWork:
     return container.create_uow(session)
+
+
+def get_list_persons_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ListPersonsUseCase:
+    return container.build_list_persons_use_case(session)
+
+
+def get_create_person_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> CreatePersonUseCase:
+    return container.build_create_person_use_case(session)
+
+
+def get_get_person_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetPersonUseCase:
+    return container.build_get_person_use_case(session)
+
+
+def get_update_person_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> UpdatePersonUseCase:
+    return container.build_update_person_use_case(session)
+
+
+def get_delete_person_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> DeletePersonUseCase:
+    return container.build_delete_person_use_case(session)
+
+
+def get_bulk_delete_persons_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> BulkDeletePersonsUseCase:
+    return container.build_bulk_delete_persons_use_case(session)
+
+
+def get_list_recognition_events_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ListRecognitionEventsUseCase:
+    return container.build_list_recognition_events_use_case(session)
+
+
+def get_list_unknown_events_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ListUnknownEventsUseCase:
+    return container.build_list_unknown_events_use_case(session)
+
+
+def get_list_spoof_alert_events_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ListSpoofAlertEventsUseCase:
+    return container.build_list_spoof_alert_events_use_case(session)
+
+
+def get_list_media_assets_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ListMediaAssetsUseCase:
+    return container.build_list_media_assets_use_case(session)
+
+
+def get_create_face_registration_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> CreateFaceRegistrationUseCase:
+    return container.build_create_face_registration_use_case(session)
+
+
+def get_list_face_registrations_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ListFaceRegistrationsUseCase:
+    return container.build_list_face_registrations_use_case(session)
+
+
+def get_get_face_registration_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetFaceRegistrationUseCase:
+    return container.build_get_face_registration_use_case(session)
+
+
+def get_delete_face_registration_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> DeleteFaceRegistrationUseCase:
+    return container.build_delete_face_registration_use_case(session)
+
+
+def get_complete_face_registration_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> CompleteFaceRegistrationUseCase:
+    return container.build_complete_face_registration_use_case(session)
+
+
+def get_pipeline_event_publisher(
+    container: Container = Depends(get_container),
+) -> PipelineEventPublisher:
+    return container.build_pipeline_event_publisher()

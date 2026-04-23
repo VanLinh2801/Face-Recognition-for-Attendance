@@ -11,13 +11,14 @@
   - `domain/`, `application/`, `infrastructure/`, `presentation/`, `bootstrap/`.
 - DB schema đã có migration tại [D:/Face Recognition/apps/backend/migrations/versions/20260419_0001_phase1_initial_schema.py](D:/Face Recognition/apps/backend/migrations/versions/20260419_0001_phase1_initial_schema.py).
 - Contracts event đã chốt tại [D:/Face Recognition/packages/contracts](D:/Face Recognition/packages/contracts):
-  - `ai_backend/*`, `backend_pipeline/*`, `common/envelope.schema.json`, `common/media_asset_ref.schema.json`.
+  - `backend_pipeline/*`, `pipeline_ai/*`, `ai_pipeline/*`, `pipeline_backend/*`, `ai_backend/registration_processing_completed.v1.schema.json`, `common/envelope.schema.json`, `common/media_asset_ref.schema.json`.
 
 ## Kiến trúc mục tiêu
 ```mermaid
 flowchart LR
   frontend[Frontend] -->|REST + WS signaling| backendPresentation
-  aiService[AI Service] -->|Redis Streams ai_backend events| backendIngress
+  pipeline[Pipeline] -->|Redis Streams pipeline_backend events| backendIngress
+  aiService[AI Service] -->|Redis Streams registration_processing.completed| backendIngress
   backendEgress -->|Redis Streams registration.requested| pipeline[Pipeline]
   backendPresentation --> applicationLayer
   backendIngress --> applicationLayer
@@ -52,9 +53,10 @@ flowchart LR
 - Chuẩn hóa auth mapping user-camera-room ở backend để frontend subscribe stream đúng quyền.
 - Tạo fallback chiến lược: nếu WebRTC lỗi -> frontend poll event APIs để vẫn có UX tối thiểu.
 
-## Phase 4 - Nhận AI events, xử lý và push frontend (Task 3)
+## Phase 4 - Nhận pipeline/AI events, xử lý và push frontend (Task 3)
 - Implement Redis Streams inbound consumer adapter tại `infrastructure/integration`:
-  - đọc các event `frame_analysis.updated`, `recognition_event.detected`, `unknown_event.detected`, `spoof_alert.detected`, `registration_processing.completed`.
+  - đọc các event realtime/business từ pipeline: `frame_analysis.updated`, `recognition_event.detected`, `unknown_event.detected`, `spoof_alert.detected`.
+  - đọc event registration completion từ AI: `registration_processing.completed`.
 - Validate envelope + payload theo schema contracts trước khi vào use-case.
 - Tách use-case xử lý:
   - realtime overlay event -> publish qua websocket channel cho frontend,

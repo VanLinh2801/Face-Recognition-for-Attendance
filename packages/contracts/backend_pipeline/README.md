@@ -1,32 +1,27 @@
-# Backend To Pipeline Contracts
+# Hợp đồng Backend -> Pipeline
 
-Commands published by backend and consumed by pipeline.
+Thư mục này chứa các event/command do backend phát và pipeline tiêu thụ.
 
 - `registration_requested.v1.schema.json`
 
 ## `registration_requested.v1.schema.json`
 
-Event này được backend publish khi có yêu cầu xử lý ảnh đăng ký khuôn mặt cho một nhân sự.
-Pipeline consume event này để bắt đầu đọc ảnh nguồn, chuẩn bị input và chuyển tiếp sang AI.
+Backend phát `registration.requested` khi có yêu cầu xử lý ảnh đăng ký khuôn mặt cho một nhân sự.
 
-Luồng sử dụng:
+Pipeline tiêu thụ event này để:
 
-1. Frontend gửi yêu cầu tạo hoặc cập nhật đăng ký khuôn mặt lên backend.
-2. Backend tạo `person_face_registrations` ở trạng thái ban đầu.
-3. Backend publish `registration.requested`.
-4. Pipeline nhận event, chuẩn bị input phù hợp và phát tiếp `pipeline_ai/registration_requested`.
-5. AI xử lý ảnh và gửi kết quả cuối về backend.
+1. Đọc ảnh nguồn từ storage.
+2. Validate ảnh có hợp lệ không.
+3. Detect/crop/normalize ảnh nếu cần.
+4. Phát `registration_input.validated` về backend.
+5. Nếu ảnh hợp lệ, phát `registration.requested` sang AI theo contract `pipeline_ai`.
 
-Các trường chính trong `payload`:
+Payload chính:
 
-- `person_id`: id nhân sự trong hệ thống. Pipeline không sở hữu person record nhưng cần field này để gắn kết kết quả xử lý về đúng người.
-- `registration_id`: id của lần đăng ký khuôn mặt. Đây là key chính để mọi bước sau map ngược về bảng `person_face_registrations`.
-- `requested_by_person_id`: id người dùng hoặc admin đã tạo yêu cầu đăng ký.
-- `source_media_asset`: metadata của ảnh gốc cần xử lý. Đây là input chính để pipeline tải đúng file từ storage.
-- `notes`: ghi chú bổ sung từ backend nếu có.
+- `person_id`: id nhân sự trong hệ thống.
+- `registration_id`: id lượt đăng ký khuôn mặt.
+- `requested_by_person_id`: id người dùng hoặc admin tạo yêu cầu.
+- `source_media_asset`: metadata ảnh nguồn cần xử lý.
+- `notes`: ghi chú bổ sung nếu có.
 
-Ý nghĩa thiết kế:
-
-- Backend là owner của nghiệp vụ đăng ký.
-- Pipeline là worker chịu trách nhiệm chuẩn bị input và chuyển tiếp sang AI.
-- Event này không chứa embedding hay logic AI, vì đó chưa phải trách nhiệm của backend.
+Backend là owner nghiệp vụ registration. Pipeline chỉ chuẩn bị input và điều phối bước tiếp theo sang AI.

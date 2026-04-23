@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "packages/contracts/ai_backend/frame_analysis.updated.v1.schema.json",
+  "$id": "packages/contracts/pipeline_backend/frame_analysis.updated.v1.schema.json",
   "allOf": [
     {
       "$ref": "../common/envelope.schema.json"
@@ -15,7 +15,7 @@
           "const": "1.0.0"
         },
         "producer": {
-          "const": "ai_service"
+          "const": "pipeline"
         },
         "payload": {
           "type": "object",
@@ -68,7 +68,7 @@
                   "track_id",
                   "bbox",
                   "tracking_state",
-                  "classification",
+                  "analysis_status",
                   "display_label"
                 ],
                 "properties": {
@@ -110,37 +110,17 @@
                       "lost"
                     ]
                   },
-                  "classification": {
+                  "analysis_status": {
                     "type": "string",
                     "enum": [
-                      "recognized",
-                      "unknown",
+                      "detected",
                       "spoof",
+                      "low_quality",
                       "ignored"
                     ]
                   },
-                  "person_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "format": "uuid"
-                  },
-                  "face_registration_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "format": "uuid"
-                  },
                   "display_label": {
                     "type": "string"
-                  },
-                  "match_score": {
-                    "type": [
-                      "number",
-                      "null"
-                    ]
                   },
                   "spoof_score": {
                     "type": [
@@ -165,16 +145,6 @@
                       "string",
                       "null"
                     ]
-                  },
-                  "embedding_preview": {
-                    "type": [
-                      "array",
-                      "null"
-                    ],
-                    "items": {
-                      "type": "number"
-                    },
-                    "maxItems": 16
                   }
                 }
               }
