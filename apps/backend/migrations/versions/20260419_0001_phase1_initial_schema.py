@@ -174,6 +174,39 @@ def upgrade() -> None:
     )
 
     op.create_table(
+        "users",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            nullable=False,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column("username", sa.String(length=100), nullable=False),
+        sa.Column("password_hash", sa.Text(), nullable=False),
+        sa.Column(
+            "is_active",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("true"),
+        ),
+        sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.UniqueConstraint("username", name="uq_users_username"),
+    )
+
+    op.create_table(
         "media_assets",
         sa.Column(
             "id",
@@ -456,6 +489,34 @@ def upgrade() -> None:
     )
 
     op.create_table(
+        "auth_refresh_tokens",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            nullable=False,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("token_hash", sa.Text(), nullable=False),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+            name="fk_auth_refresh_tokens_user_id_users",
+        ),
+        sa.UniqueConstraint("token_hash", name="uq_auth_refresh_tokens_token_hash"),
+    )
+
+    op.create_table(
         "attendance_exceptions",
         sa.Column(
             "id",
@@ -512,6 +573,7 @@ def upgrade() -> None:
     )
 
     op.create_index("ix_persons_department_id", "persons", ["department_id"])
+    op.create_index("ix_users_username", "users", ["username"])
     op.create_index("ix_media_assets_asset_type", "media_assets", ["asset_type"])
     op.create_index(
         "ix_face_registrations_person_id",
@@ -563,6 +625,8 @@ def upgrade() -> None:
     )
     op.create_index("ix_spoof_alert_events_dedupe_key", "spoof_alert_events", ["dedupe_key"])
     op.create_index("ix_event_inbox_message_id", "event_inbox", ["message_id"])
+    op.create_index("ix_auth_refresh_tokens_user_id", "auth_refresh_tokens", ["user_id"])
+    op.create_index("ix_auth_refresh_tokens_expires_at", "auth_refresh_tokens", ["expires_at"])
     op.create_index(
         "ix_attendance_exceptions_person_id",
         "attendance_exceptions",
@@ -586,6 +650,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_auth_refresh_tokens_expires_at", table_name="auth_refresh_tokens")
+    op.drop_index("ix_auth_refresh_tokens_user_id", table_name="auth_refresh_tokens")
+    op.drop_table("auth_refresh_tokens")
+
     op.drop_index("ix_event_inbox_message_id", table_name="event_inbox")
     op.drop_table("event_inbox")
 
@@ -620,6 +688,8 @@ def downgrade() -> None:
     op.drop_table("media_assets")
 
     op.drop_index("ix_persons_department_id", table_name="persons")
+    op.drop_index("ix_users_username", table_name="users")
+    op.drop_table("users")
     op.drop_table("persons")
     op.drop_table("departments")
 

@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.presentation.api.v1 import (
     attendance,
     attendance_exceptions,
+    auth,
     departments,
     face_registrations,
     media_assets,
@@ -16,6 +17,7 @@ from app.presentation.api.v1 import (
 )
 
 router = APIRouter(prefix="/v1")
+router.include_router(auth.router)
 router.include_router(attendance.router)
 router.include_router(persons.router)
 router.include_router(persons_registrations.router)

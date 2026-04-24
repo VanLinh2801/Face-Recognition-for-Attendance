@@ -13,6 +13,12 @@ from app.application.use_cases.attendance import (
     ListAttendanceEventsUseCase,
     ListPersonAttendanceHistoryUseCase,
 )
+from app.application.use_cases.auth import (
+    GetCurrentUserUseCase,
+    LoginUseCase,
+    LogoutUseCase,
+    RefreshAccessTokenUseCase,
+)
 from app.application.use_cases.attendance_exceptions import (
     BulkDeleteAttendanceExceptionsUseCase,
     CreateAttendanceExceptionUseCase,
@@ -55,9 +61,11 @@ from app.infrastructure.persistence.repositories import (
     SqlAlchemyFaceRegistrationRepository,
     SqlAlchemyMediaAssetRepository,
     SqlAlchemyPersonRepository,
+    SqlAlchemyRefreshTokenRepository,
     SqlAlchemyRecognitionEventRepository,
     SqlAlchemySpoofAlertEventRepository,
     SqlAlchemyUnknownEventRepository,
+    SqlAlchemyUserRepository,
 )
 from app.infrastructure.integrations.pipeline_client import PipelineEventPublisher
 from app.infrastructure.realtime import HubRealtimeEventBus, WebSocketHub
@@ -206,6 +214,26 @@ class Container:
             unknown_repository=SqlAlchemyUnknownEventRepository(session),
             spoof_repository=SqlAlchemySpoofAlertEventRepository(session),
         )
+
+    def build_login_use_case(self, session: Session) -> LoginUseCase:
+        return LoginUseCase(
+            user_repository=SqlAlchemyUserRepository(session),
+            refresh_token_repository=SqlAlchemyRefreshTokenRepository(session),
+            settings=self.settings,
+        )
+
+    def build_refresh_access_token_use_case(self, session: Session) -> RefreshAccessTokenUseCase:
+        return RefreshAccessTokenUseCase(
+            user_repository=SqlAlchemyUserRepository(session),
+            refresh_token_repository=SqlAlchemyRefreshTokenRepository(session),
+            settings=self.settings,
+        )
+
+    def build_logout_use_case(self, session: Session) -> LogoutUseCase:
+        return LogoutUseCase(SqlAlchemyRefreshTokenRepository(session))
+
+    def build_get_current_user_use_case(self, session: Session) -> GetCurrentUserUseCase:
+        return GetCurrentUserUseCase(SqlAlchemyUserRepository(session), self.settings)
 
 
 def build_container(settings: Settings | None = None) -> Container:

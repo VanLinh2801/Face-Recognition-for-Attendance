@@ -16,8 +16,10 @@ from app.bootstrap.container import Container, build_container
 from app.bootstrap.logging import configure_logging
 from app.core.db import ping_database
 from app.core.exceptions import AppError, InfrastructureError
+from app.core.security import hash_password
 from app.application.use_cases.event_ingestion import IngestStatus
 from app.infrastructure.integrations.redis_event_consumer import RedisEventConsumer
+from app.infrastructure.persistence.repositories.user_repository import SqlAlchemyUserRepository
 from app.presentation.api.router import api_router
 from app.presentation.schemas.common import ErrorResponse
 
@@ -32,6 +34,7 @@ async def lifespan(app: FastAPI):
     app.state.container = container
     app.state.redis_consumer = None
     app.state.websocket_hub = container.websocket_hub
+    _seed_admin_user_if_configured(container)
 
     if container.settings.enable_event_consumer:
         consumer = RedisEventConsumer(container.settings)
@@ -247,4 +250,21 @@ def _to_realtime_envelope(*, channel: RealtimeChannel, event_type: str, envelope
         payload=payload if isinstance(payload, dict) else {},
         metadata={"message_id": envelope.get("message_id"), "producer": envelope.get("producer")},
     )
+
+
+def _seed_admin_user_if_configured(container: Container) -> None:
+    username = container.settings.auth_seed_admin_username
+    password = container.settings.auth_seed_admin_password
+    if not username or not password:
+        return
+    with container.session_factory() as session:
+        repo = SqlAlchemyUserRepository(session)
+        if repo.get_by_username(username) is None:
+            repo.create_user(
+                username=username,
+                password_hash=hash_password(password, container.settings.auth_bcrypt_rounds),
+                is_active=True,
+            )
+            session.commit()
+            logger.info("Seeded admin account username=%s", username)
 

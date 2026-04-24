@@ -13,6 +13,12 @@ from app.application.use_cases.attendance import (
     ListAttendanceEventsUseCase,
     ListPersonAttendanceHistoryUseCase,
 )
+from app.application.use_cases.auth import (
+    GetCurrentUserUseCase,
+    LoginUseCase,
+    LogoutUseCase,
+    RefreshAccessTokenUseCase,
+)
 from app.application.use_cases.attendance_exceptions import (
     BulkDeleteAttendanceExceptionsUseCase,
     CreateAttendanceExceptionUseCase,
@@ -265,3 +271,31 @@ def get_realtime_catchup_use_case(
     container: Container = Depends(get_container),
 ) -> GetRealtimeCatchupUseCase:
     return container.build_get_realtime_catchup_use_case(session)
+
+
+def get_login_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> LoginUseCase:
+    return container.build_login_use_case(session)
+
+
+def get_refresh_access_token_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> RefreshAccessTokenUseCase:
+    return container.build_refresh_access_token_use_case(session)
+
+
+def get_logout_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> LogoutUseCase:
+    return container.build_logout_use_case(session)
+
+
+def get_current_user_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetCurrentUserUseCase:
+    return container.build_get_current_user_use_case(session)
