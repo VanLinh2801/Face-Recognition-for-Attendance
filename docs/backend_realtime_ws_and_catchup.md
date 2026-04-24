@@ -205,3 +205,129 @@ Lưu ý hiện tại:
 - Chưa có session resume theo cursor/message_id (đang dùng `since_timestamp`).
 - Logic reconnect tự động/backoff nằm phía frontend client (backend đã hỗ trợ endpoint + flow).
 
+---
+
+## Frontend Integration Guide
+
+Phần này là checklist để team frontend dùng realtime service của backend một cách ổn định.
+
+### 1) Chuẩn bị dữ liệu ở frontend
+- Lưu `lastReceivedTimestamp` (ISO UTC string) mỗi khi nhận được message hợp lệ từ WS.
+- Dùng `dedupe_key` để chống hiển thị trùng khi merge dữ liệu từ catch-up và live.
+- Tạo local store theo `event_type` hoặc theo `channel` tùy UI.
+
+### 2) Trình tự kết nối khuyến nghị
+1. Lấy JWT hợp lệ.
+2. Mở WS tới `/api/ws/v1/realtime?channels=events.business,stream.overlay`.
+3. Khi WS mở lại sau disconnect, gọi catch-up:
+   - `GET /api/ws/v1/realtime/catchup?channel=events.business&since_timestamp=<lastReceivedTimestamp>&limit=200`
+4. Merge replay theo `dedupe_key`.
+5. Tiếp tục consume stream live từ WS.
+
+### 3) Mẫu code frontend (JavaScript/TypeScript)
+```ts
+type RealtimeMessage = {
+  channel?: string;
+  event_type: string;
+  occurred_at?: string;
+  correlation_id?: string | null;
+  dedupe_key?: string | null;
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+const API_BASE = "http://localhost:8000";
+const WS_BASE = "ws://localhost:8000";
+
+let socket: WebSocket | null = null;
+let reconnectTimer: number | null = null;
+let retryCount = 0;
+let lastReceivedTimestamp: string = new Date(0).toISOString();
+const seenKeys = new Set<string>();
+
+function rememberMessage(msg: RealtimeMessage) {
+  if (msg.occurred_at) {
+    if (msg.occurred_at > lastReceivedTimestamp) lastReceivedTimestamp = msg.occurred_at;
+  }
+  if (msg.dedupe_key) seenKeys.add(msg.dedupe_key);
+}
+
+function applyBusinessMessage(msg: RealtimeMessage) {
+  if (msg.dedupe_key && seenKeys.has(msg.dedupe_key)) return;
+  // TODO: update UI state/store
+  rememberMessage(msg);
+}
+
+async function fetchCatchup(jwt: string) {
+  const url = new URL(`${API_BASE}/api/ws/v1/realtime/catchup`);
+  url.searchParams.set("channel", "events.business");
+  url.searchParams.set("since_timestamp", lastReceivedTimestamp);
+  url.searchParams.set("limit", "200");
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${jwt}` },
+  });
+  if (!res.ok) throw new Error(`Catch-up failed: ${res.status}`);
+  const data = await res.json();
+  for (const item of data.items ?? []) {
+    applyBusinessMessage(item);
+  }
+}
+
+function connectRealtime(jwt: string) {
+  const wsUrl = `${WS_BASE}/api/ws/v1/realtime?token=${encodeURIComponent(jwt)}&channels=events.business,stream.overlay,stream.health`;
+  socket = new WebSocket(wsUrl);
+
+  socket.onopen = async () => {
+    retryCount = 0;
+    try {
+      await fetchCatchup(jwt);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  socket.onmessage = (event) => {
+    const msg: RealtimeMessage = JSON.parse(event.data);
+    if (msg.event_type === "heartbeat") return;
+    if (msg.channel === "events.business") {
+      applyBusinessMessage(msg);
+      return;
+    }
+    // TODO: overlay/health rendering if needed
+  };
+
+  socket.onclose = () => scheduleReconnect(jwt);
+  socket.onerror = () => socket?.close();
+}
+
+function scheduleReconnect(jwt: string) {
+  if (reconnectTimer) window.clearTimeout(reconnectTimer);
+  const delayMs = Math.min(30000, 1000 * 2 ** Math.min(retryCount, 5)); // exponential backoff
+  retryCount += 1;
+  reconnectTimer = window.setTimeout(() => connectRealtime(jwt), delayMs);
+}
+```
+
+### 4) Quy tắc xử lý dữ liệu ở frontend
+- Nếu `event_type = heartbeat`: bỏ qua ở business UI.
+- Nếu có `dedupe_key` đã thấy trước đó: bỏ qua event đó.
+- Khi nhận event mới:
+  - update UI state,
+  - cập nhật `lastReceivedTimestamp`,
+  - lưu `dedupe_key` vào cache in-memory.
+
+### 5) Xử lý lỗi thường gặp
+- `1008 policy violation` khi WS connect:
+  - JWT sai hoặc hết hạn.
+  - Kiểm tra `iss`, `aud`, `exp`.
+- Catch-up trả lỗi `422`:
+  - `since_timestamp` sai định dạng ISO datetime.
+- Mất event sau reconnect:
+  - Đảm bảo luôn gọi catch-up trước khi coi stream live là ổn định.
+  - Đảm bảo frontend cập nhật `lastReceivedTimestamp` sau mỗi event.
+
+### 6) Khuyến nghị cho dashboard 1 client
+- Dùng `channels=events.business` nếu không cần overlay/health để giảm tải.
+- `limit=200` thường đủ cho reconnect ngắn.
+- Có thể reset `seenKeys` theo vòng đời trang (không cần persist lâu dài trong localStorage nếu quy mô nhỏ).
+
