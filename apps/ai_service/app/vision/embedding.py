@@ -7,12 +7,17 @@ from io import BytesIO
 
 from PIL import Image
 
-from .schemas import BoundingBox
+from ..core.schemas import BoundingBox
 
 
 class Embedder:
-    def __init__(self, embedding_size: int) -> None:
+    def __init__(self, embedding_size: int, model_name: str) -> None:
         self._embedding_size = embedding_size
+        self._model_name = model_name
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
 
     def embed(self, image: Image.Image, face: BoundingBox) -> list[float]:
         crop = image.crop((face.x, face.y, face.x + face.width, face.y + face.height))

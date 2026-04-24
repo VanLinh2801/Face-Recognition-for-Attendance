@@ -4,6 +4,12 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(_ENV_PATH, override=False)
 
 
 def _get_bool(name: str, default: bool) -> bool:
@@ -11,6 +17,42 @@ def _get_bool(name: str, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+@dataclass(frozen=True)
+class ModelSettings:
+    detector: str = os.getenv("FACE_DETECTOR_MODEL", "scrfd_2.5g")
+    spoof: str = os.getenv("FACE_SPOOF_MODEL", "miniFASNet")
+    recognizer: str = os.getenv("FACE_RECOGNIZER_MODEL", "antelopev2")
+
+
+@dataclass(frozen=True)
+class BenchmarkSettings:
+    gallery_dir: str = os.getenv(
+        "BENCHMARK_GALLERY_DIR",
+        "data/benchmarks/recognizer_compare/gallery",
+    )
+    probe_dir: str = os.getenv(
+        "BENCHMARK_PROBE_DIR",
+        "data/benchmarks/recognizer_compare/probe",
+    )
+    report_dir: str = os.getenv(
+        "BENCHMARK_REPORT_DIR",
+        "data/benchmarks/recognizer_compare/reports",
+    )
+    models: tuple[str, ...] = tuple(
+        part.strip()
+        for part in os.getenv(
+            "BENCHMARK_RECOGNIZER_MODELS",
+            "antelopev2,buffalo_l",
+        ).split(",")
+        if part.strip()
+    )
+    match_threshold: float = float(
+        os.getenv("BENCHMARK_MATCH_THRESHOLD", os.getenv("QDRANT_MATCH_THRESHOLD", "0.82"))
+    )
+    insightface_ctx_id: int = int(os.getenv("INSIGHTFACE_CTX_ID", "-1"))
+    insightface_det_size: int = int(os.getenv("INSIGHTFACE_DET_SIZE", "640"))
 
 
 @dataclass(frozen=True)
@@ -41,3 +83,5 @@ class Settings:
         os.getenv("IMAGE_FETCH_TIMEOUT_SECONDS", "10")
     )
     run_once: bool = _get_bool("AI_SERVICE_RUN_ONCE", False)
+    models: ModelSettings = ModelSettings()
+    benchmark: BenchmarkSettings = BenchmarkSettings()

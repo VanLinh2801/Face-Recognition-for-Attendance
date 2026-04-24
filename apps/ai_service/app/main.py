@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from .config import Settings
+from .core.config import Settings
 from .service import AIService
 
 

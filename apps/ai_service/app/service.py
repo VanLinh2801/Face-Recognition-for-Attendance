@@ -5,19 +5,20 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .config import Settings
-from .detection import FaceDetector, QualityGate
-from .embedding import Embedder
-from .image_loader import ImageLoader
-from .qdrant_store import QdrantStore
-from .schemas import (
+from .core.config import Settings
+from .core.schemas import (
     AccessResult,
     AccessTask,
     FrameResolution,
     OnboardingResult,
     OnboardingTask,
 )
-from .streams import RedisStreamClient
+from .io.image_loader import ImageLoader
+from .io.streams import RedisStreamClient
+from .store.qdrant_store import QdrantStore
+from .vision.detection import FaceDetector, QualityGate
+from .vision.embedding import Embedder
+from .vision.spoof import SpoofChecker
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +35,16 @@ class AIService:
             consumer_name=settings.redis_consumer_name,
         )
         self._loader = ImageLoader(settings.image_fetch_timeout_seconds)
-        self._detector = FaceDetector()
+        self._detector = FaceDetector(settings.models.detector)
+        self._spoof_checker = SpoofChecker(settings.models.spoof)
         self._quality_gate = QualityGate(
             min_image_size=settings.min_image_size,
             min_face_size=settings.min_face_size,
         )
-        self._embedder = Embedder(settings.embedding_size)
+        self._embedder = Embedder(
+            embedding_size=settings.embedding_size,
+            model_name=settings.models.recognizer,
+        )
         self._qdrant = QdrantStore(
             host=settings.qdrant_host,
             port=settings.qdrant_port,
@@ -49,6 +54,12 @@ class AIService:
         )
 
     def bootstrap(self) -> None:
+        logger.info(
+            "Configured models detector=%s spoof=%s recognizer=%s",
+            self._detector.model_name,
+            self._spoof_checker.model_name,
+            self._embedder.model_name,
+        )
         self._streams.ensure_group()
         self._qdrant.ensure_collection()
 
