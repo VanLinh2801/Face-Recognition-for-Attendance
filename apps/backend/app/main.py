@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from time import perf_counter
 from uuid import uuid4
 from contextlib import asynccontextmanager
@@ -10,7 +11,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.bootstrap.container import build_container
+from app.application.dtos.realtime import RealtimeChannel, RealtimeEnvelope
+from app.bootstrap.container import Container, build_container
 from app.bootstrap.logging import configure_logging
 from app.core.db import ping_database
 from app.core.exceptions import AppError, InfrastructureError
@@ -29,12 +31,15 @@ async def lifespan(app: FastAPI):
     configure_logging(container.settings.log_level)
     app.state.container = container
     app.state.redis_consumer = None
+    app.state.websocket_hub = container.websocket_hub
 
     if container.settings.enable_event_consumer:
         consumer = RedisEventConsumer(container.settings)
         consumer.register_handler("recognition_event.detected", _build_recognition_ingest_handler(container))
         consumer.register_handler("unknown_event.detected", _build_unknown_ingest_handler(container))
         consumer.register_handler("spoof_alert.detected", _build_spoof_ingest_handler(container))
+        consumer.register_handler("frame_analysis.updated", _build_overlay_relay_handler(container))
+        consumer.register_handler("stream.health.updated", _build_stream_health_relay_handler(container))
         await consumer.start()
         app.state.redis_consumer = consumer
 
@@ -86,6 +91,18 @@ async def health_ready(request: Request) -> dict[str, str]:
     return {"status": "ready"}
 
 
+@app.get("/health/realtime")
+async def health_realtime(request: Request) -> dict[str, int]:
+    hub = request.app.state.websocket_hub
+    metrics = hub.metrics
+    return {
+        "active_connections": metrics.active_connections,
+        "sent_messages": metrics.sent_messages,
+        "dropped_messages": metrics.dropped_messages,
+        "disconnect_slow_client": metrics.disconnect_slow_client,
+    }
+
+
 @app.exception_handler(AppError)
 async def handle_app_error(_: Request, exc: AppError) -> JSONResponse:
     payload = ErrorResponse(code=exc.code, message=str(exc), details=exc.details)
@@ -114,6 +131,14 @@ def _build_recognition_ingest_handler(container):
             uow = container.create_uow(session)
             use_case = container.build_ingest_recognition_event_use_case(session, uow)
             result = use_case.execute(envelope)
+            if result.status == IngestStatus.PROCESSED:
+                await container.realtime_event_bus.publish(
+                    _to_realtime_envelope(
+                        channel=RealtimeChannel.EVENTS_BUSINESS,
+                        event_type="recognition_event.detected",
+                        envelope=envelope,
+                    )
+                )
             logger.info(
                 "ingest recognition result=%s message_id=%s dedupe_key=%s",
                 result.status,
@@ -131,6 +156,14 @@ def _build_unknown_ingest_handler(container):
             uow = container.create_uow(session)
             use_case = container.build_ingest_unknown_event_use_case(session, uow)
             result = use_case.execute(envelope)
+            if result.status == IngestStatus.PROCESSED:
+                await container.realtime_event_bus.publish(
+                    _to_realtime_envelope(
+                        channel=RealtimeChannel.EVENTS_BUSINESS,
+                        event_type="unknown_event.detected",
+                        envelope=envelope,
+                    )
+                )
             logger.info(
                 "ingest unknown result=%s message_id=%s dedupe_key=%s",
                 result.status,
@@ -148,6 +181,14 @@ def _build_spoof_ingest_handler(container):
             uow = container.create_uow(session)
             use_case = container.build_ingest_spoof_alert_event_use_case(session, uow)
             result = use_case.execute(envelope)
+            if result.status == IngestStatus.PROCESSED:
+                await container.realtime_event_bus.publish(
+                    _to_realtime_envelope(
+                        channel=RealtimeChannel.EVENTS_BUSINESS,
+                        event_type="spoof_alert.detected",
+                        envelope=envelope,
+                    )
+                )
             logger.info(
                 "ingest spoof result=%s message_id=%s dedupe_key=%s",
                 result.status,
@@ -157,4 +198,53 @@ def _build_spoof_ingest_handler(container):
             return result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
 
     return _handler
+
+
+def _build_overlay_relay_handler(container: Container):
+    async def _handler(envelope: dict, _payload: dict) -> bool:
+        await container.realtime_event_bus.publish(
+            _to_realtime_envelope(
+                channel=RealtimeChannel.STREAM_OVERLAY,
+                event_type="frame_analysis.updated",
+                envelope=envelope,
+            )
+        )
+        return True
+
+    return _handler
+
+
+def _build_stream_health_relay_handler(container: Container):
+    async def _handler(envelope: dict, _payload: dict) -> bool:
+        await container.realtime_event_bus.publish(
+            _to_realtime_envelope(
+                channel=RealtimeChannel.STREAM_HEALTH,
+                event_type="stream.health.updated",
+                envelope=envelope,
+            )
+        )
+        return True
+
+    return _handler
+
+
+def _to_realtime_envelope(*, channel: RealtimeChannel, event_type: str, envelope: dict) -> RealtimeEnvelope:
+    raw_occurred_at = envelope.get("occurred_at")
+    occurred_at = datetime.now(timezone.utc)
+    if isinstance(raw_occurred_at, str):
+        try:
+            occurred_at = datetime.fromisoformat(raw_occurred_at.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    payload = envelope.get("payload", {})
+    dedupe_key = payload.get("dedupe_key") if isinstance(payload, dict) else None
+    return RealtimeEnvelope(
+        channel=channel,
+        event_type=event_type,
+        occurred_at=occurred_at,
+        correlation_id=envelope.get("correlation_id"),
+        dedupe_key=dedupe_key if isinstance(dedupe_key, str) else None,
+        payload=payload if isinstance(payload, dict) else {},
+        metadata={"message_id": envelope.get("message_id"), "producer": envelope.get("producer")},
+    )
 

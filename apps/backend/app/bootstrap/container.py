@@ -59,6 +59,7 @@ from app.infrastructure.persistence.repositories import (
     SqlAlchemyUnknownEventRepository,
 )
 from app.infrastructure.integrations.pipeline_client import PipelineEventPublisher
+from app.infrastructure.realtime import HubRealtimeEventBus, WebSocketHub
 from app.infrastructure.persistence.session import SessionProvider
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
@@ -71,6 +72,8 @@ class Container:
     engine: Engine
     session_factory: sessionmaker[Session]
     session_provider: SessionProvider
+    websocket_hub: WebSocketHub
+    realtime_event_bus: HubRealtimeEventBus
 
     def create_uow(self, session: Session) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(session)
@@ -203,9 +206,13 @@ def build_container(settings: Settings | None = None) -> Container:
     engine = create_db_engine(runtime_settings)
     session_factory = create_session_factory(engine)
     session_provider = SessionProvider(session_factory)
+    websocket_hub = WebSocketHub(runtime_settings)
+    realtime_event_bus = HubRealtimeEventBus(websocket_hub)
     return Container(
         settings=runtime_settings,
         engine=engine,
         session_factory=session_factory,
         session_provider=session_provider,
+        websocket_hub=websocket_hub,
+        realtime_event_bus=realtime_event_bus,
     )

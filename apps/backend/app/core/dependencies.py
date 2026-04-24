@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, WebSocket
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.attendance import (
@@ -41,12 +41,18 @@ from app.application.use_cases.recognition_events import ListRecognitionEventsUs
 from app.application.use_cases.spoof_alert_events import ListSpoofAlertEventsUseCase
 from app.application.use_cases.unknown_events import ListUnknownEventsUseCase
 from app.bootstrap.container import Container
+from app.core.security import AuthenticatedPrincipal, extract_bearer_token, verify_jwt_token
 from app.infrastructure.integrations.pipeline_client import PipelineEventPublisher
+from app.infrastructure.realtime.websocket_hub import WebSocketHub
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
 def get_container(request: Request) -> Container:
     return request.app.state.container
+
+
+def get_container_from_websocket(websocket: WebSocket) -> Container:
+    return websocket.app.state.container
 
 
 def get_db_session(container: Container = Depends(get_container)) -> Generator[Session, None, None]:
@@ -239,3 +245,15 @@ def get_bulk_delete_attendance_exceptions_use_case(
     container: Container = Depends(get_container),
 ) -> BulkDeleteAttendanceExceptionsUseCase:
     return container.build_bulk_delete_attendance_exceptions_use_case(session)
+
+
+def get_websocket_hub(container: Container = Depends(get_container)) -> WebSocketHub:
+    return container.websocket_hub
+
+
+def authenticate_websocket(websocket: WebSocket, container: Container) -> AuthenticatedPrincipal:
+    token = extract_bearer_token(
+        websocket.headers.get("authorization"),
+        websocket.query_params.get("token"),
+    )
+    return verify_jwt_token(token, container.settings)

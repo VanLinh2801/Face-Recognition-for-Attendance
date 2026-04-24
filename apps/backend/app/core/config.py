@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     redis_batch_size: int = Field(default=20, alias="REDIS_BATCH_SIZE")
     enable_event_consumer: bool = Field(default=True, alias="ENABLE_EVENT_CONSUMER")
 
+    jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
+    jwt_secret_key: str = Field(default="change-me", alias="JWT_SECRET_KEY")
+    jwt_issuer: str = Field(default="face-recognition-backend", alias="JWT_ISSUER")
+    jwt_audience: str = Field(default="face-recognition-clients", alias="JWT_AUDIENCE")
+
+    ws_enable: bool = Field(default=True, alias="WS_ENABLE")
+    ws_max_connections: int = Field(default=200, alias="WS_MAX_CONNECTIONS")
+    ws_queue_size: int = Field(default=200, alias="WS_QUEUE_SIZE")
+    ws_heartbeat_seconds: int = Field(default=20, alias="WS_HEARTBEAT_SECONDS")
+
     @property
     def sqlalchemy_database_url(self) -> str:
         if self.database_url:
