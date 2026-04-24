@@ -43,6 +43,7 @@ from app.application.use_cases.persons import (
     UpdatePersonUseCase,
 )
 from app.application.use_cases.recognition_events import ListRecognitionEventsUseCase
+from app.application.use_cases.realtime import GetRealtimeCatchupUseCase
 from app.application.use_cases.spoof_alert_events import ListSpoofAlertEventsUseCase
 from app.application.use_cases.unknown_events import ListUnknownEventsUseCase
 from app.core.config import Settings, get_settings
@@ -197,6 +198,13 @@ class Container:
             uow=uow,
             spoof_repository=SqlAlchemySpoofAlertEventRepository(session),
             inbox_repository=SqlAlchemyEventInboxRepository(session),
+        )
+
+    def build_get_realtime_catchup_use_case(self, session: Session) -> GetRealtimeCatchupUseCase:
+        return GetRealtimeCatchupUseCase(
+            recognition_repository=SqlAlchemyRecognitionEventRepository(session),
+            unknown_repository=SqlAlchemyUnknownEventRepository(session),
+            spoof_repository=SqlAlchemySpoofAlertEventRepository(session),
         )
 
 

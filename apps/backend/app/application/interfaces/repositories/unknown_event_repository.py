@@ -23,6 +23,13 @@ class UnknownEventRepository(Protocol):
         review_status: UnknownEventReviewStatus | None = None,
     ) -> tuple[list[UnknownEvent], int]: ...
 
+    def list_unknown_events_since(
+        self,
+        *,
+        since_timestamp: datetime,
+        limit: int,
+    ) -> list[UnknownEvent]: ...
+
     def get_by_dedupe_key(self, dedupe_key: str) -> UnknownEvent | None: ...
 
     def create_unknown_event(

@@ -38,6 +38,7 @@ from app.application.use_cases.persons import (
     UpdatePersonUseCase,
 )
 from app.application.use_cases.recognition_events import ListRecognitionEventsUseCase
+from app.application.use_cases.realtime import GetRealtimeCatchupUseCase
 from app.application.use_cases.spoof_alert_events import ListSpoofAlertEventsUseCase
 from app.application.use_cases.unknown_events import ListUnknownEventsUseCase
 from app.bootstrap.container import Container
@@ -257,3 +258,10 @@ def authenticate_websocket(websocket: WebSocket, container: Container) -> Authen
         websocket.query_params.get("token"),
     )
     return verify_jwt_token(token, container.settings)
+
+
+def get_realtime_catchup_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetRealtimeCatchupUseCase:
+    return container.build_get_realtime_catchup_use_case(session)

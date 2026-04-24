@@ -88,6 +88,38 @@ class SqlAlchemyUnknownEventRepository(UnknownEventRepository):
             updated_at=item.updated_at,
         )
 
+    def list_unknown_events_since(
+        self,
+        *,
+        since_timestamp: datetime,
+        limit: int,
+    ) -> list[UnknownEvent]:
+        stmt = (
+            select(UnknownEventModel)
+            .where(UnknownEventModel.detected_at > since_timestamp)
+            .order_by(UnknownEventModel.detected_at.asc())
+            .limit(limit)
+        )
+        items = self._session.execute(stmt).scalars().all()
+        return [
+            UnknownEvent(
+                id=item.id,
+                snapshot_media_asset_id=item.snapshot_media_asset_id,
+                detected_at=item.detected_at,
+                event_direction=item.event_direction,
+                match_score=to_float(item.match_score),
+                spoof_score=to_float(item.spoof_score),
+                event_source=item.event_source,
+                dedupe_key=item.dedupe_key,
+                raw_payload=item.raw_payload,
+                review_status=item.review_status,
+                notes=item.notes,
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+            )
+            for item in items
+        ]
+
     def create_unknown_event(
         self,
         *,

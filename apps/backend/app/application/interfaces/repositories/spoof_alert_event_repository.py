@@ -23,6 +23,13 @@ class SpoofAlertEventRepository(Protocol):
         review_status: SpoofReviewStatus | None = None,
     ) -> tuple[list[SpoofAlertEvent], int]: ...
 
+    def list_spoof_alert_events_since(
+        self,
+        *,
+        since_timestamp: datetime,
+        limit: int,
+    ) -> list[SpoofAlertEvent]: ...
+
     def get_by_dedupe_key(self, dedupe_key: str) -> SpoofAlertEvent | None: ...
 
     def create_spoof_alert_event(

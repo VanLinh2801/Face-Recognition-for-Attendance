@@ -47,6 +47,9 @@ def test_websocket_auth_and_fanout(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "secret")
     monkeypatch.setenv("JWT_ISSUER", "issuer")
     monkeypatch.setenv("JWT_AUDIENCE", "aud")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
     import app.main as app_main
 
     importlib.reload(app_main)
@@ -75,6 +78,9 @@ def test_websocket_auth_failure(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "secret")
     monkeypatch.setenv("JWT_ISSUER", "issuer")
     monkeypatch.setenv("JWT_AUDIENCE", "aud")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
     import app.main as app_main
 
     importlib.reload(app_main)

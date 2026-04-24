@@ -88,6 +88,38 @@ class SqlAlchemySpoofAlertEventRepository(SpoofAlertEventRepository):
             updated_at=item.updated_at,
         )
 
+    def list_spoof_alert_events_since(
+        self,
+        *,
+        since_timestamp: datetime,
+        limit: int,
+    ) -> list[SpoofAlertEvent]:
+        stmt = (
+            select(SpoofAlertEventModel)
+            .where(SpoofAlertEventModel.detected_at > since_timestamp)
+            .order_by(SpoofAlertEventModel.detected_at.asc())
+            .limit(limit)
+        )
+        items = self._session.execute(stmt).scalars().all()
+        return [
+            SpoofAlertEvent(
+                id=item.id,
+                person_id=item.person_id,
+                snapshot_media_asset_id=item.snapshot_media_asset_id,
+                detected_at=item.detected_at,
+                spoof_score=to_float(item.spoof_score) or 0.0,
+                event_source=item.event_source,
+                dedupe_key=item.dedupe_key,
+                raw_payload=item.raw_payload,
+                severity=item.severity,
+                review_status=item.review_status,
+                notes=item.notes,
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+            )
+            for item in items
+        ]
+
     def create_spoof_alert_event(
         self,
         *,

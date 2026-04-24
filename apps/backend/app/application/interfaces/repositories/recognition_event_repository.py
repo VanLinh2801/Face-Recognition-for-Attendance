@@ -22,6 +22,13 @@ class RecognitionEventRepository(Protocol):
         recognized_to: datetime | None = None,
     ) -> tuple[list[RecognitionEvent], int]: ...
 
+    def list_recognition_events_since(
+        self,
+        *,
+        since_timestamp: datetime,
+        limit: int,
+    ) -> list[RecognitionEvent]: ...
+
     def get_by_dedupe_key(self, dedupe_key: str) -> RecognitionEvent | None: ...
 
     def create_recognition_event(
