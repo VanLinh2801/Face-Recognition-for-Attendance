@@ -31,6 +31,7 @@ class SpoofAlertEventModel(Base):
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     spoof_score: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
     event_source: Mapped[str] = mapped_column(String(100), nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     raw_payload: Mapped[dict | None] = mapped_column(JSONB(astext_type=Text()), nullable=True)
     severity: Mapped[SpoofSeverity]
     review_status: Mapped[SpoofReviewStatus]

@@ -7,7 +7,26 @@ from dataclasses import dataclass
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.use_cases.attendance import (
+    GetAttendanceDailySummaryUseCase,
+    GetAttendanceEventUseCase,
+    ListAttendanceEventsUseCase,
+    ListPersonAttendanceHistoryUseCase,
+)
+from app.application.use_cases.attendance_exceptions import (
+    BulkDeleteAttendanceExceptionsUseCase,
+    CreateAttendanceExceptionUseCase,
+    DeleteAttendanceExceptionUseCase,
+    GetAttendanceExceptionUseCase,
+    ListAttendanceExceptionsUseCase,
+    UpdateAttendanceExceptionUseCase,
+)
 from app.application.use_cases.media_assets import ListMediaAssetsUseCase
+from app.application.use_cases.event_ingestion import (
+    IngestRecognitionEventUseCase,
+    IngestSpoofAlertEventUseCase,
+    IngestUnknownEventUseCase,
+)
 from app.application.use_cases.face_registrations import (
     CompleteFaceRegistrationUseCase,
     CreateFaceRegistrationUseCase,
@@ -28,7 +47,10 @@ from app.application.use_cases.spoof_alert_events import ListSpoofAlertEventsUse
 from app.application.use_cases.unknown_events import ListUnknownEventsUseCase
 from app.core.config import Settings, get_settings
 from app.core.db import create_db_engine, create_session_factory
-from app.infrastructure.persistence.repositories.read_repositories import (
+from app.infrastructure.persistence.repositories import (
+    SqlAlchemyAttendanceExceptionRepository,
+    SqlAlchemyAttendanceRepository,
+    SqlAlchemyEventInboxRepository,
     SqlAlchemyFaceRegistrationRepository,
     SqlAlchemyMediaAssetRepository,
     SqlAlchemyPersonRepository,
@@ -83,6 +105,39 @@ class Container:
     def build_list_media_assets_use_case(self, session: Session) -> ListMediaAssetsUseCase:
         return ListMediaAssetsUseCase(SqlAlchemyMediaAssetRepository(session))
 
+    def build_list_attendance_events_use_case(self, session: Session) -> ListAttendanceEventsUseCase:
+        return ListAttendanceEventsUseCase(SqlAlchemyAttendanceRepository(session))
+
+    def build_get_attendance_event_use_case(self, session: Session) -> GetAttendanceEventUseCase:
+        return GetAttendanceEventUseCase(SqlAlchemyAttendanceRepository(session))
+
+    def build_list_person_attendance_history_use_case(self, session: Session) -> ListPersonAttendanceHistoryUseCase:
+        return ListPersonAttendanceHistoryUseCase(SqlAlchemyAttendanceRepository(session))
+
+    def build_get_attendance_daily_summary_use_case(self, session: Session) -> GetAttendanceDailySummaryUseCase:
+        return GetAttendanceDailySummaryUseCase(SqlAlchemyAttendanceRepository(session))
+
+    def build_create_attendance_exception_use_case(self, session: Session) -> CreateAttendanceExceptionUseCase:
+        return CreateAttendanceExceptionUseCase(SqlAlchemyAttendanceExceptionRepository(session))
+
+    def build_list_attendance_exceptions_use_case(self, session: Session) -> ListAttendanceExceptionsUseCase:
+        return ListAttendanceExceptionsUseCase(SqlAlchemyAttendanceExceptionRepository(session))
+
+    def build_get_attendance_exception_use_case(self, session: Session) -> GetAttendanceExceptionUseCase:
+        return GetAttendanceExceptionUseCase(SqlAlchemyAttendanceExceptionRepository(session))
+
+    def build_update_attendance_exception_use_case(self, session: Session) -> UpdateAttendanceExceptionUseCase:
+        return UpdateAttendanceExceptionUseCase(SqlAlchemyAttendanceExceptionRepository(session))
+
+    def build_delete_attendance_exception_use_case(self, session: Session) -> DeleteAttendanceExceptionUseCase:
+        return DeleteAttendanceExceptionUseCase(SqlAlchemyAttendanceExceptionRepository(session))
+
+    def build_bulk_delete_attendance_exceptions_use_case(
+        self,
+        session: Session,
+    ) -> BulkDeleteAttendanceExceptionsUseCase:
+        return BulkDeleteAttendanceExceptionsUseCase(SqlAlchemyAttendanceExceptionRepository(session))
+
     def build_create_face_registration_use_case(self, session: Session) -> CreateFaceRegistrationUseCase:
         return CreateFaceRegistrationUseCase(
             SqlAlchemyPersonRepository(session),
@@ -107,6 +162,39 @@ class Container:
 
     def build_pipeline_event_publisher(self) -> PipelineEventPublisher:
         return PipelineEventPublisher(self.settings)
+
+    def build_ingest_recognition_event_use_case(
+        self,
+        session: Session,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> IngestRecognitionEventUseCase:
+        return IngestRecognitionEventUseCase(
+            uow=uow,
+            recognition_repository=SqlAlchemyRecognitionEventRepository(session),
+            inbox_repository=SqlAlchemyEventInboxRepository(session),
+        )
+
+    def build_ingest_unknown_event_use_case(
+        self,
+        session: Session,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> IngestUnknownEventUseCase:
+        return IngestUnknownEventUseCase(
+            uow=uow,
+            unknown_repository=SqlAlchemyUnknownEventRepository(session),
+            inbox_repository=SqlAlchemyEventInboxRepository(session),
+        )
+
+    def build_ingest_spoof_alert_event_use_case(
+        self,
+        session: Session,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> IngestSpoofAlertEventUseCase:
+        return IngestSpoofAlertEventUseCase(
+            uow=uow,
+            spoof_repository=SqlAlchemySpoofAlertEventRepository(session),
+            inbox_repository=SqlAlchemyEventInboxRepository(session),
+        )
 
 
 def build_container(settings: Settings | None = None) -> Container:

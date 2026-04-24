@@ -28,6 +28,7 @@ class UnknownEventModel(Base):
     match_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     spoof_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     event_source: Mapped[str] = mapped_column(String(100), nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     raw_payload: Mapped[dict | None] = mapped_column(JSONB(astext_type=Text()), nullable=True)
     review_status: Mapped[UnknownEventReviewStatus]
     notes: Mapped[str | None] = mapped_column(Text(), nullable=True)

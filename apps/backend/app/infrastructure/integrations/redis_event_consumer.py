@@ -17,7 +17,7 @@ from app.core.config import Settings
 
 logger = logging.getLogger(__name__)
 
-EventHandler = Callable[[dict[str, Any], dict[str, Any]], Awaitable[None]]
+EventHandler = Callable[[dict[str, Any], dict[str, Any]], Awaitable[bool]]
 
 
 @dataclass(slots=True)
@@ -35,10 +35,15 @@ class RedisEventConsumer:
 
     async def start(self) -> None:
         self._client = Redis.from_url(self.settings.redis_url, decode_responses=True)
-        await self._ensure_group()
+        await self._ensure_group(self.settings.redis_stream_ai_events)
+        await self._ensure_group(self.settings.redis_stream_pipeline_events)
         self._stop_event.clear()
         self._task = asyncio.create_task(self._consume_loop())
-        logger.info("Redis consumer started for stream=%s", self.settings.redis_stream_ai_events)
+        logger.info(
+            "Redis consumer started for streams=%s,%s",
+            self.settings.redis_stream_ai_events,
+            self.settings.redis_stream_pipeline_events,
+        )
 
     async def stop(self) -> None:
         self._stop_event.set()
@@ -50,11 +55,11 @@ class RedisEventConsumer:
             await self._client.close()
         logger.info("Redis consumer stopped")
 
-    async def _ensure_group(self) -> None:
+    async def _ensure_group(self, stream_name: str) -> None:
         assert self._client is not None
         try:
             await self._client.xgroup_create(
-                name=self.settings.redis_stream_ai_events,
+                name=stream_name,
                 groupname=self.settings.redis_consumer_group,
                 id="$",
                 mkstream=True,
@@ -70,7 +75,10 @@ class RedisEventConsumer:
                 records = await self._client.xreadgroup(
                     groupname=self.settings.redis_consumer_group,
                     consumername=self.settings.redis_consumer_name,
-                    streams={self.settings.redis_stream_ai_events: ">"},
+                    streams={
+                        self.settings.redis_stream_ai_events: ">",
+                        self.settings.redis_stream_pipeline_events: ">",
+                    },
                     count=self.settings.redis_batch_size,
                     block=self.settings.redis_block_ms,
                 )
@@ -89,12 +97,13 @@ class RedisEventConsumer:
                 payload = envelope.get("payload", {})
                 event_name = envelope.get("event_name", "unknown")
                 handler = self._handlers.get(event_name, self._default_handler)
-                await handler(envelope, payload)
-                await self._client.xack(
-                    self.settings.redis_stream_ai_events,
-                    self.settings.redis_consumer_group,
-                    message_id,
-                )
+                should_ack = await handler(envelope, payload)
+                if should_ack:
+                    await self._client.xack(
+                        _stream_name,
+                        self.settings.redis_consumer_group,
+                        message_id,
+                    )
 
     @staticmethod
     def _parse_envelope(raw_data: dict[str, str]) -> dict[str, Any]:
@@ -111,10 +120,11 @@ class RedisEventConsumer:
             "payload": json.loads(raw_data["payload"]) if "payload" in raw_data else {},
         }
 
-    async def _default_handler(self, envelope: dict[str, Any], payload: dict[str, Any]) -> None:
+    async def _default_handler(self, envelope: dict[str, Any], payload: dict[str, Any]) -> bool:
         logger.info(
             "Received event=%s version=%s payload_keys=%s",
             envelope.get("event_name"),
             envelope.get("event_version"),
             sorted(payload.keys()),
         )
+        return True

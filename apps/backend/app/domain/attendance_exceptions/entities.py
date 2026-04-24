@@ -18,5 +18,8 @@ class AttendanceException:
     reason: str
     notes: str | None
     created_by_person_id: UUID
+    is_deleted: bool
+    deleted_at: datetime | None
+    deleted_by_person_id: UUID | None
     created_at: datetime
     updated_at: datetime

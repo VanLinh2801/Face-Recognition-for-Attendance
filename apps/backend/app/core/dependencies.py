@@ -7,6 +7,20 @@ from collections.abc import Generator
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from app.application.use_cases.attendance import (
+    GetAttendanceDailySummaryUseCase,
+    GetAttendanceEventUseCase,
+    ListAttendanceEventsUseCase,
+    ListPersonAttendanceHistoryUseCase,
+)
+from app.application.use_cases.attendance_exceptions import (
+    BulkDeleteAttendanceExceptionsUseCase,
+    CreateAttendanceExceptionUseCase,
+    DeleteAttendanceExceptionUseCase,
+    GetAttendanceExceptionUseCase,
+    ListAttendanceExceptionsUseCase,
+    UpdateAttendanceExceptionUseCase,
+)
 from app.application.use_cases.media_assets import ListMediaAssetsUseCase
 from app.application.use_cases.face_registrations import (
     CompleteFaceRegistrationUseCase,
@@ -155,3 +169,73 @@ def get_pipeline_event_publisher(
     container: Container = Depends(get_container),
 ) -> PipelineEventPublisher:
     return container.build_pipeline_event_publisher()
+
+
+def get_list_attendance_events_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ListAttendanceEventsUseCase:
+    return container.build_list_attendance_events_use_case(session)
+
+
+def get_get_attendance_event_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetAttendanceEventUseCase:
+    return container.build_get_attendance_event_use_case(session)
+
+
+def get_list_person_attendance_history_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ListPersonAttendanceHistoryUseCase:
+    return container.build_list_person_attendance_history_use_case(session)
+
+
+def get_get_attendance_daily_summary_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetAttendanceDailySummaryUseCase:
+    return container.build_get_attendance_daily_summary_use_case(session)
+
+
+def get_create_attendance_exception_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> CreateAttendanceExceptionUseCase:
+    return container.build_create_attendance_exception_use_case(session)
+
+
+def get_list_attendance_exceptions_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ListAttendanceExceptionsUseCase:
+    return container.build_list_attendance_exceptions_use_case(session)
+
+
+def get_get_attendance_exception_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetAttendanceExceptionUseCase:
+    return container.build_get_attendance_exception_use_case(session)
+
+
+def get_update_attendance_exception_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> UpdateAttendanceExceptionUseCase:
+    return container.build_update_attendance_exception_use_case(session)
+
+
+def get_delete_attendance_exception_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> DeleteAttendanceExceptionUseCase:
+    return container.build_delete_attendance_exception_use_case(session)
+
+
+def get_bulk_delete_attendance_exceptions_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> BulkDeleteAttendanceExceptionsUseCase:
+    return container.build_bulk_delete_attendance_exceptions_use_case(session)

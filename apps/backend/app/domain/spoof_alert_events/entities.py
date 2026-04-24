@@ -16,6 +16,7 @@ class SpoofAlertEvent:
     detected_at: datetime
     spoof_score: float
     event_source: str
+    dedupe_key: str = ""
     raw_payload: dict[str, Any] | None
     severity: SpoofSeverity
     review_status: SpoofReviewStatus

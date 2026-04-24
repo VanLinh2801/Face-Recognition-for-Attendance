@@ -14,6 +14,7 @@ from app.bootstrap.container import build_container
 from app.bootstrap.logging import configure_logging
 from app.core.db import ping_database
 from app.core.exceptions import AppError, InfrastructureError
+from app.application.use_cases.event_ingestion import IngestStatus
 from app.infrastructure.integrations.redis_event_consumer import RedisEventConsumer
 from app.presentation.api.router import api_router
 from app.presentation.schemas.common import ErrorResponse
@@ -31,6 +32,9 @@ async def lifespan(app: FastAPI):
 
     if container.settings.enable_event_consumer:
         consumer = RedisEventConsumer(container.settings)
+        consumer.register_handler("recognition_event.detected", _build_recognition_ingest_handler(container))
+        consumer.register_handler("unknown_event.detected", _build_unknown_ingest_handler(container))
+        consumer.register_handler("spoof_alert.detected", _build_spoof_ingest_handler(container))
         await consumer.start()
         app.state.redis_consumer = consumer
 
@@ -102,4 +106,55 @@ async def handle_unexpected_error(_: Request, exc: Exception) -> JSONResponse:
     logger.exception("Unhandled exception", exc_info=exc)
     payload = ErrorResponse(code="internal_error", message="Internal server error", details=None)
     return JSONResponse(status_code=500, content=payload.model_dump())
+
+
+def _build_recognition_ingest_handler(container):
+    async def _handler(envelope: dict, _payload: dict) -> bool:
+        with container.session_factory() as session:
+            uow = container.create_uow(session)
+            use_case = container.build_ingest_recognition_event_use_case(session, uow)
+            result = use_case.execute(envelope)
+            logger.info(
+                "ingest recognition result=%s message_id=%s dedupe_key=%s",
+                result.status,
+                envelope.get("message_id"),
+                (envelope.get("payload") or {}).get("dedupe_key"),
+            )
+            return result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
+
+    return _handler
+
+
+def _build_unknown_ingest_handler(container):
+    async def _handler(envelope: dict, _payload: dict) -> bool:
+        with container.session_factory() as session:
+            uow = container.create_uow(session)
+            use_case = container.build_ingest_unknown_event_use_case(session, uow)
+            result = use_case.execute(envelope)
+            logger.info(
+                "ingest unknown result=%s message_id=%s dedupe_key=%s",
+                result.status,
+                envelope.get("message_id"),
+                (envelope.get("payload") or {}).get("dedupe_key"),
+            )
+            return result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
+
+    return _handler
+
+
+def _build_spoof_ingest_handler(container):
+    async def _handler(envelope: dict, _payload: dict) -> bool:
+        with container.session_factory() as session:
+            uow = container.create_uow(session)
+            use_case = container.build_ingest_spoof_alert_event_use_case(session, uow)
+            result = use_case.execute(envelope)
+            logger.info(
+                "ingest spoof result=%s message_id=%s dedupe_key=%s",
+                result.status,
+                envelope.get("message_id"),
+                (envelope.get("payload") or {}).get("dedupe_key"),
+            )
+            return result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
+
+    return _handler
 

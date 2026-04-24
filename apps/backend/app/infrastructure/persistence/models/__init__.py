@@ -1,7 +1,9 @@
 """ORM models package."""
 
 from app.infrastructure.persistence.models.base import Base
+from app.infrastructure.persistence.models.attendance_exception_model import AttendanceExceptionModel
 from app.infrastructure.persistence.models.department_model import DepartmentModel
+from app.infrastructure.persistence.models.event_inbox_model import EventInboxModel
 from app.infrastructure.persistence.models.face_registration_model import FaceRegistrationModel
 from app.infrastructure.persistence.models.media_asset_model import MediaAssetModel
 from app.infrastructure.persistence.models.person_model import PersonModel
@@ -11,7 +13,9 @@ from app.infrastructure.persistence.models.unknown_event_model import UnknownEve
 
 __all__ = [
     "Base",
+    "AttendanceExceptionModel",
     "DepartmentModel",
+    "EventInboxModel",
     "FaceRegistrationModel",
     "MediaAssetModel",
     "PersonModel",

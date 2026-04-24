@@ -17,6 +17,7 @@ class UnknownEvent:
     match_score: float | None
     spoof_score: float | None
     event_source: str
+    dedupe_key: str = ""
     raw_payload: dict[str, Any] | None
     review_status: UnknownEventReviewStatus
     notes: str | None

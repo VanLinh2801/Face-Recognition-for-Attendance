@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.presentation.api.v1 import (
+    attendance,
     attendance_exceptions,
     departments,
     face_registrations,
@@ -15,6 +16,7 @@ from app.presentation.api.v1 import (
 )
 
 router = APIRouter(prefix="/v1")
+router.include_router(attendance.router)
 router.include_router(persons.router)
 router.include_router(persons_registrations.router)
 router.include_router(persons_registrations.internal_router)

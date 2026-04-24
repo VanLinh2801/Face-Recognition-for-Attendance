@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Protocol
+from uuid import UUID
 
-from app.domain.shared.enums import SpoofReviewStatus
+from app.domain.shared.enums import SpoofReviewStatus, SpoofSeverity
 from app.domain.spoof_alert_events.entities import SpoofAlertEvent
 
 
@@ -21,3 +22,20 @@ class SpoofAlertEventRepository(Protocol):
         detected_to: datetime | None = None,
         review_status: SpoofReviewStatus | None = None,
     ) -> tuple[list[SpoofAlertEvent], int]: ...
+
+    def get_by_dedupe_key(self, dedupe_key: str) -> SpoofAlertEvent | None: ...
+
+    def create_spoof_alert_event(
+        self,
+        *,
+        person_id: UUID | None,
+        snapshot_media_asset_id: UUID | None,
+        detected_at: datetime,
+        spoof_score: float,
+        event_source: str,
+        dedupe_key: str,
+        severity: SpoofSeverity,
+        review_status: SpoofReviewStatus,
+        notes: str | None,
+        raw_payload: dict | None,
+    ) -> SpoofAlertEvent: ...

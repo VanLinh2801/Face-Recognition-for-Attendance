@@ -291,6 +291,7 @@ def upgrade() -> None:
         sa.Column("match_score", sa.Numeric(5, 4), nullable=True),
         sa.Column("spoof_score", sa.Numeric(5, 4), nullable=True),
         sa.Column("event_source", sa.String(length=100), nullable=False),
+        sa.Column("dedupe_key", sa.String(length=255), nullable=False),
         sa.Column("raw_payload", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column(
             "is_valid",
@@ -321,6 +322,7 @@ def upgrade() -> None:
             name="fk_recognition_events_snapshot_media_asset_id_media_assets",
             ondelete="SET NULL",
         ),
+        sa.UniqueConstraint("dedupe_key", name="uq_recognition_events_dedupe_key"),
     )
 
     op.create_table(
@@ -343,6 +345,7 @@ def upgrade() -> None:
         sa.Column("match_score", sa.Numeric(5, 4), nullable=True),
         sa.Column("spoof_score", sa.Numeric(5, 4), nullable=True),
         sa.Column("event_source", sa.String(length=100), nullable=False),
+        sa.Column("dedupe_key", sa.String(length=255), nullable=False),
         sa.Column("raw_payload", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column(
             "review_status",
@@ -369,6 +372,7 @@ def upgrade() -> None:
             name="fk_unknown_events_snapshot_media_asset_id_media_assets",
             ondelete="SET NULL",
         ),
+        sa.UniqueConstraint("dedupe_key", name="uq_unknown_events_dedupe_key"),
     )
 
     op.create_table(
@@ -385,6 +389,7 @@ def upgrade() -> None:
         sa.Column("detected_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("spoof_score", sa.Numeric(5, 4), nullable=False),
         sa.Column("event_source", sa.String(length=100), nullable=False),
+        sa.Column("dedupe_key", sa.String(length=255), nullable=False),
         sa.Column("raw_payload", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column(
             "severity",
@@ -423,6 +428,31 @@ def upgrade() -> None:
             name="fk_spoof_alert_events_snapshot_media_asset_id_media_assets",
             ondelete="SET NULL",
         ),
+        sa.UniqueConstraint("dedupe_key", name="uq_spoof_alert_events_dedupe_key"),
+    )
+
+    op.create_table(
+        "event_inbox",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            nullable=False,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column("message_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("event_name", sa.String(length=255), nullable=False),
+        sa.Column("producer", sa.String(length=50), nullable=False),
+        sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "status",
+            sa.String(length=50),
+            nullable=False,
+            server_default=sa.text("'processed'"),
+        ),
+        sa.Column("processed_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("details", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.UniqueConstraint("message_id", name="uq_event_inbox_message_id"),
     )
 
     op.create_table(
@@ -442,6 +472,14 @@ def upgrade() -> None:
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("created_by_person_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column(
+            "is_deleted",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("false"),
+        ),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("deleted_by_person_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -464,6 +502,12 @@ def upgrade() -> None:
             ["person_id"],
             ["persons.id"],
             name="fk_attendance_exceptions_person_id_persons",
+        ),
+        sa.ForeignKeyConstraint(
+            ["deleted_by_person_id"],
+            ["persons.id"],
+            name="fk_attendance_exceptions_deleted_by_person_id_persons",
+            ondelete="SET NULL",
         ),
     )
 
@@ -494,7 +538,9 @@ def upgrade() -> None:
         "recognition_events",
         ["recognized_at"],
     )
+    op.create_index("ix_recognition_events_dedupe_key", "recognition_events", ["dedupe_key"])
     op.create_index("ix_unknown_events_detected_at", "unknown_events", ["detected_at"])
+    op.create_index("ix_unknown_events_dedupe_key", "unknown_events", ["dedupe_key"])
     op.create_index(
         "ix_unknown_events_review_status",
         "unknown_events",
@@ -515,6 +561,8 @@ def upgrade() -> None:
         "spoof_alert_events",
         ["review_status"],
     )
+    op.create_index("ix_spoof_alert_events_dedupe_key", "spoof_alert_events", ["dedupe_key"])
+    op.create_index("ix_event_inbox_message_id", "event_inbox", ["message_id"])
     op.create_index(
         "ix_attendance_exceptions_person_id",
         "attendance_exceptions",
@@ -530,9 +578,19 @@ def upgrade() -> None:
         "attendance_exceptions",
         ["created_by_person_id"],
     )
+    op.create_index(
+        "ix_attendance_exceptions_is_deleted_work_date",
+        "attendance_exceptions",
+        ["is_deleted", "work_date"],
+    )
 
 
 def downgrade() -> None:
+    op.drop_index("ix_event_inbox_message_id", table_name="event_inbox")
+    op.drop_table("event_inbox")
+
+    op.drop_index("ix_spoof_alert_events_dedupe_key", table_name="spoof_alert_events")
+    op.drop_index("ix_attendance_exceptions_is_deleted_work_date", table_name="attendance_exceptions")
     op.drop_index("ix_attendance_exceptions_created_by_person_id", table_name="attendance_exceptions")
     op.drop_index("ix_attendance_exceptions_work_date", table_name="attendance_exceptions")
     op.drop_index("ix_attendance_exceptions_person_id", table_name="attendance_exceptions")
@@ -543,10 +601,12 @@ def downgrade() -> None:
     op.drop_index("ix_spoof_alert_events_person_id", table_name="spoof_alert_events")
     op.drop_table("spoof_alert_events")
 
+    op.drop_index("ix_unknown_events_dedupe_key", table_name="unknown_events")
     op.drop_index("ix_unknown_events_review_status", table_name="unknown_events")
     op.drop_index("ix_unknown_events_detected_at", table_name="unknown_events")
     op.drop_table("unknown_events")
 
+    op.drop_index("ix_recognition_events_dedupe_key", table_name="recognition_events")
     op.drop_index("ix_recognition_events_recognized_at", table_name="recognition_events")
     op.drop_index("ix_recognition_events_face_registration_id", table_name="recognition_events")
     op.drop_index("ix_recognition_events_person_id", table_name="recognition_events")

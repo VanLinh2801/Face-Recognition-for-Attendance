@@ -33,6 +33,10 @@ class Settings(BaseSettings):
 
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
     redis_stream_ai_events: str = Field(default="ai.backend.events", alias="REDIS_STREAM_AI_EVENTS")
+    redis_stream_pipeline_events: str = Field(
+        default="pipeline.backend.events",
+        alias="REDIS_STREAM_PIPELINE_EVENTS",
+    )
     redis_stream_backend_pipeline: str = Field(
         default="backend.pipeline.events",
         alias="REDIS_STREAM_BACKEND_PIPELINE",
