@@ -21,16 +21,22 @@ class CameraManager:
             logger.warning(f"Initial connection to {source} failed. Retrying in 5s...")
             await asyncio.sleep(5)
 
+        def _on_task_done(task: asyncio.Task):
+            """Callback để bắt exception từ các task fire-and-forget."""
+            if not task.cancelled() and task.exception() is not None:
+                logger.error(f"[CameraManager] Exception in processing task: {task.exception()}", exc_info=task.exception())
+
         try:
             while self.is_running:
-                frame = reader.read_frame()
+                # Đọc frame trong thread riêng để không block event loop
+                # Lưu ý: FRAME_INTERVAL không áp dụng ở đây vì RTSP đã tự điều tiết tốc độ
+                frame = await asyncio.to_thread(reader.read_frame)
                 if frame is not None:
-                    # Gửi toàn bộ frame sang PipelineService (bộ lọc Motion đã nằm trong PipelineService)
-                    asyncio.create_task(self.process_callback(source, frame))
-                else:
-                    # Nếu frame None (mất kết nối giữa chừng), sleep 1 lúc trước khi thử lại
-                    await asyncio.sleep(1)
-                    
+                    task = asyncio.create_task(self.process_callback(source, frame))
+                    task.add_done_callback(_on_task_done)
+                    logger.debug(f"Pushed frame from {source} to processing task.")
+                # Throttle: chỉ lấy frame để xử lý theo FRAME_INTERVAL
+                # Background thread vẫn đọc 30fps để giữ _latest_frame luôn mới
                 await asyncio.sleep(settings.FRAME_INTERVAL)
         except asyncio.CancelledError:
             logger.info(f"Camera loop for {source} cancelled.")

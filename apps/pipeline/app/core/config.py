@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     FRAME_INTERVAL: float = 0.1     # Giây giữa các lần đọc frame (10 FPS)
     
     # SCRFD & Tracking
-    SCRFD_MODEL_PATH: str = "apps\pipeline\app\models\scrfd_2.5g_bnkps.onnx"
+    SCRFD_MODEL_PATH: str = r"app\models\scrfd_2.5g_bnkps.onnx"
     FACE_DETECTION_THRESHOLD: float = 0.5
     FACE_TRACKER_COOLDOWN: int = 300  # 5 phút (300 giây)
     MAX_INITIAL_SNAPSHOTS: int = 3   # Số ảnh tối đa trong 2 giây đầu

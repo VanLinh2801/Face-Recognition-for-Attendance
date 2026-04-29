@@ -31,12 +31,16 @@ class FaceTracker(BaseProcessor):
             track_id = self._match_track(bbox)
             
             if track_id not in self.tracks:
+                # Tính lại centroid để lưu
+                x1, y1, x2, y2 = bbox
+                
                 # 1. Phát hiện mới
                 self.tracks[track_id] = {
                     "first_seen": current_time,
                     "last_seen": current_time,
                     "last_snapshot": current_time,
-                    "initial_count": 1
+                    "initial_count": 1,
+                    "centroid": ((x1+x2)/2.0, (y1+y2)/2.0)
                 }
                 faces_to_emit.append({"track_id": track_id, "bbox": bbox, "score": score, "type": "NEW"})
             else:
@@ -60,10 +64,35 @@ class FaceTracker(BaseProcessor):
         return context
 
     def _match_track(self, bbox):
-        # Đây là nơi logic Matching (IOU hoặc Centroid) hoạt động.
-        # Hiện tại trả về một UUID mới để hoạt động độc lập nếu chưa có tracker xịn.
-        return str(uuid.uuid4())[:8]
+        # Tính toán tâm (Centroid) của khuôn mặt mới
+        x1, y1, x2, y2 = bbox
+        cx = (x1 + x2) / 2.0
+        cy = (y1 + y2) / 2.0
+        
+        best_track_id = None
+        min_dist = float('inf')
+        dist_threshold = 100.0 # Bán kính tối đa để coi là cùng 1 người giữa 2 frame liên tiếp
+        
+        # Tìm track gần nhất
+        for tid, t_data in self.tracks.items():
+            last_cx, last_cy = t_data.get('centroid', (0, 0))
+            dist = np.sqrt((cx - last_cx)**2 + (cy - last_cy)**2)
+            if dist < min_dist and dist < dist_threshold:
+                min_dist = dist
+                best_track_id = tid
+                
+        # Nếu tìm thấy, cập nhật lại tọa độ tâm mới nhất cho track đó
+        if best_track_id:
+            self.tracks[best_track_id]['centroid'] = (cx, cy)
+            return best_track_id
+            
+        # Nếu không có track nào gần, tạo ID mới
+        new_id = str(uuid.uuid4())[:8]
+        # (Lưu ý: Centroid sẽ được lưu vào track_data ở hàm process phía trên khi nó thấy ID mới)
+        return new_id
 
     def _cleanup_tracks(self, current_time):
-        expire_time = 10.0
+        # 60 giây: đủ để người đứng yên không bị coi là người mới
+        # Khi track hết hạn, lần phát hiện tiếp theo sẽ là NEW → upload MinIO
+        expire_time = 60.0
         self.tracks = {tid: t for tid, t in self.tracks.items() if current_time - t["last_seen"] < expire_time}

@@ -29,5 +29,6 @@ class MotionProcessor(BaseProcessor):
         changed_pixels_ratio = np.count_nonzero(thresh) / thresh.size
         self.prev_frame = gray
         
+        context['motion_ratio'] = changed_pixels_ratio
         context['motion_detected'] = changed_pixels_ratio > self.threshold
         return context

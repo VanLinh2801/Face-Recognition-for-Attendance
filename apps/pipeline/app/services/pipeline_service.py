@@ -31,6 +31,7 @@ class PipelineService:
         """Luồng xử lý chính cho mỗi frame từ camera."""
         start_time = time.time()
         self.frame_count += 1
+        logger.debug(f"handle_realtime_frame called. Frame #{self.frame_count}, shape={frame.shape}")
         
         context = {
             "source_id": source_id,
@@ -41,10 +42,17 @@ class PipelineService:
         }
 
         context = self.motion_processor.process(context)
-        if not context.get('motion_detected'): return
+        ratio = context.get('motion_ratio', 0)
+        logger.debug(f"Motion ratio: {ratio:.4f} (threshold={settings.MOTION_THRESHOLD})")
+        if not context.get('motion_detected'):
+            if self.frame_count % 100 == 0:
+                logger.info(f"Processed {self.frame_count} frames, no motion detected. ratio={ratio:.4f}")
+            return
 
+        logger.info(f"Motion detected in frame {self.frame_count}, running face detection...")
         context = self.face_detector.process(context)
-        if not context.get('detections'): return
+        if not context.get('detections'):
+            return
 
         context = self.face_tracker.process(context)
         faces_to_emit = context.get('faces_to_emit', [])
@@ -56,10 +64,13 @@ class PipelineService:
         
         full_frame_ref = None
         if needs_upload:
+            logger.info(f"Faces to emit: {[f['type'] for f in faces_to_emit]}. Triggering MinIO upload...")
             full_frame_ref = self._dispatch_background_upload(source_id, frame)
             # Lưu lại ref cho các khuôn mặt trong frame này
             for face in faces_to_emit:
                 self.track_frame_refs[face['track_id']] = full_frame_ref
+        else:
+            logger.debug("No new/periodic faces to emit, skipping MinIO upload.")
         
         # Căn chỉnh và cắt khuôn mặt (Face Alignment & Crop)
         context = self.face_cropper.process(context)
@@ -114,7 +125,7 @@ class PipelineService:
         if upload_time_ms > 100:
             logger.warning(f"[KPI] MinIO Upload took unusually long: {upload_time_ms:.1f}ms (Threshold: 100ms)")
         else:
-            logger.debug(f"[KPI] MinIO Upload fast: {upload_time_ms:.1f}ms")
+            logger.info(f"[KPI] MinIO Upload fast: {upload_time_ms:.1f}ms. Object: {object_key}")
 
     def _publish_to_ai_service(self, context, face):
         """Đóng gói và gửi event recognition.requested sang Redis Stream."""

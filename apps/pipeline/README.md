@@ -25,7 +25,8 @@ ffmpeg -list_devices true -f dshow -i dummy
 Thay thế `"Integrated Webcam"` bằng tên thiết bị bạn vừa quét được ở bước 1.
 
 ```bash
-ffmpeg -f dshow -rtbufsize 500M -i video="Integrated Webcam" -c:v libx264 -preset ultrafast -tune zerolatency -rtsp_transport tcp -f rtsp rtsp://localhost:8554/mystream
+ffmpeg -f dshow -i video="Integrated Webcam" -c:v libx264 -preset ultrafast -tune zerolatency -g 10 -f rtsp -rtsp_transport tcp rtsp://localhost:8554/mystream
+
 ```
 
 **Giải thích thông số:**
