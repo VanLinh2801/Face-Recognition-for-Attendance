@@ -120,6 +120,15 @@ class SqlAlchemySpoofAlertEventRepository(SpoofAlertEventRepository):
             for item in items
         ]
 
+    def get_latest_spoof_time(self, *, person_id: UUID) -> datetime | None:
+        stmt = (
+            select(SpoofAlertEventModel.detected_at)
+            .where(SpoofAlertEventModel.person_id == person_id)
+            .order_by(SpoofAlertEventModel.detected_at.desc())
+            .limit(1)
+        )
+        return self._session.execute(stmt).scalar_one_or_none()
+
     def create_spoof_alert_event(
         self,
         *,

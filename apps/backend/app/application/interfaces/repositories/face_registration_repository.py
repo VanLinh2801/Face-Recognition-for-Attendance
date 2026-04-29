@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -40,3 +41,10 @@ class FaceRegistrationRepository(Protocol):
         embedding_version: str | None = None,
         face_image_media_asset_id: UUID | None = None,
     ) -> PersonFaceRegistration | None: ...
+
+    def list_registrations_completed_since(
+        self,
+        *,
+        since_timestamp: datetime,
+        limit: int,
+    ) -> list[PersonFaceRegistration]: ...

@@ -69,10 +69,12 @@ class IngestRecognitionEventUseCase:
         uow: UnitOfWork,
         recognition_repository: RecognitionEventRepository,
         inbox_repository: EventInboxRepository,
+        throttle_window_seconds: int = 30,
     ) -> None:
         self._uow = uow
         self._recognition_repository = recognition_repository
         self._inbox_repository = inbox_repository
+        self._throttle_window_seconds = throttle_window_seconds
 
     def execute(self, envelope: dict) -> IngestResult:
         message_id = _as_uuid(_required_str(envelope, "message_id"), "message_id")
@@ -95,11 +97,38 @@ class IngestRecognitionEventUseCase:
                 self._uow.commit()
                 return IngestResult(status=IngestStatus.DUPLICATE, reason="dedupe_key")
 
+            # Throttle repeated recognition for the same person before persisting.
+            person_id = _as_uuid(_required_str(payload, "person_id"), "person_id")
+            recognized_at = _as_datetime(_required_str(payload, "recognized_at"), "recognized_at")
+            if self._throttle_window_seconds > 0:
+                latest_time = self._recognition_repository.get_latest_recognition_time(person_id=person_id)
+                if latest_time is not None:
+                    within_window = (
+                        recognized_at >= latest_time
+                        and (recognized_at - latest_time).total_seconds() <= self._throttle_window_seconds
+                    )
+                    if within_window:
+                        self._inbox_repository.add_processed_message(
+                            message_id=message_id,
+                            event_name=_required_str(envelope, "event_name"),
+                            producer=_required_str(envelope, "producer"),
+                            occurred_at=_as_datetime(_required_str(envelope, "occurred_at"), "occurred_at"),
+                            status=IngestStatus.IGNORED.value,
+                            details={
+                                "duplicate_on": "throttle_window",
+                                "person_id": str(person_id),
+                                "recognized_at": recognized_at.isoformat(),
+                                "latest_time": latest_time.isoformat(),
+                            },
+                        )
+                        self._uow.commit()
+                        return IngestResult(status=IngestStatus.IGNORED, reason="throttled")
+
             self._recognition_repository.create_recognition_event(
-                person_id=_as_uuid(_required_str(payload, "person_id"), "person_id"),
+                person_id=person_id,
                 face_registration_id=_as_uuid(_required_str(payload, "face_registration_id"), "face_registration_id"),
                 snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload),
-                recognized_at=_as_datetime(_required_str(payload, "recognized_at"), "recognized_at"),
+                recognized_at=recognized_at,
                 event_direction=EventDirection(_required_str(payload, "event_direction")),
                 match_score=payload.get("match_score"),
                 spoof_score=payload.get("spoof_score"),
@@ -183,10 +212,12 @@ class IngestSpoofAlertEventUseCase:
         uow: UnitOfWork,
         spoof_repository: SpoofAlertEventRepository,
         inbox_repository: EventInboxRepository,
+        throttle_window_seconds: int = 30,
     ) -> None:
         self._uow = uow
         self._spoof_repository = spoof_repository
         self._inbox_repository = inbox_repository
+        self._throttle_window_seconds = throttle_window_seconds
 
     def execute(self, envelope: dict) -> IngestResult:
         message_id = _as_uuid(_required_str(envelope, "message_id"), "message_id")
@@ -209,11 +240,39 @@ class IngestSpoofAlertEventUseCase:
                 self._uow.commit()
                 return IngestResult(status=IngestStatus.DUPLICATE, reason="dedupe_key")
 
-            person_id = payload.get("person_id")
+            person_id_raw = payload.get("person_id")
+            person_id = _as_uuid(person_id_raw, "person_id") if isinstance(person_id_raw, str) else None
+            detected_at = _as_datetime(_required_str(payload, "detected_at"), "detected_at")
+
+            # Throttle repeated spoof alerts for the same person before persisting.
+            if self._throttle_window_seconds > 0 and person_id is not None:
+                latest_time = self._spoof_repository.get_latest_spoof_time(person_id=person_id)
+                if latest_time is not None:
+                    within_window = (
+                        detected_at >= latest_time
+                        and (detected_at - latest_time).total_seconds() <= self._throttle_window_seconds
+                    )
+                    if within_window:
+                        self._inbox_repository.add_processed_message(
+                            message_id=message_id,
+                            event_name=_required_str(envelope, "event_name"),
+                            producer=_required_str(envelope, "producer"),
+                            occurred_at=_as_datetime(_required_str(envelope, "occurred_at"), "occurred_at"),
+                            status=IngestStatus.IGNORED.value,
+                            details={
+                                "duplicate_on": "throttle_window",
+                                "person_id": str(person_id),
+                                "detected_at": detected_at.isoformat(),
+                                "latest_time": latest_time.isoformat(),
+                            },
+                        )
+                        self._uow.commit()
+                        return IngestResult(status=IngestStatus.IGNORED, reason="throttled")
+
             self._spoof_repository.create_spoof_alert_event(
-                person_id=_as_uuid(person_id, "person_id") if isinstance(person_id, str) else None,
+                person_id=person_id,
                 snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload),
-                detected_at=_as_datetime(_required_str(payload, "detected_at"), "detected_at"),
+                detected_at=detected_at,
                 spoof_score=float(payload["spoof_score"]),
                 event_source=_required_str(payload, "event_source"),
                 dedupe_key=dedupe_key,

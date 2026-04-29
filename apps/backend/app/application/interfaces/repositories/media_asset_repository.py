@@ -38,3 +38,13 @@ class MediaAssetRepository(Protocol):
     ) -> MediaAsset: ...
 
     def get_media_asset(self, media_asset_id: UUID) -> MediaAsset | None: ...
+
+    def list_expired_assets(
+        self,
+        *,
+        asset_type: MediaAssetType,
+        older_than: datetime,
+        limit: int,
+    ) -> list[MediaAsset]: ...
+
+    def delete_media_asset(self, *, media_asset_id: UUID) -> bool: ...

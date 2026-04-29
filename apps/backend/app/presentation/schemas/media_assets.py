@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.domain.shared.enums import MediaAssetType, StorageProvider
 from app.presentation.schemas.common import PaginatedResponse
@@ -27,3 +27,12 @@ class MediaAssetItemResponse(BaseModel):
 
 class MediaAssetListResponse(PaginatedResponse):
     items: list[MediaAssetItemResponse]
+
+
+class CleanupMediaAssetsRequest(BaseModel):
+    max_batch_size: int = Field(default=500, ge=1, le=5000)
+
+
+class CleanupMediaAssetsResponse(BaseModel):
+    deleted_total: int
+    deleted_by_asset_type: dict[str, int]

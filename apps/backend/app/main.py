@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from datetime import datetime, timezone
 from time import perf_counter
 from uuid import uuid4
+import contextlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -18,6 +20,7 @@ from app.core.db import ping_database
 from app.core.exceptions import AppError, InfrastructureError
 from app.core.security import hash_password
 from app.application.use_cases.event_ingestion import IngestStatus
+from app.application.use_cases.media_assets import CleanupMediaAssetsCommand
 from app.infrastructure.integrations.redis_event_consumer import RedisEventConsumer
 from app.infrastructure.persistence.repositories.user_repository import SqlAlchemyUserRepository
 from app.presentation.api.router import api_router
@@ -33,6 +36,7 @@ async def lifespan(app: FastAPI):
     configure_logging(container.settings.log_level)
     app.state.container = container
     app.state.redis_consumer = None
+    app.state.media_cleanup_task = None
     app.state.websocket_hub = container.websocket_hub
     _seed_admin_user_if_configured(container)
 
@@ -46,11 +50,19 @@ async def lifespan(app: FastAPI):
         await consumer.start()
         app.state.redis_consumer = consumer
 
+    if container.settings.media_cleanup_enabled:
+        app.state.media_cleanup_task = asyncio.create_task(_run_media_cleanup_scheduler(container))
+
     logger.info("Backend service started")
     try:
         yield
     finally:
         consumer: RedisEventConsumer | None = app.state.redis_consumer
+        cleanup_task: asyncio.Task[None] | None = app.state.media_cleanup_task
+        if cleanup_task is not None:
+            cleanup_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await cleanup_task
         if consumer is not None:
             await consumer.stop()
         container.engine.dispose()
@@ -267,4 +279,26 @@ def _seed_admin_user_if_configured(container: Container) -> None:
             )
             session.commit()
             logger.info("Seeded admin account username=%s", username)
+
+
+async def _run_media_cleanup_scheduler(container: Container) -> None:
+    interval_days = max(1, container.settings.media_cleanup_interval_days)
+    interval_seconds = interval_days * 24 * 60 * 60
+    batch_size = max(1, container.settings.media_cleanup_batch_size)
+
+    while True:
+        try:
+            with container.session_factory() as session:
+                use_case = container.build_cleanup_media_assets_use_case(session)
+                result = use_case.execute(CleanupMediaAssetsCommand(max_batch_size=batch_size))
+                session.commit()
+                logger.info(
+                    "media cleanup completed deleted_total=%s details=%s",
+                    result.deleted_total,
+                    result.deleted_by_asset_type,
+                )
+        except Exception:
+            logger.exception("media cleanup job failed")
+
+        await asyncio.sleep(interval_seconds)
 

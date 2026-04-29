@@ -108,6 +108,7 @@ def test_auth_token_lifecycle_and_ws_connect(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "secret")
     monkeypatch.setenv("JWT_ISSUER", "issuer")
     monkeypatch.setenv("JWT_AUDIENCE", "aud")
+    monkeypatch.setenv("AUTH_SEED_ADMIN_USERNAME", "admin")
     from app.core.config import get_settings
 
     get_settings.cache_clear()
@@ -139,7 +140,11 @@ def test_auth_token_lifecycle_and_ws_connect(monkeypatch):
         with client.websocket_connect(f"/api/ws/v1/realtime?token={new_access_token}&channels=events.business") as _ws:
             pass
 
-        logout_resp = client.post("/api/v1/auth/logout", json={"refresh_token": refresh_token})
+        logout_resp = client.post(
+            "/api/v1/auth/logout",
+            json={"refresh_token": refresh_token},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
         assert logout_resp.status_code == 200
         refresh_again = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
         assert refresh_again.status_code == 422

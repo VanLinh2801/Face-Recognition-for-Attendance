@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.core import dependencies
+from app.domain.auth.entities import User
 from app.domain.attendance_exceptions.entities import AttendanceException
 from app.domain.shared.enums import AttendanceExceptionType, EventDirection
 
@@ -97,6 +98,19 @@ class _FakeAttendanceExceptionUseCases:
         return 1
 
 
+def _build_admin_user() -> User:
+    now = datetime.now(timezone.utc)
+    return User(
+        id=uuid4(),
+        username="admin",
+        password_hash="x",
+        is_active=True,
+        last_login_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 def test_attendance_and_exceptions_api(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("ENABLE_EVENT_CONSUMER", "false")
@@ -106,6 +120,7 @@ def test_attendance_and_exceptions_api(monkeypatch):
 
     attendance_ex = _FakeAttendanceExceptionUseCases()
 
+    app_main.app.dependency_overrides[dependencies.get_admin_user] = lambda: _build_admin_user()
     app_main.app.dependency_overrides[dependencies.get_unit_of_work] = lambda: _FakeUow()
     app_main.app.dependency_overrides[dependencies.get_list_attendance_events_use_case] = lambda: _FakeAttendanceListUseCase()
     app_main.app.dependency_overrides[dependencies.get_get_attendance_event_use_case] = lambda: _FakeAttendanceGetUseCase()

@@ -5,10 +5,12 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.domain.face_registrations.entities import PersonFaceRegistration
+from app.domain.departments.entities import Department
 from app.domain.media_assets.entities import MediaAsset
 from app.domain.persons.entities import Person
 from app.infrastructure.persistence.models.face_registration_model import FaceRegistrationModel
 from app.infrastructure.persistence.models.media_asset_model import MediaAssetModel
+from app.infrastructure.persistence.models.department_model import DepartmentModel
 from app.infrastructure.persistence.models.person_model import PersonModel
 
 
@@ -63,4 +65,16 @@ def to_media_asset(model: MediaAssetModel) -> MediaAsset:
         asset_type=model.asset_type,
         uploaded_by_person_id=model.uploaded_by_person_id,
         created_at=model.created_at,
+    )
+
+
+def to_department(model: DepartmentModel) -> Department:
+    return Department(
+        id=model.id,
+        code=model.code,
+        name=model.name,
+        parent_id=model.parent_id,
+        is_active=model.is_active,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
     )

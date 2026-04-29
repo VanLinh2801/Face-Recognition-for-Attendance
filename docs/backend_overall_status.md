@@ -81,6 +81,12 @@ Backend tiêu thụ event từ Redis Streams qua consumer:
 5. Commit transaction.
 6. Ack Redis sau commit thành công.
 
+### Hardening chống flood business events (Case A)
+- Backend áp dụng throttle cho `recognition_event.detected` (và `spoof_alert.detected` khi payload có `person_id`) để tránh ghi nhận quá nhiều event trùng lặp cho cùng 1 người.
+- Cửa sổ thời gian: cấu hình `THROTTLE_BUSINESS_SECONDS` (default `30` giây).
+- Khi bị throttle: không tạo bản ghi event business mới, nhưng vẫn ghi `event_inbox` với status `ignored` để giữ tính idempotency/ack flow.
+- Với bối cảnh demo nhỏ (khoảng `50` person, ít camera), cách throttle hiện tại dùng query DB lấy event gần nhất theo `person_id` vẫn được xem là chấp nhận được. Nếu quy mô tăng lên, cần cân nhắc tối ưu thêm bằng composite index, cache hoặc Redis-based throttle.
+
 ---
 
 ## 5) Realtime subsystem
@@ -142,6 +148,10 @@ Cho phép client reconnect và lấy lại event bị lỡ trước khi tiếp t
 - Script seed admin: `apps/backend/scripts/seed_admin.py`.
 - Optional auto-seed lúc startup nếu set env `AUTH_SEED_ADMIN_USERNAME/PASSWORD`.
 
+### Phạm vi bảo vệ JWT hiện tại
+- JWT đã được dùng đầy đủ cho nhóm auth lifecycle (`/auth/me`), WebSocket realtime và các API `departments` mới thêm.
+- Nhiều API backend khác (persons, attendance, recognition/unknown/spoof/media, registrations...) hiện chưa được bảo vệ JWT hoàn toàn và vẫn là một hạng mục cần hoàn thiện thêm.
+
 ---
 
 ## 8) Cấu hình quan trọng
@@ -196,6 +206,7 @@ Kết quả gần nhất: các batch test auth + realtime + smoke đều pass.
 ## 11) Các điểm còn thiếu / hướng nâng cấp tiếp
 - Refresh token rotation (mỗi lần refresh cấp token mới + revoke token cũ).
 - Replay cho `stream.overlay` và `stream.health` nếu cần đầy đủ reconnect cho mọi channel.
+- Chưa triển khai xử lý unindex vector DB khi xóa/sửa `FaceRegistration` (mặc định backend hiện mới soft-deactivate trong Postgres). Tạm gác việc này và chờ khi AI được xử lý xong / xác định phương án mapping point-id <-> registration-id để triển khai hướng phù hợp.
 - Hardening production:
   - stricter secret management,
   - observability sâu hơn (metrics export/alerts),

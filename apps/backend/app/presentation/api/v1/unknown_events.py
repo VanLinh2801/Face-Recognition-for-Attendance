@@ -6,11 +6,11 @@ from fastapi import APIRouter
 from fastapi import Depends, Query
 
 from app.application.use_cases.unknown_events import ListUnknownEventsQuery, ListUnknownEventsUseCase
-from app.core.dependencies import get_list_unknown_events_use_case
+from app.core.dependencies import get_admin_user, get_list_unknown_events_use_case
 from app.domain.shared.enums import UnknownEventReviewStatus
 from app.presentation.schemas.unknown_events import UnknownEventItemResponse, UnknownEventListResponse
 
-router = APIRouter(prefix="/unknown-events", tags=["unknown-events"])
+router = APIRouter(prefix="/unknown-events", tags=["unknown-events"], dependencies=[Depends(get_admin_user)])
 
 
 @router.get("", response_model=UnknownEventListResponse)

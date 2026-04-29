@@ -9,14 +9,14 @@ from app.application.use_cases.spoof_alert_events import (
     ListSpoofAlertEventsQuery,
     ListSpoofAlertEventsUseCase,
 )
-from app.core.dependencies import get_list_spoof_alert_events_use_case
+from app.core.dependencies import get_admin_user, get_list_spoof_alert_events_use_case
 from app.domain.shared.enums import SpoofReviewStatus
 from app.presentation.schemas.spoof_alert_events import (
     SpoofAlertEventItemResponse,
     SpoofAlertEventListResponse,
 )
 
-router = APIRouter(prefix="/spoof-alert-events", tags=["spoof-alert-events"])
+router = APIRouter(prefix="/spoof-alert-events", tags=["spoof-alert-events"], dependencies=[Depends(get_admin_user)])
 
 
 @router.get("", response_model=SpoofAlertEventListResponse)

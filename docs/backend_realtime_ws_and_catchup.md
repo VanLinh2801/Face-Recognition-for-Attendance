@@ -164,7 +164,7 @@ Lưu ý hiện tại:
 ### 2) Luồng reconnect + catch-up
 1. Client reconnect WS.
 2. Client gọi `GET /api/ws/v1/realtime/catchup?since_timestamp=...`.
-3. Backend query recognition/unknown/spoof theo timestamp và merge-sort tăng dần thời gian.
+3. Backend query recognition/unknown/spoof và các registration đã `completed` theo timestamp, sau đó merge-sort tăng dần thời gian.
 4. Client merge replay theo `dedupe_key`.
 5. Client tiếp tục nhận live qua WS.
 
@@ -174,6 +174,7 @@ Lưu ý hiện tại:
 - `recognition_event.detected` -> `events.business`
 - `unknown_event.detected` -> `events.business`
 - `spoof_alert.detected` -> `events.business`
+- `registration_processing.completed` -> `events.business`
 - `frame_analysis.updated` -> `stream.overlay`
 - `stream.health.updated` -> `stream.health`
 

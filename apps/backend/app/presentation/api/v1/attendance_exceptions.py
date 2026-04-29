@@ -19,6 +19,7 @@ from app.application.use_cases.attendance_exceptions import (
     UpdateAttendanceExceptionUseCase,
 )
 from app.core.dependencies import (
+    get_admin_user,
     get_bulk_delete_attendance_exceptions_use_case,
     get_create_attendance_exception_use_case,
     get_delete_attendance_exception_use_case,
@@ -38,7 +39,11 @@ from app.presentation.schemas.attendance_exceptions import (
     UpdateAttendanceExceptionRequest,
 )
 
-router = APIRouter(prefix="/attendance-exceptions", tags=["attendance-exceptions"])
+router = APIRouter(
+    prefix="/attendance-exceptions",
+    tags=["attendance-exceptions"],
+    dependencies=[Depends(get_admin_user)],
+)
 
 
 @router.post("", response_model=AttendanceExceptionItemResponse, status_code=status.HTTP_201_CREATED)

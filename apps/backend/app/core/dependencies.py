@@ -27,13 +27,20 @@ from app.application.use_cases.attendance_exceptions import (
     ListAttendanceExceptionsUseCase,
     UpdateAttendanceExceptionUseCase,
 )
-from app.application.use_cases.media_assets import ListMediaAssetsUseCase
+from app.application.use_cases.media_assets import CleanupMediaAssetsUseCase, ListMediaAssetsUseCase
 from app.application.use_cases.face_registrations import (
     CompleteFaceRegistrationUseCase,
     CreateFaceRegistrationUseCase,
     DeleteFaceRegistrationUseCase,
     GetFaceRegistrationUseCase,
     ListFaceRegistrationsUseCase,
+)
+from app.application.use_cases.departments import (
+    CreateDepartmentUseCase,
+    DeleteDepartmentUseCase,
+    GetDepartmentUseCase,
+    ListDepartmentsUseCase,
+    UpdateDepartmentUseCase,
 )
 from app.application.use_cases.persons import ListPersonsUseCase
 from app.application.use_cases.persons import (
@@ -49,9 +56,12 @@ from app.application.use_cases.spoof_alert_events import ListSpoofAlertEventsUse
 from app.application.use_cases.unknown_events import ListUnknownEventsUseCase
 from app.bootstrap.container import Container
 from app.core.security import AuthenticatedPrincipal, extract_bearer_token, verify_jwt_token
+from app.core.exceptions import ValidationError
+from app.domain.auth.entities import User
 from app.infrastructure.integrations.pipeline_client import PipelineEventPublisher
 from app.infrastructure.realtime.websocket_hub import WebSocketHub
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from app.application.interfaces.realtime_event_bus import RealtimeEventBus
 
 
 def get_container(request: Request) -> Container:
@@ -115,6 +125,41 @@ def get_bulk_delete_persons_use_case(
     return container.build_bulk_delete_persons_use_case(session)
 
 
+def get_list_departments_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ListDepartmentsUseCase:
+    return container.build_list_departments_use_case(session)
+
+
+def get_create_department_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> CreateDepartmentUseCase:
+    return container.build_create_department_use_case(session)
+
+
+def get_get_department_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetDepartmentUseCase:
+    return container.build_get_department_use_case(session)
+
+
+def get_update_department_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> UpdateDepartmentUseCase:
+    return container.build_update_department_use_case(session)
+
+
+def get_delete_department_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> DeleteDepartmentUseCase:
+    return container.build_delete_department_use_case(session)
+
+
 def get_list_recognition_events_use_case(
     session: Session = Depends(get_db_session),
     container: Container = Depends(get_container),
@@ -141,6 +186,13 @@ def get_list_media_assets_use_case(
     container: Container = Depends(get_container),
 ) -> ListMediaAssetsUseCase:
     return container.build_list_media_assets_use_case(session)
+
+
+def get_cleanup_media_assets_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> CleanupMediaAssetsUseCase:
+    return container.build_cleanup_media_assets_use_case(session)
 
 
 def get_create_face_registration_use_case(
@@ -258,6 +310,10 @@ def get_websocket_hub(container: Container = Depends(get_container)) -> WebSocke
     return container.websocket_hub
 
 
+def get_realtime_event_bus(container: Container = Depends(get_container)) -> RealtimeEventBus:
+    return container.realtime_event_bus
+
+
 def authenticate_websocket(websocket: WebSocket, container: Container) -> AuthenticatedPrincipal:
     token = extract_bearer_token(
         websocket.headers.get("authorization"),
@@ -299,3 +355,20 @@ def get_current_user_use_case(
     container: Container = Depends(get_container),
 ) -> GetCurrentUserUseCase:
     return container.build_get_current_user_use_case(session)
+
+
+def get_admin_user(
+    request: Request,
+    use_case: GetCurrentUserUseCase = Depends(get_current_user_use_case),
+    container: Container = Depends(get_container),
+) -> User:
+    seed_username = container.settings.auth_seed_admin_username
+    if seed_username is None:
+        raise ValidationError("Admin account is not configured")
+
+    access_token = extract_bearer_token(request.headers.get("authorization"))
+    user = use_case.execute(access_token)
+
+    if user.username != seed_username:
+        raise ValidationError("Admin access required", details={"username": user.username})
+    return user

@@ -81,3 +81,28 @@ class SqlAlchemyMediaAssetRepository(MediaAssetRepository):
         if item is None:
             return None
         return to_media_asset(item)
+
+    def list_expired_assets(
+        self,
+        *,
+        asset_type: MediaAssetType,
+        older_than: datetime,
+        limit: int,
+    ) -> list[MediaAsset]:
+        stmt = (
+            select(MediaAssetModel)
+            .where(MediaAssetModel.asset_type == asset_type)
+            .where(MediaAssetModel.created_at < older_than)
+            .order_by(MediaAssetModel.created_at.asc())
+            .limit(limit)
+        )
+        items = self._session.execute(stmt).scalars().all()
+        return [to_media_asset(item) for item in items]
+
+    def delete_media_asset(self, *, media_asset_id: UUID) -> bool:
+        item = self._session.get(MediaAssetModel, media_asset_id)
+        if item is None:
+            return False
+        self._session.delete(item)
+        self._session.flush()
+        return True

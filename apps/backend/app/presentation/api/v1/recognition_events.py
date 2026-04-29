@@ -9,13 +9,17 @@ from app.application.use_cases.recognition_events import (
     ListRecognitionEventsQuery,
     ListRecognitionEventsUseCase,
 )
-from app.core.dependencies import get_list_recognition_events_use_case
+from app.core.dependencies import get_admin_user, get_list_recognition_events_use_case
 from app.presentation.schemas.recognition_events import (
     RecognitionEventItemResponse,
     RecognitionEventListResponse,
 )
 
-router = APIRouter(prefix="/recognition-events", tags=["recognition-events"])
+router = APIRouter(
+    prefix="/recognition-events",
+    tags=["recognition-events"],
+    dependencies=[Depends(get_admin_user)],
+)
 
 
 @router.get("", response_model=RecognitionEventListResponse)

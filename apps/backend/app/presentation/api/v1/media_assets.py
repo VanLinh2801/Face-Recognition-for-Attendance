@@ -5,12 +5,28 @@ from datetime import datetime
 from fastapi import APIRouter
 from fastapi import Depends, Query
 
-from app.application.use_cases.media_assets import ListMediaAssetsQuery, ListMediaAssetsUseCase
-from app.core.dependencies import get_list_media_assets_use_case
+from app.application.use_cases.media_assets import (
+    CleanupMediaAssetsCommand,
+    CleanupMediaAssetsUseCase,
+    ListMediaAssetsQuery,
+    ListMediaAssetsUseCase,
+)
+from app.core.dependencies import get_admin_user, get_cleanup_media_assets_use_case, get_list_media_assets_use_case, get_unit_of_work
 from app.domain.shared.enums import MediaAssetType
-from app.presentation.schemas.media_assets import MediaAssetItemResponse, MediaAssetListResponse
+from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from app.presentation.schemas.media_assets import (
+    CleanupMediaAssetsRequest,
+    CleanupMediaAssetsResponse,
+    MediaAssetItemResponse,
+    MediaAssetListResponse,
+)
 
-router = APIRouter(prefix="/media-assets", tags=["media-assets"])
+router = APIRouter(prefix="/media-assets", tags=["media-assets"], dependencies=[Depends(get_admin_user)])
+internal_router = APIRouter(
+    prefix="/internal/media-assets",
+    tags=["internal-media-assets"],
+    dependencies=[Depends(get_admin_user)],
+)
 
 
 @router.get("", response_model=MediaAssetListResponse)
@@ -36,4 +52,18 @@ def list_media_assets(
         total=result.total,
         page=result.page,
         page_size=result.page_size,
+    )
+
+
+@internal_router.post("/cleanup", response_model=CleanupMediaAssetsResponse)
+def cleanup_media_assets(
+    request: CleanupMediaAssetsRequest,
+    use_case: CleanupMediaAssetsUseCase = Depends(get_cleanup_media_assets_use_case),
+    uow: SqlAlchemyUnitOfWork = Depends(get_unit_of_work),
+) -> CleanupMediaAssetsResponse:
+    result = use_case.execute(CleanupMediaAssetsCommand(max_batch_size=request.max_batch_size))
+    uow.commit()
+    return CleanupMediaAssetsResponse(
+        deleted_total=result.deleted_total,
+        deleted_by_asset_type=result.deleted_by_asset_type,
     )

@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select  # type: ignore[import-not-found]
+from sqlalchemy.orm import Session  # type: ignore[import-not-found]
 
 from app.application.interfaces.repositories.recognition_event_repository import RecognitionEventRepository
 from app.domain.recognition_events.entities import RecognitionEvent
@@ -118,6 +118,15 @@ class SqlAlchemyRecognitionEventRepository(RecognitionEventRepository):
             )
             for item in items
         ]
+
+    def get_latest_recognition_time(self, *, person_id: UUID) -> datetime | None:
+        stmt = (
+            select(RecognitionEventModel.recognized_at)
+            .where(RecognitionEventModel.person_id == person_id)
+            .order_by(RecognitionEventModel.recognized_at.desc())
+            .limit(1)
+        )
+        return self._session.execute(stmt).scalar_one_or_none()
 
     def create_recognition_event(
         self,

@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.core import dependencies
+from app.domain.auth.entities import User
 from app.domain.face_registrations.entities import PersonFaceRegistration
 from app.domain.persons.entities import Person
 from app.domain.shared.enums import PersonStatus, RegistrationStatus
@@ -122,6 +123,19 @@ class _UseCaseCompleteRegistration:
         return _build_registration(uuid4())
 
 
+def _build_admin_user() -> User:
+    now = datetime.now(timezone.utc)
+    return User(
+        id=uuid4(),
+        username="admin",
+        password_hash="x",
+        is_active=True,
+        last_login_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 def test_persons_module_endpoints(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("ENABLE_EVENT_CONSUMER", "false")
@@ -129,6 +143,7 @@ def test_persons_module_endpoints(monkeypatch):
 
     importlib.reload(app_main)
 
+    app_main.app.dependency_overrides[dependencies.get_admin_user] = lambda: _build_admin_user()
     app_main.app.dependency_overrides[dependencies.get_create_person_use_case] = lambda: _UseCaseCreatePerson()
     app_main.app.dependency_overrides[dependencies.get_get_person_use_case] = lambda: _UseCaseGetPerson()
     app_main.app.dependency_overrides[dependencies.get_update_person_use_case] = lambda: _UseCaseUpdatePerson()

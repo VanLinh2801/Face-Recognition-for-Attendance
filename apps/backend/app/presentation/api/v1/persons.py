@@ -18,6 +18,7 @@ from app.application.use_cases.persons import (
     UpdatePersonUseCase,
 )
 from app.core.dependencies import (
+    get_admin_user,
     get_bulk_delete_persons_use_case,
     get_create_person_use_case,
     get_delete_person_use_case,
@@ -37,7 +38,7 @@ from app.presentation.schemas.persons import (
     UpdatePersonRequest,
 )
 
-router = APIRouter(prefix="/persons", tags=["persons"])
+router = APIRouter(prefix="/persons", tags=["persons"], dependencies=[Depends(get_admin_user)])
 
 
 @router.get("", response_model=PersonListResponse)

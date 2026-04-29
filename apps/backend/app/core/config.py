@@ -47,6 +47,22 @@ class Settings(BaseSettings):
     redis_batch_size: int = Field(default=20, alias="REDIS_BATCH_SIZE")
     enable_event_consumer: bool = Field(default=True, alias="ENABLE_EVENT_CONSUMER")
 
+    # Business realtime hardening (prevent event flooding).
+    # Used by ingestion layer to throttle repeated business events for the same person.
+    throttle_business_seconds: int = Field(default=30, alias="THROTTLE_BUSINESS_SECONDS")
+
+    media_retention_days_recognition: int = Field(default=30, alias="MEDIA_RETENTION_DAYS_RECOGNITION")
+    media_retention_days_unknown: int = Field(default=30, alias="MEDIA_RETENTION_DAYS_UNKNOWN")
+    media_retention_days_spoof: int = Field(default=30, alias="MEDIA_RETENTION_DAYS_SPOOF")
+    media_cleanup_enabled: bool = Field(default=False, alias="MEDIA_CLEANUP_ENABLED")
+    media_cleanup_interval_days: int = Field(default=1, alias="MEDIA_CLEANUP_INTERVAL_DAYS")
+    media_cleanup_batch_size: int = Field(default=500, alias="MEDIA_CLEANUP_BATCH_SIZE")
+
+    minio_endpoint: str = Field(default="minio:9000", alias="MINIO_ENDPOINT")
+    minio_access_key: str = Field(default="minioadmin", alias="MINIO_ACCESS_KEY")
+    minio_secret_key: str = Field(default="minioadmin", alias="MINIO_SECRET_KEY")
+    minio_bucket: str = Field(default="attendance", alias="MINIO_BUCKET")
+
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     jwt_secret_key: str = Field(default="change-me", alias="JWT_SECRET_KEY")
     jwt_issuer: str = Field(default="face-recognition-backend", alias="JWT_ISSUER")

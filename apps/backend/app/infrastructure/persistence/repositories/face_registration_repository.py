@@ -95,3 +95,21 @@ class SqlAlchemyFaceRegistrationRepository(FaceRegistrationRepository):
         item.updated_at = datetime.now(timezone.utc)
         self._session.flush()
         return to_registration(item)
+
+    def list_registrations_completed_since(
+        self,
+        *,
+        since_timestamp: datetime,
+        limit: int,
+    ) -> list[PersonFaceRegistration]:
+        completed_statuses = [RegistrationStatus.VALIDATED, RegistrationStatus.INDEXED, RegistrationStatus.FAILED]
+        stmt = (
+            select(FaceRegistrationModel)
+            .where(FaceRegistrationModel.updated_at > since_timestamp)
+            .where(FaceRegistrationModel.registration_status.in_(completed_statuses))
+            .where(FaceRegistrationModel.is_active.is_(True))
+            .order_by(FaceRegistrationModel.updated_at.asc())
+            .limit(limit)
+        )
+        items = self._session.execute(stmt).scalars().all()
+        return [to_registration(item) for item in items]

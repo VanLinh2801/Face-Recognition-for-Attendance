@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.core import dependencies
+from app.domain.auth.entities import User
 from app.domain.media_assets.entities import MediaAsset
 from app.domain.persons.entities import Person
 from app.domain.recognition_events.entities import RecognitionEvent
@@ -37,6 +38,19 @@ class _FakeUseCase:
         return _FakeResult(self._items)
 
 
+def _build_admin_user() -> User:
+    now = datetime.now(timezone.utc)
+    return User(
+        id=uuid4(),
+        username="admin",
+        password_hash="x",
+        is_active=True,
+        last_login_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 def test_phase2_read_endpoints_return_paginated_shape(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("ENABLE_EVENT_CONSUMER", "false")
@@ -44,6 +58,7 @@ def test_phase2_read_endpoints_return_paginated_shape(monkeypatch):
 
     importlib.reload(app_main)
     now = datetime.now(timezone.utc)
+    app_main.app.dependency_overrides[dependencies.get_admin_user] = lambda: _build_admin_user()
 
     app_main.app.dependency_overrides[dependencies.get_list_persons_use_case] = lambda: _FakeUseCase(
         [

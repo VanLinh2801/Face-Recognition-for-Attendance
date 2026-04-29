@@ -16,6 +16,7 @@ from app.application.use_cases.attendance import (
     ListPersonAttendanceHistoryUseCase,
 )
 from app.core.dependencies import (
+    get_admin_user,
     get_get_attendance_daily_summary_use_case,
     get_get_attendance_event_use_case,
     get_list_attendance_events_use_case,
@@ -27,7 +28,7 @@ from app.presentation.schemas.attendance import (
     AttendanceEventListResponse,
 )
 
-router = APIRouter(prefix="/attendance", tags=["attendance"])
+router = APIRouter(prefix="/attendance", tags=["attendance"], dependencies=[Depends(get_admin_user)])
 
 
 @router.get("/events", response_model=AttendanceEventListResponse)

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from app.application.use_cases.auth import (
-    GetCurrentUserUseCase,
     LoginCommand,
     LoginUseCase,
     LogoutUseCase,
@@ -13,12 +12,12 @@ from app.application.use_cases.auth import (
     RefreshCommand,
 )
 from app.core.dependencies import (
-    get_current_user_use_case,
+    get_admin_user,
     get_login_use_case,
     get_logout_use_case,
     get_refresh_access_token_use_case,
 )
-from app.core.security import extract_bearer_token
+from app.domain.auth.entities import User
 from app.presentation.schemas.auth import (
     AuthTokenResponse,
     CurrentUserResponse,
@@ -61,6 +60,7 @@ def refresh_token(
 @router.post("/logout")
 def logout(
     payload: LogoutRequest,
+    _admin: User = Depends(get_admin_user),
     use_case: LogoutUseCase = Depends(get_logout_use_case),
 ) -> dict[str, str]:
     use_case.execute(payload.refresh_token)
@@ -69,14 +69,11 @@ def logout(
 
 @router.get("/me", response_model=CurrentUserResponse)
 def me(
-    request: Request,
-    use_case: GetCurrentUserUseCase = Depends(get_current_user_use_case),
+    admin_user: User = Depends(get_admin_user),
 ) -> CurrentUserResponse:
-    access_token = extract_bearer_token(request.headers.get("authorization"))
-    user = use_case.execute(access_token)
     return CurrentUserResponse(
-        id=user.id,
-        username=user.username,
-        is_active=user.is_active,
-        last_login_at=user.last_login_at,
+        id=admin_user.id,
+        username=admin_user.username,
+        is_active=admin_user.is_active,
+        last_login_at=admin_user.last_login_at,
     )

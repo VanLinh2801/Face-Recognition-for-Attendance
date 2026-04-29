@@ -27,7 +27,7 @@ from app.application.use_cases.attendance_exceptions import (
     ListAttendanceExceptionsUseCase,
     UpdateAttendanceExceptionUseCase,
 )
-from app.application.use_cases.media_assets import ListMediaAssetsUseCase
+from app.application.use_cases.media_assets import CleanupMediaAssetsUseCase, ListMediaAssetsUseCase
 from app.application.use_cases.event_ingestion import (
     IngestRecognitionEventUseCase,
     IngestSpoofAlertEventUseCase,
@@ -39,6 +39,13 @@ from app.application.use_cases.face_registrations import (
     DeleteFaceRegistrationUseCase,
     GetFaceRegistrationUseCase,
     ListFaceRegistrationsUseCase,
+)
+from app.application.use_cases.departments import (
+    CreateDepartmentUseCase,
+    DeleteDepartmentUseCase,
+    GetDepartmentUseCase,
+    ListDepartmentsUseCase,
+    UpdateDepartmentUseCase,
 )
 from app.application.use_cases.persons import ListPersonsUseCase
 from app.application.use_cases.persons import (
@@ -71,6 +78,8 @@ from app.infrastructure.integrations.pipeline_client import PipelineEventPublish
 from app.infrastructure.realtime import HubRealtimeEventBus, WebSocketHub
 from app.infrastructure.persistence.session import SessionProvider
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from app.infrastructure.persistence.repositories.department_repository import SqlAlchemyDepartmentRepository
+from app.infrastructure.storage.minio_storage_gateway import MinioStorageGateway
 
 
 @dataclass(slots=True)
@@ -105,6 +114,21 @@ class Container:
     def build_bulk_delete_persons_use_case(self, session: Session) -> BulkDeletePersonsUseCase:
         return BulkDeletePersonsUseCase(SqlAlchemyPersonRepository(session))
 
+    def build_list_departments_use_case(self, session: Session) -> ListDepartmentsUseCase:
+        return ListDepartmentsUseCase(SqlAlchemyDepartmentRepository(session))
+
+    def build_create_department_use_case(self, session: Session) -> CreateDepartmentUseCase:
+        return CreateDepartmentUseCase(SqlAlchemyDepartmentRepository(session))
+
+    def build_get_department_use_case(self, session: Session) -> GetDepartmentUseCase:
+        return GetDepartmentUseCase(SqlAlchemyDepartmentRepository(session))
+
+    def build_update_department_use_case(self, session: Session) -> UpdateDepartmentUseCase:
+        return UpdateDepartmentUseCase(SqlAlchemyDepartmentRepository(session))
+
+    def build_delete_department_use_case(self, session: Session) -> DeleteDepartmentUseCase:
+        return DeleteDepartmentUseCase(SqlAlchemyDepartmentRepository(session))
+
     def build_list_recognition_events_use_case(self, session: Session) -> ListRecognitionEventsUseCase:
         return ListRecognitionEventsUseCase(SqlAlchemyRecognitionEventRepository(session))
 
@@ -116,6 +140,13 @@ class Container:
 
     def build_list_media_assets_use_case(self, session: Session) -> ListMediaAssetsUseCase:
         return ListMediaAssetsUseCase(SqlAlchemyMediaAssetRepository(session))
+
+    def build_cleanup_media_assets_use_case(self, session: Session) -> CleanupMediaAssetsUseCase:
+        return CleanupMediaAssetsUseCase(
+            repository=SqlAlchemyMediaAssetRepository(session),
+            storage_gateway=MinioStorageGateway(self.settings),
+            settings=self.settings,
+        )
 
     def build_list_attendance_events_use_case(self, session: Session) -> ListAttendanceEventsUseCase:
         return ListAttendanceEventsUseCase(SqlAlchemyAttendanceRepository(session))
@@ -184,6 +215,7 @@ class Container:
             uow=uow,
             recognition_repository=SqlAlchemyRecognitionEventRepository(session),
             inbox_repository=SqlAlchemyEventInboxRepository(session),
+            throttle_window_seconds=self.settings.throttle_business_seconds,
         )
 
     def build_ingest_unknown_event_use_case(
@@ -206,6 +238,7 @@ class Container:
             uow=uow,
             spoof_repository=SqlAlchemySpoofAlertEventRepository(session),
             inbox_repository=SqlAlchemyEventInboxRepository(session),
+            throttle_window_seconds=self.settings.throttle_business_seconds,
         )
 
     def build_get_realtime_catchup_use_case(self, session: Session) -> GetRealtimeCatchupUseCase:
@@ -213,6 +246,7 @@ class Container:
             recognition_repository=SqlAlchemyRecognitionEventRepository(session),
             unknown_repository=SqlAlchemyUnknownEventRepository(session),
             spoof_repository=SqlAlchemySpoofAlertEventRepository(session),
+            face_registration_repository=SqlAlchemyFaceRegistrationRepository(session),
         )
 
     def build_login_use_case(self, session: Session) -> LoginUseCase:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from app.application.use_cases.event_ingestion import (
@@ -42,6 +42,8 @@ class _FakeInboxRepo:
 class _FakeRecognitionRepo:
     def __init__(self) -> None:
         self.by_dedupe: set[str] = set()
+        self.latest_by_person: dict[UUID, datetime] = {}
+        self.create_calls = 0
 
     def list_recognition_events(self, **_kwargs):
         return ([], 0)
@@ -50,8 +52,12 @@ class _FakeRecognitionRepo:
         return object() if dedupe_key in self.by_dedupe else None
 
     def create_recognition_event(self, *, dedupe_key: str, **_kwargs):
+        self.create_calls += 1
         self.by_dedupe.add(dedupe_key)
         return object()
+
+    def get_latest_recognition_time(self, *, person_id: UUID) -> datetime | None:
+        return self.latest_by_person.get(person_id)
 
 
 class _FakeUnknownRepo:
@@ -72,6 +78,8 @@ class _FakeUnknownRepo:
 class _FakeSpoofRepo:
     def __init__(self) -> None:
         self.by_dedupe: set[str] = set()
+        self.latest_by_person: dict[UUID, datetime] = {}
+        self.create_calls = 0
 
     def list_spoof_alert_events(self, **_kwargs):
         return ([], 0)
@@ -80,8 +88,12 @@ class _FakeSpoofRepo:
         return object() if dedupe_key in self.by_dedupe else None
 
     def create_spoof_alert_event(self, *, dedupe_key: str, **_kwargs):
+        self.create_calls += 1
         self.by_dedupe.add(dedupe_key)
         return object()
+
+    def get_latest_spoof_time(self, *, person_id: UUID) -> datetime | None:
+        return self.latest_by_person.get(person_id)
 
 
 def _base_envelope(event_name: str, producer: str) -> dict:
@@ -153,3 +165,70 @@ def test_ingest_spoof_processed() -> None:
     result = use_case.execute(envelope)
     assert result.status == IngestStatus.PROCESSED
     assert uow.commits == 1
+
+
+def test_ingest_recognition_throttled_within_window() -> None:
+    uow = _FakeUoW()
+    inbox = _FakeInboxRepo()
+    repo = _FakeRecognitionRepo()
+
+    latest = datetime.now(timezone.utc)
+    person_id = uuid4()
+    repo.latest_by_person[person_id] = latest
+
+    use_case = IngestRecognitionEventUseCase(
+        uow=uow,
+        inbox_repository=inbox,
+        recognition_repository=repo,
+        throttle_window_seconds=30,
+    )
+
+    envelope = _base_envelope("recognition_event.detected", "ai_service")
+    envelope["payload"] = {
+        "person_id": str(person_id),
+        "face_registration_id": str(uuid4()),
+        "recognized_at": (latest + timedelta(seconds=10)).isoformat(),
+        "event_direction": "entry",
+        "event_source": "ai_service",
+        "dedupe_key": "rk-new",
+    }
+
+    result = use_case.execute(envelope)
+    assert result.status == IngestStatus.IGNORED
+    assert uow.commits == 1
+    assert "rk-new" not in repo.by_dedupe
+    assert repo.create_calls == 0
+
+
+def test_ingest_spoof_throttled_within_window() -> None:
+    uow = _FakeUoW()
+    inbox = _FakeInboxRepo()
+    repo = _FakeSpoofRepo()
+
+    latest = datetime.now(timezone.utc)
+    person_id = uuid4()
+    repo.latest_by_person[person_id] = latest
+
+    use_case = IngestSpoofAlertEventUseCase(
+        uow=uow,
+        inbox_repository=inbox,
+        spoof_repository=repo,
+        throttle_window_seconds=30,
+    )
+
+    envelope = _base_envelope("spoof_alert.detected", "pipeline")
+    envelope["payload"] = {
+        "person_id": str(person_id),
+        "detected_at": (latest + timedelta(seconds=10)).isoformat(),
+        "spoof_score": 0.99,
+        "severity": "high",
+        "review_status": "new",
+        "event_source": "pipeline",
+        "dedupe_key": "sk-new",
+    }
+
+    result = use_case.execute(envelope)
+    assert result.status == IngestStatus.IGNORED
+    assert uow.commits == 1
+    assert "sk-new" not in repo.by_dedupe
+    assert repo.create_calls == 0

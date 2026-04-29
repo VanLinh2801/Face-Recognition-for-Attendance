@@ -17,10 +17,12 @@ from app.application.use_cases.face_registrations import (
     RegistrationCompletedCommand,
 )
 from app.core.dependencies import (
+    get_admin_user,
     get_complete_face_registration_use_case,
     get_create_face_registration_use_case,
     get_delete_face_registration_use_case,
     get_get_face_registration_use_case,
+    get_realtime_event_bus,
     get_list_face_registrations_use_case,
     get_pipeline_event_publisher,
     get_unit_of_work,
@@ -28,6 +30,8 @@ from app.core.dependencies import (
 from app.domain.shared.enums import RegistrationStatus
 from app.infrastructure.integrations.pipeline_client import PipelineEventPublisher
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from app.application.dtos.realtime import RealtimeChannel, RealtimeEnvelope
+from app.application.interfaces.realtime_event_bus import RealtimeEventBus
 from app.presentation.schemas.persons import (
     CreatePersonRegistrationRequest,
     CreatePersonRegistrationResponse,
@@ -36,8 +40,12 @@ from app.presentation.schemas.persons import (
     RegistrationEventCompletedRequest,
 )
 
-router = APIRouter(prefix="/persons", tags=["persons-registrations"])
-internal_router = APIRouter(prefix="/internal/registrations/events", tags=["internal-registrations"])
+router = APIRouter(prefix="/persons", tags=["persons-registrations"], dependencies=[Depends(get_admin_user)])
+internal_router = APIRouter(
+    prefix="/internal/registrations/events",
+    tags=["internal-registrations"],
+    dependencies=[Depends(get_admin_user)],
+)
 
 
 @router.post("/{person_id}/registrations", response_model=CreatePersonRegistrationResponse, status_code=status.HTTP_201_CREATED)
@@ -115,10 +123,11 @@ def delete_person_registration(
 
 
 @internal_router.post("/completed", response_model=PersonRegistrationItemResponse)
-def registration_processing_completed(
+async def registration_processing_completed(
     request: RegistrationEventCompletedRequest,
     use_case: CompleteFaceRegistrationUseCase = Depends(get_complete_face_registration_use_case),
     uow: SqlAlchemyUnitOfWork = Depends(get_unit_of_work),
+    realtime_event_bus: RealtimeEventBus = Depends(get_realtime_event_bus),
 ) -> PersonRegistrationItemResponse:
     payload = request.payload
     registration = use_case.execute(
@@ -132,4 +141,20 @@ def registration_processing_completed(
         )
     )
     uow.commit()
-    return PersonRegistrationItemResponse.model_validate(registration, from_attributes=True)
+
+    registration_item = PersonRegistrationItemResponse.model_validate(registration, from_attributes=True)
+
+    # Publish completed event after the DB transaction is committed.
+    websocket_payload = registration_item.model_dump(mode="json")
+    envelope = RealtimeEnvelope(
+        channel=RealtimeChannel.EVENTS_BUSINESS,
+        event_type=request.event_name,
+        occurred_at=request.occurred_at,
+        correlation_id=str(request.correlation_id) if request.correlation_id is not None else None,
+        dedupe_key=str(registration.id),
+        payload=websocket_payload,
+        metadata={"message_id": str(request.message_id), "producer": request.producer, "source": "internal-completed-endpoint"},
+    )
+    await realtime_event_bus.publish(envelope)
+
+    return registration_item

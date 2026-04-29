@@ -10,9 +10,11 @@ from app.application.dtos.realtime import RealtimeChannel
 from app.application.use_cases.realtime import GetRealtimeCatchupUseCase, RealtimeCatchupQuery
 from app.core.dependencies import (
     authenticate_websocket,
+    get_admin_user,
     get_container_from_websocket,
     get_realtime_catchup_use_case,
 )
+from app.domain.auth.entities import User
 from app.core.exceptions import ValidationError
 from app.presentation.schemas.realtime import RealtimeCatchupItemResponse, RealtimeCatchupResponse
 
@@ -47,6 +49,7 @@ def get_realtime_catchup(
     channel: str = Query(default="events.business"),
     since_timestamp: str = Query(...),
     limit: int = Query(default=200, ge=1, le=1000),
+    _admin: User = Depends(get_admin_user),
     use_case: GetRealtimeCatchupUseCase = Depends(get_realtime_catchup_use_case),
 ) -> RealtimeCatchupResponse:
     """Client reconnect flow: fetch missed events then continue live websocket stream."""

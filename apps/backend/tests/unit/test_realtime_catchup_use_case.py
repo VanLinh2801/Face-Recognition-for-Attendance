@@ -5,7 +5,8 @@ from uuid import uuid4
 
 from app.application.dtos.realtime import RealtimeChannel
 from app.application.use_cases.realtime import GetRealtimeCatchupUseCase, RealtimeCatchupQuery
-from app.domain.shared.enums import EventDirection, SpoofReviewStatus, SpoofSeverity, UnknownEventReviewStatus
+from app.domain.face_registrations.entities import PersonFaceRegistration
+from app.domain.shared.enums import EventDirection, RegistrationStatus, SpoofReviewStatus, SpoofSeverity, UnknownEventReviewStatus
 from app.domain.spoof_alert_events.entities import SpoofAlertEvent
 from app.domain.unknown_events.entities import UnknownEvent
 from app.domain.recognition_events.entities import RecognitionEvent
@@ -81,8 +82,30 @@ class _FakeSpoofRepo:
         ]
 
 
+class _FakeFaceRepo:
+    def list_registrations_completed_since(self, *, since_timestamp, limit):
+        _ = since_timestamp, limit
+        now = datetime.now(timezone.utc)
+        return [
+            PersonFaceRegistration(
+                id=uuid4(),
+                person_id=uuid4(),
+                source_media_asset_id=uuid4(),
+                face_image_media_asset_id=None,
+                registration_status=RegistrationStatus.VALIDATED,
+                validation_notes=None,
+                embedding_model=None,
+                embedding_version=None,
+                is_active=True,
+                indexed_at=None,
+                created_at=now,
+                updated_at=now + timedelta(seconds=15),
+            )
+        ]
+
+
 def test_catchup_business_sorted_and_limited() -> None:
-    use_case = GetRealtimeCatchupUseCase(_FakeRecognitionRepo(), _FakeUnknownRepo(), _FakeSpoofRepo())
+    use_case = GetRealtimeCatchupUseCase(_FakeRecognitionRepo(), _FakeUnknownRepo(), _FakeSpoofRepo(), _FakeFaceRepo())
     result = use_case.execute(
         RealtimeCatchupQuery(
             channel=RealtimeChannel.EVENTS_BUSINESS,
@@ -93,12 +116,13 @@ def test_catchup_business_sorted_and_limited() -> None:
     assert [item.event_type for item in result] == [
         "spoof_alert.detected",
         "unknown_event.detected",
+        "registration_processing.completed",
         "recognition_event.detected",
     ]
 
 
 def test_catchup_non_business_returns_empty() -> None:
-    use_case = GetRealtimeCatchupUseCase(_FakeRecognitionRepo(), _FakeUnknownRepo(), _FakeSpoofRepo())
+    use_case = GetRealtimeCatchupUseCase(_FakeRecognitionRepo(), _FakeUnknownRepo(), _FakeSpoofRepo(), _FakeFaceRepo())
     result = use_case.execute(
         RealtimeCatchupQuery(
             channel=RealtimeChannel.STREAM_OVERLAY,

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import importlib
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
 from app.core import dependencies
 from app.application.dtos.realtime import RealtimeChannel, RealtimeEnvelope
+from app.domain.auth.entities import User
 
 
 class _FakeCatchupUseCase:
@@ -35,12 +37,26 @@ class _FakeCatchupUseCase:
         ]
 
 
+def _build_admin_user() -> User:
+    now = datetime.now(timezone.utc)
+    return User(
+        id=uuid4(),
+        username="admin",
+        password_hash="x",
+        is_active=True,
+        last_login_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 def test_realtime_catchup_endpoint(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("ENABLE_EVENT_CONSUMER", "false")
     import app.main as app_main
 
     importlib.reload(app_main)
+    app_main.app.dependency_overrides[dependencies.get_admin_user] = lambda: _build_admin_user()
     app_main.app.dependency_overrides[dependencies.get_realtime_catchup_use_case] = lambda: _FakeCatchupUseCase()
 
     with TestClient(app_main.app) as client:
