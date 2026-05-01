@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic-settings
+httpx
+opencv-python
+numpy
+minio
+python-multipart
+redis
+onnxruntime-gpu
