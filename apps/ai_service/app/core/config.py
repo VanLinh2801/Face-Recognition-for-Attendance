@@ -22,8 +22,17 @@ class Settings(BaseSettings):
 
     # ── AI Models ──────────────────────────────────────────────────────────
     INSIGHTFACE_MODEL_NAME: str = "buffalo_l"
+    INSIGHTFACE_MODEL_VERSION: str = "1.0"
     INSIGHTFACE_MODEL_DIR: str = "/app/models/insightface"
+    INSIGHTFACE_CTX_ID: int = 0
+    INSIGHTFACE_DET_SIZE: int = 640
+
     ANTI_SPOOF_MODEL_PATH: str = "/app/models/anti_spoof/minifasnet.onnx"
+    ONNX_EXECUTION_PROVIDER: str = "CPUExecutionProvider"
+    ANTI_SPOOF_INPUT_SIZE: int = 80
+    ANTI_SPOOF_MEAN: str = "0.5,0.5,0.5"
+    ANTI_SPOOF_STD: str = "0.5,0.5,0.5"
+    ANTI_SPOOF_REAL_CLASS_INDEX: int = 1
 
     # ── Thresholds (env-configurable, do NOT hardcode in logic) ───────────
     # Cosine similarity >= RECOGNITION_THRESHOLD → known person
@@ -33,6 +42,7 @@ class Settings(BaseSettings):
 
     # ── Misc ───────────────────────────────────────────────────────────────
     LOG_LEVEL: str = "INFO"
+    QDRANT_TOP_K: int = 1
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

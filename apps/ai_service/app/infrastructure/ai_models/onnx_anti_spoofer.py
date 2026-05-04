@@ -12,12 +12,6 @@ from app.domain.interfaces.anti_spoofer import IAntiSpoofer
 
 logger = logging.getLogger(__name__)
 
-# MiniFASNet input spec: RGB (80, 80), normalised to [-1, 1]
-_INPUT_SIZE = (80, 80)
-_MEAN = [0.5, 0.5, 0.5]
-_STD = [0.5, 0.5, 0.5]
-
-
 class OnnxAntiSpoofer(IAntiSpoofer):
     """
     IAntiSpoofer backed by MiniFASNet exported to ONNX.
@@ -39,15 +33,19 @@ class OnnxAntiSpoofer(IAntiSpoofer):
                 return
             self._session = ort.InferenceSession(
                 settings.ANTI_SPOOF_MODEL_PATH,
-                providers=["CPUExecutionProvider"],
+                providers=[settings.ONNX_EXECUTION_PROVIDER],
             )
             self._input_name = self._session.get_inputs()[0].name
             logger.info("Anti-spoof model loaded: %s", settings.ANTI_SPOOF_MODEL_PATH)
 
     def _preprocess(self, image_bytes: bytes) -> np.ndarray:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize(_INPUT_SIZE)
+        input_size = (settings.ANTI_SPOOF_INPUT_SIZE, settings.ANTI_SPOOF_INPUT_SIZE)
+        mean = [float(value) for value in settings.ANTI_SPOOF_MEAN.split(",")]
+        std = [float(value) for value in settings.ANTI_SPOOF_STD.split(",")]
+
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize(input_size)
         arr = np.array(img, dtype=np.float32) / 255.0
-        arr = (arr - _MEAN) / _STD
+        arr = (arr - mean) / std
         arr = np.transpose(arr, (2, 0, 1))  # HWC → CHW
         return arr[np.newaxis, :].astype(np.float32)  # add batch dim
 
@@ -59,7 +57,7 @@ class OnnxAntiSpoofer(IAntiSpoofer):
             inp = self._preprocess(face.image_data)
             output = self._session.run(None, {self._input_name: inp})[0]
             # output shape: (1, 2) — [spoof_prob, real_prob]
-            real_prob = float(output[0][1])
+            real_prob = float(output[0][settings.ANTI_SPOOF_REAL_CLASS_INDEX])
             return real_prob
 
         return await loop.run_in_executor(None, _infer)

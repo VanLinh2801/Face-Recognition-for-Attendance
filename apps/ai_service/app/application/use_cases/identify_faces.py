@@ -61,7 +61,10 @@ class IdentifyFacesUseCase:
         logger.debug("Embedding extracted track_id=%s model=%s", face.track_id, embedding.embedding_model)
 
         # ── Step 3: Vector search ─────────────────────────────────────────
-        results = await self._vector_store.search(embedding.vector, top_k=1)
+        results = await self._vector_store.search(
+            embedding.vector,
+            top_k=settings.QDRANT_TOP_K,
+        )
 
         best: Optional[MatchDetail] = None
         if results:

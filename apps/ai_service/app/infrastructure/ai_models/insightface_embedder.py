@@ -11,10 +11,6 @@ from app.domain.interfaces.embedder import IFaceEmbedder
 
 logger = logging.getLogger(__name__)
 
-_MODEL_NAME = "buffalo_l"
-_MODEL_VERSION = "1.0"
-
-
 class InsightFaceEmbedder(IFaceEmbedder):
     """
     IFaceEmbedder backed by InsightFace (ArcFace / buffalo_l).
@@ -39,7 +35,10 @@ class InsightFaceEmbedder(IFaceEmbedder):
                 name=settings.INSIGHTFACE_MODEL_NAME,
                 root=settings.INSIGHTFACE_MODEL_DIR,
             )
-            app.prepare(ctx_id=0, det_size=(640, 640))
+            app.prepare(
+                ctx_id=settings.INSIGHTFACE_CTX_ID,
+                det_size=(settings.INSIGHTFACE_DET_SIZE, settings.INSIGHTFACE_DET_SIZE),
+            )
             self._app = app
             logger.info("InsightFace model loaded: %s", settings.INSIGHTFACE_MODEL_NAME)
 
@@ -63,14 +62,14 @@ class InsightFaceEmbedder(IFaceEmbedder):
         return FaceEmbedding(
             track_id=face.track_id,
             vector=vector,
-            embedding_model=_MODEL_NAME,
-            embedding_version=_MODEL_VERSION,
+            embedding_model=settings.INSIGHTFACE_MODEL_NAME,
+            embedding_version=settings.INSIGHTFACE_MODEL_VERSION,
         )
 
     @property
     def model_name(self) -> str:
-        return _MODEL_NAME
+        return settings.INSIGHTFACE_MODEL_NAME
 
     @property
     def model_version(self) -> str:
-        return _MODEL_VERSION
+        return settings.INSIGHTFACE_MODEL_VERSION
