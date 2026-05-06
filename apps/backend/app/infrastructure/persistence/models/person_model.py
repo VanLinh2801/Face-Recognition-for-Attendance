@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.shared.enums import PersonStatus
 from app.infrastructure.persistence.models.base import Base
+from app.infrastructure.persistence.models.enum_column import pg_enum
 
 
 class PersonModel(Base):
@@ -27,7 +28,7 @@ class PersonModel(Base):
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    status: Mapped[PersonStatus]
+    status: Mapped[PersonStatus] = mapped_column(pg_enum(PersonStatus, name="person_status"), nullable=False)
     joined_at: Mapped[date | None] = mapped_column(Date(), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

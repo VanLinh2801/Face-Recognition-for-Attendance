@@ -34,6 +34,7 @@ from app.application.use_cases.event_ingestion import (
     IngestUnknownEventUseCase,
 )
 from app.application.use_cases.face_registrations import (
+    ApplyRegistrationInputValidationUseCase,
     CompleteFaceRegistrationUseCase,
     CreateFaceRegistrationUseCase,
     DeleteFaceRegistrationUseCase,
@@ -199,6 +200,15 @@ class Container:
 
     def build_complete_face_registration_use_case(self, session: Session) -> CompleteFaceRegistrationUseCase:
         return CompleteFaceRegistrationUseCase(
+            SqlAlchemyFaceRegistrationRepository(session),
+            SqlAlchemyMediaAssetRepository(session),
+        )
+
+    def build_apply_registration_input_validation_use_case(
+        self,
+        session: Session,
+    ) -> ApplyRegistrationInputValidationUseCase:
+        return ApplyRegistrationInputValidationUseCase(
             SqlAlchemyFaceRegistrationRepository(session),
             SqlAlchemyMediaAssetRepository(session),
         )

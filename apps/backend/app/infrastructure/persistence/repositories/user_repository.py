@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -42,6 +42,7 @@ class SqlAlchemyUserRepository(UserRepository):
     def create_user(self, *, username: str, password_hash: str, is_active: bool = True) -> User:
         now = datetime.now(timezone.utc)
         item = UserModel(
+            id=uuid4(),
             username=username,
             password_hash=password_hash,
             is_active=is_active,

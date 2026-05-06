@@ -11,3 +11,6 @@ pytest-asyncio==0.25.3
 httpx==0.28.1
 bcrypt==4.2.0
 minio==7.2.20
+jsonschema==4.23.0
+websocket-client==1.8.0
+websockets==15.0.1

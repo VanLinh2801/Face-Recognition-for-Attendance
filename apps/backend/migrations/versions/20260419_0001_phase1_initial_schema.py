@@ -23,10 +23,12 @@ person_status_enum = postgresql.ENUM(
     "inactive",
     "resigned",
     name="person_status",
+    create_type=False,
 )
 storage_provider_enum = postgresql.ENUM(
     "minio",
     name="storage_provider",
+    create_type=False,
 )
 media_asset_type_enum = postgresql.ENUM(
     "registration_face",
@@ -35,6 +37,7 @@ media_asset_type_enum = postgresql.ENUM(
     "spoof_snapshot",
     "face_crop",
     name="media_asset_type",
+    create_type=False,
 )
 registration_status_enum = postgresql.ENUM(
     "pending",
@@ -42,30 +45,35 @@ registration_status_enum = postgresql.ENUM(
     "indexed",
     "failed",
     name="registration_status",
+    create_type=False,
 )
 event_direction_enum = postgresql.ENUM(
     "entry",
     "exit",
     "unknown",
     name="event_direction",
+    create_type=False,
 )
 unknown_event_review_status_enum = postgresql.ENUM(
     "new",
     "reviewed",
     "ignored",
     name="unknown_event_review_status",
+    create_type=False,
 )
 spoof_severity_enum = postgresql.ENUM(
     "low",
     "medium",
     "high",
     name="spoof_severity",
+    create_type=False,
 )
 spoof_review_status_enum = postgresql.ENUM(
     "new",
     "reviewed",
     "ignored",
     name="spoof_review_status",
+    create_type=False,
 )
 attendance_exception_type_enum = postgresql.ENUM(
     "offsite_meeting",
@@ -73,6 +81,7 @@ attendance_exception_type_enum = postgresql.ENUM(
     "approved_early_leave",
     "manual_adjustment",
     name="attendance_exception_type",
+    create_type=False,
 )
 
 

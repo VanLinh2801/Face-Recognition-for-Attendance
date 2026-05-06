@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from datetime import timezone
+from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -30,6 +31,7 @@ class SqlAlchemyRefreshTokenRepository(RefreshTokenRepository):
 
     def create(self, *, user_id, token_hash: str, expires_at: datetime) -> RefreshTokenRecord:
         item = AuthRefreshTokenModel(
+            id=uuid4(),
             user_id=user_id,
             token_hash=token_hash,
             expires_at=expires_at,

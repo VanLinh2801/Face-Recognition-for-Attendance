@@ -42,6 +42,15 @@ class FaceRegistrationRepository(Protocol):
         face_image_media_asset_id: UUID | None = None,
     ) -> PersonFaceRegistration | None: ...
 
+    def apply_registration_input_validation(
+        self,
+        registration_id: UUID,
+        *,
+        rejected: bool,
+        validation_notes: str | None = None,
+        face_image_media_asset_id: UUID | None = None,
+    ) -> PersonFaceRegistration | None: ...
+
     def list_registrations_completed_since(
         self,
         *,

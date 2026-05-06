@@ -8,16 +8,21 @@ import logging
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
 
 from app.core.config import Settings
+from app.core.exceptions import AppError
 
 logger = logging.getLogger(__name__)
 
 EventHandler = Callable[[dict[str, Any], dict[str, Any]], Awaitable[bool]]
+
+
+class EventContractValidator(Protocol):
+    def validate(self, envelope: dict[str, Any]) -> None: ...
 
 
 @dataclass(slots=True)
@@ -29,9 +34,13 @@ class RedisEventConsumer:
     _task: asyncio.Task[None] | None = field(init=False, default=None)
     _stop_event: asyncio.Event = field(init=False, default_factory=asyncio.Event)
     _handlers: dict[str, EventHandler] = field(init=False, default_factory=dict)
+    _validator: EventContractValidator | None = field(init=False, default=None)
 
     def register_handler(self, event_name: str, handler: EventHandler) -> None:
         self._handlers[event_name] = handler
+
+    def set_validator(self, validator: EventContractValidator) -> None:
+        self._validator = validator
 
     async def start(self) -> None:
         self._client = Redis.from_url(self.settings.redis_url, decode_responses=True)
@@ -93,7 +102,23 @@ class RedisEventConsumer:
         assert self._client is not None
         for _stream_name, stream_messages in records:
             for message_id, raw_data in stream_messages:
-                envelope = self._parse_envelope(raw_data)
+                try:
+                    envelope = self._parse_envelope(raw_data)
+                except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                    logger.warning("Failed to parse Redis event message_id=%s error=%s", message_id, str(exc))
+                    continue
+                if self._validator is not None:
+                    try:
+                        self._validator.validate(envelope)
+                    except AppError as exc:
+                        logger.warning(
+                            "Contract validation failed event=%s message_id=%s error=%s details=%s",
+                            envelope.get("event_name"),
+                            envelope.get("message_id"),
+                            str(exc),
+                            exc.details,
+                        )
+                        continue
                 payload = envelope.get("payload", {})
                 event_name = envelope.get("event_name", "unknown")
                 handler = self._handlers.get(event_name, self._default_handler)

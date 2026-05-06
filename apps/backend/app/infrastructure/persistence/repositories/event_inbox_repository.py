@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -32,6 +32,7 @@ class SqlAlchemyEventInboxRepository(EventInboxRepository):
     ) -> None:
         self._session.add(
             EventInboxModel(
+                id=uuid4(),
                 message_id=message_id,
                 event_name=event_name,
                 producer=producer,

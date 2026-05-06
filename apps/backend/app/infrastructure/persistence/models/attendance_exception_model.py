@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.shared.enums import AttendanceExceptionType
 from app.infrastructure.persistence.models.base import Base
+from app.infrastructure.persistence.models.enum_column import pg_enum
 
 
 class AttendanceExceptionModel(Base):
@@ -18,7 +19,10 @@ class AttendanceExceptionModel(Base):
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
     person_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("persons.id"), nullable=False)
-    exception_type: Mapped[AttendanceExceptionType]
+    exception_type: Mapped[AttendanceExceptionType] = mapped_column(
+        pg_enum(AttendanceExceptionType, name="attendance_exception_type"),
+        nullable=False,
+    )
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     work_date: Mapped[date] = mapped_column(Date(), nullable=False)

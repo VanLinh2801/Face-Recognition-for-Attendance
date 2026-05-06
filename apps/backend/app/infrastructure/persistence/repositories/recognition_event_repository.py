@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select  # type: ignore[import-not-found]
 from sqlalchemy.orm import Session  # type: ignore[import-not-found]
@@ -143,6 +143,7 @@ class SqlAlchemyRecognitionEventRepository(RecognitionEventRepository):
         raw_payload: dict | None,
     ) -> RecognitionEvent:
         item = RecognitionEventModel(
+            id=uuid4(),
             person_id=person_id,
             face_registration_id=face_registration_id,
             snapshot_media_asset_id=snapshot_media_asset_id,

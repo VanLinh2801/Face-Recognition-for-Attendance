@@ -12,6 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.shared.enums import EventDirection
 from app.infrastructure.persistence.models.base import Base
+from app.infrastructure.persistence.models.enum_column import pg_enum
 
 
 class RecognitionEventModel(Base):
@@ -30,7 +31,7 @@ class RecognitionEventModel(Base):
         nullable=True,
     )
     recognized_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    event_direction: Mapped[EventDirection]
+    event_direction: Mapped[EventDirection] = mapped_column(pg_enum(EventDirection, name="event_direction"), nullable=False)
     match_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     spoof_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
     event_source: Mapped[str] = mapped_column(String(100), nullable=False)

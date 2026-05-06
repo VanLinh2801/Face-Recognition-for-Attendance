@@ -2,10 +2,12 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.application.use_cases.face_registrations import (
+    ApplyRegistrationInputValidationUseCase,
     CompleteFaceRegistrationUseCase,
     CreateFaceRegistrationUseCase,
     CreateRegistrationCommand,
     RegistrationCompletedCommand,
+    RegistrationInputValidatedCommand,
 )
 from app.domain.face_registrations.entities import PersonFaceRegistration
 from app.domain.media_assets.entities import MediaAsset
@@ -76,6 +78,15 @@ class FakeRegistrationRepo:
         self.registration.embedding_model = kwargs.get("embedding_model")
         return self.registration
 
+    def apply_registration_input_validation(self, registration_id, **kwargs):
+        if self.registration is None or self.registration.id != registration_id:
+            return None
+        if kwargs.get("rejected"):
+            self.registration.registration_status = RegistrationStatus.FAILED
+        self.registration.validation_notes = kwargs.get("validation_notes")
+        self.registration.face_image_media_asset_id = kwargs.get("face_image_media_asset_id")
+        return self.registration
+
 
 def test_create_face_registration_use_case_returns_registration_and_media_ref():
     person_repo = FakePersonRepo()
@@ -121,3 +132,21 @@ def test_complete_face_registration_use_case_updates_status():
 
     assert updated.registration_status == RegistrationStatus.INDEXED
     assert updated.embedding_model == "facenet"
+
+
+def test_apply_registration_input_validation_use_case_marks_failed_when_rejected():
+    reg_repo = FakeRegistrationRepo()
+    media_repo = FakeMediaRepo()
+    created = reg_repo.create_registration(person_id=uuid4(), source_media_asset_id=uuid4())
+    use_case = ApplyRegistrationInputValidationUseCase(reg_repo, media_repo)
+
+    updated = use_case.execute(
+        RegistrationInputValidatedCommand(
+            registration_id=created.id,
+            status="rejected",
+            validation_notes="blurred image",
+        )
+    )
+
+    assert updated.registration_status == RegistrationStatus.FAILED
+    assert updated.validation_notes == "blurred image"

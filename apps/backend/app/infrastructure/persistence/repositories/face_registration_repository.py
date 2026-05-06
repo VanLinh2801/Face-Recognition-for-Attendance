@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -28,6 +28,7 @@ class SqlAlchemyFaceRegistrationRepository(FaceRegistrationRepository):
     ) -> PersonFaceRegistration:
         now = datetime.now(timezone.utc)
         item = FaceRegistrationModel(
+            id=uuid4(),
             person_id=person_id,
             source_media_asset_id=source_media_asset_id,
             face_image_media_asset_id=None,
@@ -92,6 +93,26 @@ class SqlAlchemyFaceRegistrationRepository(FaceRegistrationRepository):
         item.embedding_version = embedding_version
         item.face_image_media_asset_id = face_image_media_asset_id
         item.indexed_at = datetime.now(timezone.utc) if status == RegistrationStatus.INDEXED else item.indexed_at
+        item.updated_at = datetime.now(timezone.utc)
+        self._session.flush()
+        return to_registration(item)
+
+    def apply_registration_input_validation(
+        self,
+        registration_id: UUID,
+        *,
+        rejected: bool,
+        validation_notes: str | None = None,
+        face_image_media_asset_id: UUID | None = None,
+    ) -> PersonFaceRegistration | None:
+        item = self._session.get(FaceRegistrationModel, registration_id)
+        if item is None:
+            return None
+        if rejected:
+            item.registration_status = RegistrationStatus.FAILED
+        item.validation_notes = validation_notes
+        if face_image_media_asset_id is not None:
+            item.face_image_media_asset_id = face_image_media_asset_id
         item.updated_at = datetime.now(timezone.utc)
         self._session.flush()
         return to_registration(item)

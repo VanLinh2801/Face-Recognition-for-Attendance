@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -61,6 +61,7 @@ class SqlAlchemyMediaAssetRepository(MediaAssetRepository):
         uploaded_by_person_id: UUID | None = None,
     ) -> MediaAsset:
         item = MediaAssetModel(
+            id=uuid4(),
             storage_provider=StorageProvider(storage_provider),
             bucket_name=bucket_name,
             object_key=object_key,

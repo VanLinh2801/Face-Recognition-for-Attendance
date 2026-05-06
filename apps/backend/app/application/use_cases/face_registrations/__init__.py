@@ -39,6 +39,14 @@ class RegistrationCompletedCommand:
     face_image_media_asset: dict | None = None
 
 
+@dataclass(slots=True, kw_only=True)
+class RegistrationInputValidatedCommand:
+    registration_id: UUID
+    status: str
+    validation_notes: str | None = None
+    prepared_face_media_asset: dict | None = None
+
+
 class CreateFaceRegistrationUseCase:
     def __init__(
         self,
@@ -151,6 +159,44 @@ class CompleteFaceRegistrationUseCase:
             validation_notes=command.validation_notes,
             embedding_model=command.embedding_model,
             embedding_version=command.embedding_version,
+            face_image_media_asset_id=face_media_asset_id,
+        )
+        if registration is None:
+            raise NotFoundError("Registration not found")
+        return registration
+
+
+class ApplyRegistrationInputValidationUseCase:
+    def __init__(
+        self,
+        registration_repository: FaceRegistrationRepository,
+        media_asset_repository: MediaAssetRepository,
+    ) -> None:
+        self._registration_repository = registration_repository
+        self._media_asset_repository = media_asset_repository
+
+    def execute(self, command: RegistrationInputValidatedCommand) -> PersonFaceRegistration:
+        face_media_asset_id: UUID | None = None
+        media_ref = command.prepared_face_media_asset
+        if media_ref is not None:
+            created_asset = self._media_asset_repository.create_media_asset(
+                storage_provider=media_ref["storage_provider"],
+                bucket_name=media_ref["bucket_name"],
+                object_key=media_ref["object_key"],
+                original_filename=media_ref["original_filename"],
+                mime_type=media_ref["mime_type"],
+                file_size=media_ref["file_size"],
+                checksum=media_ref.get("checksum"),
+                asset_type=media_ref["asset_type"],
+            )
+            face_media_asset_id = created_asset.id
+
+        rejected = command.status == "rejected"
+        validation_notes = command.validation_notes
+        registration = self._registration_repository.apply_registration_input_validation(
+            command.registration_id,
+            rejected=rejected,
+            validation_notes=validation_notes,
             face_image_media_asset_id=face_media_asset_id,
         )
         if registration is None:

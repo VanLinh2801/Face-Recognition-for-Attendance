@@ -29,6 +29,7 @@ from app.application.use_cases.attendance_exceptions import (
 )
 from app.application.use_cases.media_assets import CleanupMediaAssetsUseCase, ListMediaAssetsUseCase
 from app.application.use_cases.face_registrations import (
+    ApplyRegistrationInputValidationUseCase,
     CompleteFaceRegistrationUseCase,
     CreateFaceRegistrationUseCase,
     DeleteFaceRegistrationUseCase,
@@ -228,6 +229,13 @@ def get_complete_face_registration_use_case(
     container: Container = Depends(get_container),
 ) -> CompleteFaceRegistrationUseCase:
     return container.build_complete_face_registration_use_case(session)
+
+
+def get_apply_registration_input_validation_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ApplyRegistrationInputValidationUseCase:
+    return container.build_apply_registration_input_validation_use_case(session)
 
 
 def get_pipeline_event_publisher(

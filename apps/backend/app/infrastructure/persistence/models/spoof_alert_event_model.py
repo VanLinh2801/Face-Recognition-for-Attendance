@@ -12,6 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.shared.enums import SpoofReviewStatus, SpoofSeverity
 from app.infrastructure.persistence.models.base import Base
+from app.infrastructure.persistence.models.enum_column import pg_enum
 
 
 class SpoofAlertEventModel(Base):
@@ -33,8 +34,11 @@ class SpoofAlertEventModel(Base):
     event_source: Mapped[str] = mapped_column(String(100), nullable=False)
     dedupe_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     raw_payload: Mapped[dict | None] = mapped_column(JSONB(astext_type=Text()), nullable=True)
-    severity: Mapped[SpoofSeverity]
-    review_status: Mapped[SpoofReviewStatus]
+    severity: Mapped[SpoofSeverity] = mapped_column(pg_enum(SpoofSeverity, name="spoof_severity"), nullable=False)
+    review_status: Mapped[SpoofReviewStatus] = mapped_column(
+        pg_enum(SpoofReviewStatus, name="spoof_review_status"),
+        nullable=False,
+    )
     notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

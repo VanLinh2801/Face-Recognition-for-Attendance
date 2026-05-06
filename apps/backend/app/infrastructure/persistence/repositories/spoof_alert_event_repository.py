@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -145,6 +145,7 @@ class SqlAlchemySpoofAlertEventRepository(SpoofAlertEventRepository):
     ) -> SpoofAlertEvent:
         now = datetime.now(timezone.utc)
         item = SpoofAlertEventModel(
+            id=uuid4(),
             person_id=person_id,
             snapshot_media_asset_id=snapshot_media_asset_id,
             detected_at=detected_at,

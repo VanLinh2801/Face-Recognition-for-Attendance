@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.shared.enums import RegistrationStatus
 from app.infrastructure.persistence.models.base import Base
+from app.infrastructure.persistence.models.enum_column import pg_enum
 
 
 class FaceRegistrationModel(Base):
@@ -24,7 +25,10 @@ class FaceRegistrationModel(Base):
         ForeignKey("media_assets.id", ondelete="SET NULL"),
         nullable=True,
     )
-    registration_status: Mapped[RegistrationStatus]
+    registration_status: Mapped[RegistrationStatus] = mapped_column(
+        pg_enum(RegistrationStatus, name="registration_status"),
+        nullable=False,
+    )
     validation_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
     embedding_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     embedding_version: Mapped[str | None] = mapped_column(String(100), nullable=True)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -136,6 +136,7 @@ class SqlAlchemyUnknownEventRepository(UnknownEventRepository):
     ) -> UnknownEvent:
         now = datetime.now(timezone.utc)
         item = UnknownEventModel(
+            id=uuid4(),
             snapshot_media_asset_id=snapshot_media_asset_id,
             detected_at=detected_at,
             event_direction=event_direction,

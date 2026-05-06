@@ -1,0 +1,95 @@
+services:
+  backend-migrate:
+    image: face-recognition-backend:e2e
+    env_file:
+      - .env.e2e
+    working_dir: /app/apps/backend
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  minio-init:
+    image: minio/mc:latest
+    env_file:
+      - .env.e2e
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "until mc alias set local http://minio:9000 $${MINIO_ACCESS_KEY} $${MINIO_SECRET_KEY}; do sleep 1; done && mc mb --ignore-existing local/$${MINIO_BUCKET}",
+      ]
+    depends_on:
+      minio:
+        condition: service_started
+    restart: "no"
+
+  backend:
+    image: face-recognition-backend:e2e
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    env_file:
+      - .env.e2e
+    ports:
+      - "${BACKEND_HOST_PORT:-18000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      backend-migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  e2e-runner:
+    image: face-recognition-backend:e2e
+    env_file:
+      - .env.e2e
+    environment:
+      BACKEND_E2E_ENABLED: "1"
+      BACKEND_E2E_BASE_URL: http://backend:8000
+      BACKEND_E2E_REDIS_URL: redis://redis:6379/0
+      NO_PROXY: backend,127.0.0.1,localhost
+      no_proxy: backend,127.0.0.1,localhost
+    working_dir: /app/apps/backend
+    command: ["pytest", "tests/e2e", "-q"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles: ["e2e-runner"]
+
+  postgres:
+    ports:
+      - "${POSTGRES_HOST_PORT:-15432}:5432"
+
+  minio:
+    ports:
+      - "${MINIO_API_HOST_PORT:-19000}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT:-19001}:9001"
+
+  qdrant:
+    ports:
+      - "${QDRANT_HTTP_HOST_PORT:-16333}:6333"
+      - "${QDRANT_GRPC_HOST_PORT:-16334}:6334"
+
+  redis:
+    ports:
+      - "${REDIS_HOST_PORT:-16379}:6379"

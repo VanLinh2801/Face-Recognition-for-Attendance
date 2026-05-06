@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from app.application.use_cases.event_ingestion import IngestResult, IngestStatus
-from app.main import _build_recognition_ingest_handler
+from app.infrastructure.integrations.event_handlers import BackendEventHandlers
 
 
 class _FakeSession:
@@ -43,7 +43,7 @@ async def _run_handler_with_status(status: IngestStatus) -> int:
         realtime_event_bus=bus,
         build_ingest_recognition_event_use_case=lambda _session, _uow: _FakeUseCase(status),
     )
-    handler = _build_recognition_ingest_handler(container)
+    handler = BackendEventHandlers(container).handle_recognition_event
     await handler(
         {
             "event_name": "recognition_event.detected",

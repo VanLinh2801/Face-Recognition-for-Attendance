@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import asyncio
-from datetime import datetime, timezone
 from time import perf_counter
 from uuid import uuid4
 import contextlib
@@ -13,14 +12,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.application.dtos.realtime import RealtimeChannel, RealtimeEnvelope
 from app.bootstrap.container import Container, build_container
 from app.bootstrap.logging import configure_logging
 from app.core.db import ping_database
 from app.core.exceptions import AppError, InfrastructureError
 from app.core.security import hash_password
-from app.application.use_cases.event_ingestion import IngestStatus
 from app.application.use_cases.media_assets import CleanupMediaAssetsCommand
+from app.infrastructure.integrations.contract_validator import ContractValidator
+from app.infrastructure.integrations.event_handlers import BackendEventHandlers, register_backend_event_handlers
 from app.infrastructure.integrations.redis_event_consumer import RedisEventConsumer
 from app.infrastructure.persistence.repositories.user_repository import SqlAlchemyUserRepository
 from app.presentation.api.router import api_router
@@ -42,11 +41,9 @@ async def lifespan(app: FastAPI):
 
     if container.settings.enable_event_consumer:
         consumer = RedisEventConsumer(container.settings)
-        consumer.register_handler("recognition_event.detected", _build_recognition_ingest_handler(container))
-        consumer.register_handler("unknown_event.detected", _build_unknown_ingest_handler(container))
-        consumer.register_handler("spoof_alert.detected", _build_spoof_ingest_handler(container))
-        consumer.register_handler("frame_analysis.updated", _build_overlay_relay_handler(container))
-        consumer.register_handler("stream.health.updated", _build_stream_health_relay_handler(container))
+        consumer.set_validator(ContractValidator())
+        handlers = BackendEventHandlers(container)
+        register_backend_event_handlers(consumer, handlers)
         await consumer.start()
         app.state.redis_consumer = consumer
 
@@ -140,130 +137,6 @@ async def handle_unexpected_error(_: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=500, content=payload.model_dump())
 
 
-def _build_recognition_ingest_handler(container):
-    async def _handler(envelope: dict, _payload: dict) -> bool:
-        with container.session_factory() as session:
-            uow = container.create_uow(session)
-            use_case = container.build_ingest_recognition_event_use_case(session, uow)
-            result = use_case.execute(envelope)
-            if result.status == IngestStatus.PROCESSED:
-                await container.realtime_event_bus.publish(
-                    _to_realtime_envelope(
-                        channel=RealtimeChannel.EVENTS_BUSINESS,
-                        event_type="recognition_event.detected",
-                        envelope=envelope,
-                    )
-                )
-            logger.info(
-                "ingest recognition result=%s message_id=%s dedupe_key=%s",
-                result.status,
-                envelope.get("message_id"),
-                (envelope.get("payload") or {}).get("dedupe_key"),
-            )
-            return result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
-
-    return _handler
-
-
-def _build_unknown_ingest_handler(container):
-    async def _handler(envelope: dict, _payload: dict) -> bool:
-        with container.session_factory() as session:
-            uow = container.create_uow(session)
-            use_case = container.build_ingest_unknown_event_use_case(session, uow)
-            result = use_case.execute(envelope)
-            if result.status == IngestStatus.PROCESSED:
-                await container.realtime_event_bus.publish(
-                    _to_realtime_envelope(
-                        channel=RealtimeChannel.EVENTS_BUSINESS,
-                        event_type="unknown_event.detected",
-                        envelope=envelope,
-                    )
-                )
-            logger.info(
-                "ingest unknown result=%s message_id=%s dedupe_key=%s",
-                result.status,
-                envelope.get("message_id"),
-                (envelope.get("payload") or {}).get("dedupe_key"),
-            )
-            return result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
-
-    return _handler
-
-
-def _build_spoof_ingest_handler(container):
-    async def _handler(envelope: dict, _payload: dict) -> bool:
-        with container.session_factory() as session:
-            uow = container.create_uow(session)
-            use_case = container.build_ingest_spoof_alert_event_use_case(session, uow)
-            result = use_case.execute(envelope)
-            if result.status == IngestStatus.PROCESSED:
-                await container.realtime_event_bus.publish(
-                    _to_realtime_envelope(
-                        channel=RealtimeChannel.EVENTS_BUSINESS,
-                        event_type="spoof_alert.detected",
-                        envelope=envelope,
-                    )
-                )
-            logger.info(
-                "ingest spoof result=%s message_id=%s dedupe_key=%s",
-                result.status,
-                envelope.get("message_id"),
-                (envelope.get("payload") or {}).get("dedupe_key"),
-            )
-            return result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
-
-    return _handler
-
-
-def _build_overlay_relay_handler(container: Container):
-    async def _handler(envelope: dict, _payload: dict) -> bool:
-        await container.realtime_event_bus.publish(
-            _to_realtime_envelope(
-                channel=RealtimeChannel.STREAM_OVERLAY,
-                event_type="frame_analysis.updated",
-                envelope=envelope,
-            )
-        )
-        return True
-
-    return _handler
-
-
-def _build_stream_health_relay_handler(container: Container):
-    async def _handler(envelope: dict, _payload: dict) -> bool:
-        await container.realtime_event_bus.publish(
-            _to_realtime_envelope(
-                channel=RealtimeChannel.STREAM_HEALTH,
-                event_type="stream.health.updated",
-                envelope=envelope,
-            )
-        )
-        return True
-
-    return _handler
-
-
-def _to_realtime_envelope(*, channel: RealtimeChannel, event_type: str, envelope: dict) -> RealtimeEnvelope:
-    raw_occurred_at = envelope.get("occurred_at")
-    occurred_at = datetime.now(timezone.utc)
-    if isinstance(raw_occurred_at, str):
-        try:
-            occurred_at = datetime.fromisoformat(raw_occurred_at.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    payload = envelope.get("payload", {})
-    dedupe_key = payload.get("dedupe_key") if isinstance(payload, dict) else None
-    return RealtimeEnvelope(
-        channel=channel,
-        event_type=event_type,
-        occurred_at=occurred_at,
-        correlation_id=envelope.get("correlation_id"),
-        dedupe_key=dedupe_key if isinstance(dedupe_key, str) else None,
-        payload=payload if isinstance(payload, dict) else {},
-        metadata={"message_id": envelope.get("message_id"), "producer": envelope.get("producer")},
-    )
-
-
 def _seed_admin_user_if_configured(container: Container) -> None:
     username = container.settings.auth_seed_admin_username
     password = container.settings.auth_seed_admin_password
@@ -301,4 +174,3 @@ async def _run_media_cleanup_scheduler(container: Container) -> None:
             logger.exception("media cleanup job failed")
 
         await asyncio.sleep(interval_seconds)
-
