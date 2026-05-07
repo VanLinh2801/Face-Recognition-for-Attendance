@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { Eye, MoreHorizontal, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { Building2, ChevronRight, Eye, MoreHorizontal, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PersonStatusBadge } from "@/components/data/status-badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import type { Department, Person } from "@/lib/types";
 type PersonRow = Person & {
   department_name: string;
 };
+
+type PersonStatusFilter = "all" | Person["status"];
 
 type DeleteRequest =
   | {
@@ -39,16 +41,32 @@ export function PersonsTable({
   const [editingPerson, setEditingPerson] = useState<PersonRow | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
   const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
-  const allSelected = persons.length > 0 && selectedIds.size === persons.length;
+  const [departmentId, setDepartmentId] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<PersonStatusFilter>("all");
+  const departmentScopeIds = useMemo(() => getDepartmentScopeIds(departmentId, departments), [departmentId, departments]);
+  const visiblePersons = persons.filter((person) => {
+    const departmentMatches = !departmentScopeIds || (person.department_id ? departmentScopeIds.has(person.department_id) : false);
+    const statusMatches = statusFilter === "all" || person.status === statusFilter;
+    return departmentMatches && statusMatches;
+  });
+  const selectedVisibleCount = visiblePersons.filter((person) => selectedIds.has(person.id)).length;
+  const allSelected = visiblePersons.length > 0 && selectedVisibleCount === visiblePersons.length;
 
-  const selectedCount = selectedIds.size;
+  const selectedCount = selectedVisibleCount;
   const selectedText = useMemo(() => {
-    if (selectedCount === 0) return `${persons.length} records`;
-    return `${selectedCount}/${persons.length} selected`;
-  }, [persons.length, selectedCount]);
+    if (selectedCount === 0) return `${visiblePersons.length} records`;
+    return `${selectedCount}/${visiblePersons.length} selected`;
+  }, [selectedCount, visiblePersons.length]);
 
   function toggleAll(checked: boolean) {
-    setSelectedIds(checked ? new Set(persons.map((person) => person.id)) : new Set());
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const person of visiblePersons) {
+        if (checked) next.add(person.id);
+        else next.delete(person.id);
+      }
+      return next;
+    });
   }
 
   function toggleOne(personId: string, checked: boolean) {
@@ -99,7 +117,7 @@ export function PersonsTable({
   }
 
   function requestDeleteSelected() {
-    const ids = Array.from(selectedIds);
+    const ids = visiblePersons.filter((person) => selectedIds.has(person.id)).map((person) => person.id);
     if (ids.length === 0) return;
     setDeleteRequest({
       type: "bulk",
@@ -126,20 +144,10 @@ export function PersonsTable({
   return (
     <>
       <Card>
-        <CardContent className="grid gap-3 md:grid-cols-[1fr_180px_220px_auto]">
+        <CardContent className="grid gap-3 md:grid-cols-[minmax(240px,0.78fr)_220px_280px_auto]">
           <Input placeholder="Tìm theo tên hoặc mã nhân viên" />
-          <Select defaultValue="all">
-            <option value="all">Tất cả trạng thái</option>
-            <option value="active">active</option>
-            <option value="inactive">inactive</option>
-            <option value="resigned">resigned</option>
-          </Select>
-          <Select defaultValue="all">
-            <option value="all">Tất cả phòng ban</option>
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>{department.name}</option>
-            ))}
-          </Select>
+          <StatusFilterSelect value={statusFilter} onChange={setStatusFilter} />
+          <DepartmentTreeSelect departments={departments} value={departmentId} onChange={setDepartmentId} />
           <Button variant="outline" disabled={selectedCount === 0} onClick={requestDeleteSelected}>
             <Trash2 className="h-4 w-4" /> Xóa
           </Button>
@@ -172,7 +180,7 @@ export function PersonsTable({
                 </tr>
               </thead>
               <tbody>
-                {persons.map((person, index) => (
+                {visiblePersons.map((person, index) => (
                   <tr key={person.id} className="border-b border-slate-100">
                     <td className="py-3">
                       <input
@@ -403,5 +411,243 @@ export function PersonsTable({
         </div>
       ) : null}
     </>
+  );
+}
+
+function getDepartmentScopeIds(departmentId: string, departments: Department[]) {
+  if (departmentId === "all") return null;
+
+  const ids = new Set<string>([departmentId]);
+  const visit = (parentId: string) => {
+    for (const child of departments.filter((department) => department.parent_id === parentId)) {
+      ids.add(child.id);
+      visit(child.id);
+    }
+  };
+
+  visit(departmentId);
+  return ids;
+}
+
+function StatusFilterSelect({
+  value,
+  onChange,
+}: {
+  value: PersonStatusFilter;
+  onChange: (value: PersonStatusFilter) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const options: Array<{ value: PersonStatusFilter; label: string }> = [
+    { value: "all", label: "Tất cả" },
+    { value: "active", label: "active" },
+    { value: "inactive", label: "inactive" },
+    { value: "resigned", label: "resigned" },
+  ];
+  const selectedOption = options.find((option) => option.value === value) ?? options[0];
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {selectedOption.value === "all" ? (
+            <span className="truncate font-medium text-slate-700">{selectedOption.label}</span>
+          ) : (
+            <PersonStatusBadge status={selectedOption.value} />
+          )}
+        </span>
+        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+      </button>
+
+      {open ? (
+        <div className="absolute left-0 top-11 z-30 w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className={value === option.value ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+            >
+              {option.value === "all" ? (
+                <span>Tất cả trạng thái</span>
+              ) : (
+                <PersonStatusBadge status={option.value} />
+              )}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DepartmentTreeSelect({
+  departments,
+  value,
+  onChange,
+}: {
+  departments: Department[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    new Set(departments.filter((department) => department.parent_id === null).map((department) => department.id)),
+  );
+
+  const selectedDepartment = departments.find((department) => department.id === value);
+  const selectedLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : "Tất cả phòng ban";
+  const normalizedQuery = query.trim().toLowerCase();
+
+  function toggleDepartment(departmentId: string) {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(departmentId)) next.delete(departmentId);
+      else next.add(departmentId);
+      return next;
+    });
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+      </button>
+
+      {open ? (
+        <div className="absolute left-0 top-11 z-30 w-[360px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+          <div className="border-b border-slate-100 p-2">
+            <div className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Tìm phòng ban"
+                className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="thin-scrollbar max-h-80 overflow-y-auto p-2">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("all");
+                setOpen(false);
+              }}
+              className={value === "all" ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+            >
+              <Building2 className="h-4 w-4" />
+              Tất cả phòng ban
+            </button>
+
+            <div className="mt-1 space-y-1">
+              {departments
+                .filter((department) => department.parent_id === null)
+                .map((department) => (
+                  <DepartmentTreeOption
+                    key={department.id}
+                    department={department}
+                    departments={departments}
+                    selectedId={value}
+                    depth={0}
+                    expandedIds={expandedIds}
+                    query={normalizedQuery}
+                    onToggle={toggleDepartment}
+                    onSelect={(departmentId) => {
+                      onChange(departmentId);
+                      setOpen(false);
+                    }}
+                  />
+                ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DepartmentTreeOption({
+  department,
+  departments,
+  selectedId,
+  depth,
+  expandedIds,
+  query,
+  onToggle,
+  onSelect,
+}: {
+  department: Department;
+  departments: Department[];
+  selectedId: string;
+  depth: number;
+  expandedIds: Set<string>;
+  query: string;
+  onToggle: (departmentId: string) => void;
+  onSelect: (departmentId: string) => void;
+}) {
+  const children = departments.filter((item) => item.parent_id === department.id);
+  const expanded = expandedIds.has(department.id);
+  const hasChildren = children.length > 0;
+  const matchesQuery =
+    query.length === 0 ||
+    department.name.toLowerCase().includes(query) ||
+    department.code.toLowerCase().includes(query) ||
+    children.some((child) => child.name.toLowerCase().includes(query) || child.code.toLowerCase().includes(query));
+
+  if (!matchesQuery) return null;
+
+  return (
+    <div>
+      <div
+        className={selectedId === department.id ? "flex items-center gap-2 rounded-md bg-slate-950 px-2 py-2 text-sm font-medium text-white" : "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-slate-50"}
+        style={{ paddingLeft: 8 + depth * 18 }}
+      >
+        <button
+          type="button"
+          disabled={!hasChildren}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle(department.id);
+          }}
+          className="grid h-5 w-5 shrink-0 place-items-center rounded hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-transparent"
+          aria-label={expanded ? `Thu gọn ${department.name}` : `Mở rộng ${department.name}`}
+        >
+          <ChevronRight className={expanded ? "h-4 w-4 rotate-90 transition-transform" : "h-4 w-4 transition-transform"} />
+        </button>
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => onSelect(department.id)}>
+          <Building2 className="h-4 w-4 shrink-0" />
+          <span className="truncate">{department.code} · {department.name}</span>
+        </button>
+      </div>
+      {expanded || query.length > 0
+        ? children.map((child) => (
+            <DepartmentTreeOption
+              key={child.id}
+              department={child}
+              departments={departments}
+              selectedId={selectedId}
+              depth={depth + 1}
+              expandedIds={expandedIds}
+              query={query}
+              onToggle={onToggle}
+              onSelect={onSelect}
+            />
+          ))
+        : null}
+    </div>
   );
 }

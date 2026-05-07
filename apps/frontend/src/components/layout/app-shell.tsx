@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -92,16 +91,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className={cn("min-h-screen transition-all duration-200", collapsed ? "pl-[72px]" : "pl-64")}>
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-6 backdrop-blur">
-          <div>
-            <div className="text-sm font-semibold">Frontend - Face Recognition</div>
-            <div className="text-xs text-slate-500">UI mock mode, backend disconnected</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="success">Backend ready</Badge>
-            <Badge variant="info">WS mock</Badge>
-          </div>
-        </header>
         {children}
       </main>
     </div>
