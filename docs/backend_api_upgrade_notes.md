@@ -120,4 +120,127 @@ Response item nên có:
 Backend cần sinh danh sách ngày trong khoảng thời gian, left join với danh sách nhân viên để tính được cả ngày `absent`.
 
 Chỉ nên thêm bảng summary như `attendance_daily_records` sau này nếu dữ liệu lớn, report chạy chậm, hoặc cần lưu snapshot kết quả chấm công đã chốt theo ngày.
+
+## Unknown events & Spoof alerts - update endpoints
+
+Frontend cần có khả năng mark unknown event hoặc spoof alert là đã xem xét (reviewed) hoặc bỏ qua (ignored).
+
+Các endpoint cần thêm:
+
+### Update unknown event
+
+`PATCH /api/v1/unknown-events/{event_id}`
+
+Request:
+
+```json
+{
+  "review_status": "reviewed",
+  "notes": "Visitor verified"
+}
+```
+
+Response:
+
+```json
+{
+  "id": "uuid",
+  "snapshot_media_asset_id": "uuid",
+  "detected_at": "2026-05-06T09:22:00Z",
+  "event_direction": "entry",
+  "match_score": null,
+  "spoof_score": 0.04,
+  "event_source": "ai_service",
+  "raw_payload": {},
+  "review_status": "reviewed",
+  "notes": "Visitor verified",
+  "created_at": "2026-05-06T09:22:00Z",
+  "updated_at": "2026-05-06T10:15:00Z"
+}
+```
+
+### Update spoof alert
+
+`PATCH /api/v1/spoof-alert-events/{event_id}`
+
+Request:
+
+```json
+{
+  "review_status": "reviewed",
+  "notes": "False positive - low light"
+}
+```
+
+Response:
+
+```json
+{
+  "id": "uuid",
+  "person_id": "person-4",
+  "snapshot_media_asset_id": "uuid",
+  "detected_at": "2026-05-06T14:32:00Z",
+  "spoof_score": 0.72,
+  "event_source": "pipeline",
+  "raw_payload": {},
+  "severity": "medium",
+  "review_status": "reviewed",
+  "notes": "False positive - low light",
+  "created_at": "2026-05-06T14:32:00Z",
+  "updated_at": "2026-05-06T14:45:00Z"
+}
+```
+
+## Media assets - presigned URL endpoint
+
+Frontend cần load ảnh snapshot từ MinIO mà không cần credentials. Backend nên cấp presigned URL với thời hạn.
+
+`GET /api/v1/media-assets/{media_asset_id}/presigned-url`
+
+Response:
+
+```json
+{
+  "media_asset_id": "uuid",
+  "url": "https://minio.example.com:9000/attendance/registrations/raw/file.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&...",
+  "expires_at": "2026-05-07T09:00:00Z",
+  "content_type": "image/jpeg"
+}
+```
+
+Ghi chú:
+
+- URL có thời hạn (khuyến nghị 1 giờ).
+- Frontend có thể dùng URL này trong tag `<img src={url} />`.
+- MinIO credential không được expose.
+- Nếu media_asset_id không tồn tại, trả 404.
+
+## Media snapshot URLs for attendance UI (Expanded)
+
+Endpoint `GET /api/v1/attendance/daily-presence` nên trả luôn URL presigned:
+
+```json
+{
+  "items": [
+    {
+      "person_id": "uuid",
+      "person_full_name": "Nguyen Van A",
+      "work_date": "2026-05-06",
+      "first_seen_at": "2026-05-06T08:01:00Z",
+      "last_seen_at": "2026-05-06T17:45:00Z",
+      "first_snapshot_media_asset_id": "uuid",
+      "last_snapshot_media_asset_id": "uuid",
+      "first_snapshot_url": "https://...",
+      "last_snapshot_url": "https://...",
+      "first_snapshot_expires_at": "2026-05-07T09:00:00Z",
+      "last_snapshot_expires_at": "2026-05-07T09:00:00Z",
+      "recognition_count": 3,
+      "best_match_score": 0.96
+    }
+  ]
+}
+```
+
+Hoặc để frontend tự gọi presigned-url endpoint.
+
 # Backend API Upgrade Notes

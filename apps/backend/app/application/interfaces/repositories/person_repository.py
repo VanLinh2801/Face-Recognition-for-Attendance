@@ -18,6 +18,7 @@ class PersonRepository(Protocol):
         *,
         page: int,
         page_size: int,
+        department_id: UUID | None = None,
         status: PersonStatus | None = None,
         created_from: datetime | None = None,
         created_to: datetime | None = None,
@@ -26,6 +27,10 @@ class PersonRepository(Protocol):
     def get_person(self, person_id: UUID) -> Person | None: ...
 
     def get_person_by_employee_code(self, employee_code: str) -> Person | None: ...
+
+    def get_person_by_email(self, email: str, *, exclude_person_id: UUID | None = None) -> Person | None: ...
+
+    def get_person_by_phone(self, phone: str, *, exclude_person_id: UUID | None = None) -> Person | None: ...
 
     def create_person(
         self,
@@ -36,6 +41,7 @@ class PersonRepository(Protocol):
         title: str | None,
         email: str | None,
         phone: str | None,
+        status: PersonStatus | None = None,
         joined_at: date | None,
         notes: str | None,
     ) -> Person: ...

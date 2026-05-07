@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from minio import Minio
 from minio.error import S3Error
 
@@ -24,3 +26,6 @@ class MinioStorageGateway:
             if exc.code == "NoSuchKey":
                 return
             raise
+
+    def presigned_get_object_url(self, *, bucket_name: str, object_key: str, expires_in: timedelta) -> str:
+        return self._client.presigned_get_object(bucket_name=bucket_name, object_name=object_key, expires=expires_in)

@@ -44,6 +44,19 @@ class _UseCaseCleanupMediaAssets:
         )()
 
 
+class _UseCaseGetMediaAssetPresignedUrl:
+    def execute(self, query):
+        return type(
+            "R",
+            (),
+            {
+                "asset_id": query.asset_id,
+                "url": "http://minio.local/presigned/object.jpg",
+                "expires_in": query.expires_in,
+            },
+        )()
+
+
 def test_media_asset_cleanup_endpoint(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("ENABLE_EVENT_CONSUMER", "false")
@@ -59,6 +72,9 @@ def test_media_asset_cleanup_endpoint(monkeypatch):
 
     app_main.app.dependency_overrides[dependencies.get_admin_user] = lambda: _build_admin_user()
     app_main.app.dependency_overrides[dependencies.get_cleanup_media_assets_use_case] = lambda: _UseCaseCleanupMediaAssets()
+    app_main.app.dependency_overrides[dependencies.get_media_asset_presigned_url_use_case] = (
+        lambda: _UseCaseGetMediaAssetPresignedUrl()
+    )
     app_main.app.dependency_overrides[dependencies.get_unit_of_work] = lambda: _FakeUoW()
 
     with TestClient(app_main.app) as client:
@@ -67,3 +83,11 @@ def test_media_asset_cleanup_endpoint(monkeypatch):
         payload = response.json()
         assert payload["deleted_total"] == 2
         assert payload["deleted_by_asset_type"]["recognition_snapshot"] == 1
+
+        asset_id = str(uuid4())
+        preview_response = client.get(f"/api/v1/media-assets/{asset_id}/presigned-url?expires_in=1800")
+        assert preview_response.status_code == 200
+        preview_payload = preview_response.json()
+        assert preview_payload["asset_id"] == asset_id
+        assert preview_payload["expires_in"] == 1800
+        assert preview_payload["url"].startswith("http")

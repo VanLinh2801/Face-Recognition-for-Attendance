@@ -37,6 +37,7 @@ class CreatePersonRequest(BaseModel):
     title: str | None = Field(default=None, max_length=255)
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=50)
+    status: PersonStatus | None = None
     joined_at: date | None = None
     notes: str | None = None
 

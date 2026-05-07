@@ -45,6 +45,7 @@ router = APIRouter(prefix="/persons", tags=["persons"], dependencies=[Depends(ge
 def list_persons(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    department_id: UUID | None = Query(default=None),
     status: PersonStatus | None = Query(default=None),
     from_at: datetime | None = Query(default=None),
     to_at: datetime | None = Query(default=None),
@@ -54,6 +55,7 @@ def list_persons(
         ListPersonsQuery(
             page=page,
             page_size=page_size,
+            department_id=department_id,
             status=status,
             created_from=from_at,
             created_to=to_at,
@@ -81,6 +83,7 @@ def create_person(
             title=request.title,
             email=request.email,
             phone=request.phone,
+            status=request.status,
             joined_at=request.joined_at,
             notes=request.notes,
         )

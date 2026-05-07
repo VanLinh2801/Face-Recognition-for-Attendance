@@ -1,6 +1,7 @@
 """Media asset API endpoints."""
 
 from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi import Depends, Query
@@ -8,10 +9,18 @@ from fastapi import Depends, Query
 from app.application.use_cases.media_assets import (
     CleanupMediaAssetsCommand,
     CleanupMediaAssetsUseCase,
+    GetMediaAssetPresignedUrlQuery,
+    GetMediaAssetPresignedUrlUseCase,
     ListMediaAssetsQuery,
     ListMediaAssetsUseCase,
 )
-from app.core.dependencies import get_admin_user, get_cleanup_media_assets_use_case, get_list_media_assets_use_case, get_unit_of_work
+from app.core.dependencies import (
+    get_admin_user,
+    get_cleanup_media_assets_use_case,
+    get_list_media_assets_use_case,
+    get_media_asset_presigned_url_use_case,
+    get_unit_of_work,
+)
 from app.domain.shared.enums import MediaAssetType
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from app.presentation.schemas.media_assets import (
@@ -19,6 +28,7 @@ from app.presentation.schemas.media_assets import (
     CleanupMediaAssetsResponse,
     MediaAssetItemResponse,
     MediaAssetListResponse,
+    MediaAssetPresignedUrlResponse,
 )
 
 router = APIRouter(prefix="/media-assets", tags=["media-assets"], dependencies=[Depends(get_admin_user)])
@@ -53,6 +63,16 @@ def list_media_assets(
         page=result.page,
         page_size=result.page_size,
     )
+
+
+@router.get("/{asset_id}/presigned-url", response_model=MediaAssetPresignedUrlResponse)
+def get_media_asset_presigned_url(
+    asset_id: UUID,
+    expires_in: int = Query(default=3600, ge=1, le=86400),
+    use_case: GetMediaAssetPresignedUrlUseCase = Depends(get_media_asset_presigned_url_use_case),
+) -> MediaAssetPresignedUrlResponse:
+    result = use_case.execute(GetMediaAssetPresignedUrlQuery(asset_id=asset_id, expires_in=expires_in))
+    return MediaAssetPresignedUrlResponse(asset_id=result.asset_id, url=result.url, expires_in=result.expires_in)
 
 
 @internal_router.post("/cleanup", response_model=CleanupMediaAssetsResponse)

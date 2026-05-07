@@ -1,19 +1,72 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import { PageHeader } from "@/components/data/page-header";
 import { DirectionBadge, PersonStatusBadge, RegistrationStatusBadge } from "@/components/data/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getDepartmentName, getPerson, listAttendanceEvents, listRegistrations } from "@/lib/mock-repository";
+import { ApiError, apiFetch } from "@/lib/api-client";
+import type { AttendanceEvent, Department, FaceRegistration, PageResult, Person } from "@/lib/types";
 import { formatDateTime, percent } from "@/lib/utils";
 
-export default async function PersonDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const person = getPerson(id);
-  const registrations = listRegistrations(person.id).items;
-  const attendance = listAttendanceEvents(person.id).items;
+export default function PersonDetailPage() {
+  const params = useParams<{ id: string }>();
+  const personId = params.id;
+  const [person, setPerson] = useState<Person | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [registrations, setRegistrations] = useState<FaceRegistration[]>([]);
+  const [attendance, setAttendance] = useState<AttendanceEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!personId) return;
+    let mounted = true;
+    async function loadData() {
+      setLoading(true);
+      setError("");
+      try {
+        const [personData, departmentsData, registrationsData, attendanceData] = await Promise.all([
+          apiFetch<Person>(`/persons/${personId}`, { withAuth: true }),
+          apiFetch<PageResult<Department>>("/departments?page=1&page_size=100", { withAuth: true }),
+          apiFetch<PageResult<FaceRegistration>>(`/persons/${personId}/registrations?page=1&page_size=20`, { withAuth: true }),
+          apiFetch<PageResult<AttendanceEvent>>(`/attendance/persons/${personId}/history?page=1&page_size=20`, { withAuth: true }),
+        ]);
+        if (!mounted) return;
+        setPerson(personData);
+        setDepartments(departmentsData.items);
+        setRegistrations(registrationsData.items);
+        setAttendance(attendanceData.items);
+      } catch (err) {
+        if (!mounted) return;
+        setError(err instanceof ApiError ? err.message : "Không tải được hồ sơ nhân sự.");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    void loadData();
+    return () => {
+      mounted = false;
+    };
+  }, [personId]);
+
+  const departmentName = useMemo(() => {
+    if (!person?.department_id) return "No department";
+    return departments.find((department) => department.id === person.department_id)?.name ?? "Unknown";
+  }, [departments, person?.department_id]);
+
+  if (loading) {
+    return <div className="p-6 text-sm text-slate-600">Đang tải hồ sơ nhân sự...</div>;
+  }
+
+  if (error || !person) {
+    return <div className="m-6 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error || "Không tìm thấy nhân sự."}</div>;
+  }
 
   return (
     <div>
-      <PageHeader title={person.full_name} description={`${person.employee_code} · ${getDepartmentName(person.department_id)}`} action="Cập nhật hồ sơ" />
+      <PageHeader title={person.full_name} description={`${person.employee_code} · ${departmentName}`} action="Cập nhật hồ sơ" />
       <div className="grid gap-4 p-6 xl:grid-cols-[360px_1fr]">
         <Card>
           <CardHeader><CardTitle>Profile</CardTitle></CardHeader>

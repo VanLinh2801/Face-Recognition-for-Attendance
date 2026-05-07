@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 from app.application.dtos.pagination import PageQuery, PageResult
 from app.application.interfaces.storage_gateway import ObjectStorageGateway
 from app.application.interfaces.repositories.media_asset_repository import MediaAssetRepository
 from app.core.config import Settings
+from app.core.exceptions import NotFoundError
 from app.domain.media_assets.entities import MediaAsset
 from app.domain.shared.enums import MediaAssetType
 
@@ -91,4 +93,40 @@ class CleanupMediaAssetsUseCase:
         return CleanupMediaAssetsResult(
             deleted_total=sum(deleted_by_asset_type.values()),
             deleted_by_asset_type=deleted_by_asset_type,
+        )
+
+
+@dataclass(slots=True, kw_only=True)
+class GetMediaAssetPresignedUrlQuery:
+    asset_id: UUID
+    expires_in: int = 3600
+
+
+@dataclass(slots=True, kw_only=True)
+class MediaAssetPresignedUrlResult:
+    asset_id: UUID
+    url: str
+    expires_in: int
+
+
+class GetMediaAssetPresignedUrlUseCase:
+    def __init__(self, repository: MediaAssetRepository, storage_gateway: ObjectStorageGateway) -> None:
+        self._repository = repository
+        self._storage_gateway = storage_gateway
+
+    def execute(self, query: GetMediaAssetPresignedUrlQuery) -> MediaAssetPresignedUrlResult:
+        media_asset = self._repository.get_media_asset(query.asset_id)
+        if media_asset is None:
+            raise NotFoundError("Media asset not found")
+
+        expires_delta = timedelta(seconds=query.expires_in)
+        url = self._storage_gateway.presigned_get_object_url(
+            bucket_name=media_asset.bucket_name,
+            object_key=media_asset.object_key,
+            expires_in=expires_delta,
+        )
+        return MediaAssetPresignedUrlResult(
+            asset_id=media_asset.id,
+            url=url,
+            expires_in=query.expires_in,
         )

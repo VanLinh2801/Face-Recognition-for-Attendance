@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { Building2, ChevronRight, Eye, MoreHorizontal, Pencil, Trash2, UserRound, X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Department, Person } from "@/lib/types";
+import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
+import { useOutsideClick } from "@/lib/use-outside-click";
 
 export function DepartmentDetailView({
   department,
@@ -21,6 +23,11 @@ export function DepartmentDetailView({
   const [departmentPeople, setDepartmentPeople] = useState(persons);
   const [openPersonActionId, setOpenPersonActionId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<(Person & { department_name: string }) | null>(null);
+  const personActionMenuRef = useRef<HTMLDivElement>(null);
+  const deleteDialog = useDialogTransition(deleteTarget);
+  const visibleDeleteTarget = deleteDialog.value;
+
+  useOutsideClick(personActionMenuRef, openPersonActionId !== null, () => setOpenPersonActionId(null));
 
   function getDepartmentName(id: string | null) {
     if (!id) return "Không trực thuộc";
@@ -113,7 +120,10 @@ export function DepartmentDetailView({
                             <td className="truncate pr-4">{person.title}</td>
                             <td><Badge variant={person.status === "active" ? "success" : "default"}>{person.status}</Badge></td>
                             <td className="text-right">
-                              <div className="relative inline-flex justify-end">
+                              <div
+                                ref={openPersonActionId === person.id ? personActionMenuRef : undefined}
+                                className="relative inline-flex justify-end"
+                              >
                                 <Button
                                   variant="outline"
                                   size="icon"
@@ -161,9 +171,15 @@ export function DepartmentDetailView({
       </Card>
       </div>
 
-      {deleteTarget ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl">
+      {visibleDeleteTarget ? (
+        <div
+          className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
+          onMouseDown={() => setDeleteTarget(null)}
+        >
+          <div
+            className={`w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(deleteDialog.visible)}`}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
               <div className="flex items-start gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-700">
@@ -172,7 +188,7 @@ export function DepartmentDetailView({
                 <div>
                   <h2 className="text-lg font-semibold">Xóa nhân viên?</h2>
                   <p className="mt-2 text-sm text-slate-600">
-                    Bạn có chắc muốn xóa {deleteTarget.full_name} khỏi danh sách phòng ban này? Thao tác này chỉ xóa dữ liệu mock trên giao diện hiện tại.
+                    Bạn có chắc muốn xóa {visibleDeleteTarget.full_name} khỏi danh sách phòng ban này? Thao tác này chỉ xóa dữ liệu mock trên giao diện hiện tại.
                   </p>
                 </div>
               </div>
@@ -182,7 +198,7 @@ export function DepartmentDetailView({
             </div>
             <div className="flex justify-end gap-2 p-5">
               <Button variant="outline" onClick={() => setDeleteTarget(null)}>Hủy</Button>
-              <Button variant="danger" onClick={() => deletePerson(deleteTarget.id)}>
+              <Button variant="danger" onClick={() => deletePerson(visibleDeleteTarget.id)}>
                 <Trash2 className="h-4 w-4" />
                 Xác nhận xóa
               </Button>
@@ -305,3 +321,4 @@ function DepartmentTreeNode({
     </div>
   );
 }
+

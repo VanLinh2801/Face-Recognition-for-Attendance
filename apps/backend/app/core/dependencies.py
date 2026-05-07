@@ -27,7 +27,11 @@ from app.application.use_cases.attendance_exceptions import (
     ListAttendanceExceptionsUseCase,
     UpdateAttendanceExceptionUseCase,
 )
-from app.application.use_cases.media_assets import CleanupMediaAssetsUseCase, ListMediaAssetsUseCase
+from app.application.use_cases.media_assets import (
+    CleanupMediaAssetsUseCase,
+    GetMediaAssetPresignedUrlUseCase,
+    ListMediaAssetsUseCase,
+)
 from app.application.use_cases.face_registrations import (
     ApplyRegistrationInputValidationUseCase,
     CompleteFaceRegistrationUseCase,
@@ -194,6 +198,13 @@ def get_cleanup_media_assets_use_case(
     container: Container = Depends(get_container),
 ) -> CleanupMediaAssetsUseCase:
     return container.build_cleanup_media_assets_use_case(session)
+
+
+def get_media_asset_presigned_url_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetMediaAssetPresignedUrlUseCase:
+    return container.build_get_media_asset_presigned_url_use_case(session)
 
 
 def get_create_face_registration_use_case(

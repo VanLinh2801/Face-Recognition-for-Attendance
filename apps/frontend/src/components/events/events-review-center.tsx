@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { AlertTriangle, CalendarSearch, ChevronLeft, ChevronRight, Copy, Eye, FileJson, ImageIcon, Radio, ShieldAlert, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { DirectionBadge } from "@/components/data/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { EventDirection, MediaAsset, ReviewStatus, Severity } from "@/lib/types";
+import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
+import { useOutsideClick } from "@/lib/use-outside-click";
 import { formatDateTime, percent } from "@/lib/utils";
 
 type EventType = "all" | "recognition" | "unknown" | "spoof";
@@ -45,6 +47,8 @@ export function EventsReviewCenter({ rows }: { rows: EventRow[] }) {
   const [fromTime, setFromTime] = useState("2026-05-06T00:00");
   const [toTime, setToTime] = useState("2026-05-06T23:59");
   const [selectedEvent, setSelectedEvent] = useState<EventRow | null>(null);
+  const eventDialog = useDialogTransition(selectedEvent);
+  const visibleEvent = eventDialog.value;
 
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -188,7 +192,13 @@ export function EventsReviewCenter({ rows }: { rows: EventRow[] }) {
         </CardContent>
       </Card>
 
-      {selectedEvent ? <EventDetailDrawer event={selectedEvent} onClose={() => setSelectedEvent(null)} /> : null}
+      {visibleEvent ? (
+        <EventDetailDrawer
+          event={visibleEvent}
+          visible={eventDialog.visible}
+          onClose={() => setSelectedEvent(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -201,10 +211,13 @@ function DateTimePicker({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [visibleMonth, setVisibleMonth] = useState(() => monthStart(datePart(value)));
   const selectedDate = parseDate(datePart(value));
   const days = calendarDays(visibleMonth);
   const monthLabel = visibleMonth.toLocaleDateString("vi-VN", { month: "long", year: "numeric", timeZone: "UTC" });
+
+  useOutsideClick(containerRef, open, () => setOpen(false));
 
   function shiftMonth(offset: number) {
     setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + offset, 1)));
@@ -220,7 +233,7 @@ function DateTimePicker({
   }
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -344,7 +357,7 @@ function formatDateTimeInputLabel(value: string) {
   })} ${timePart(value)}`;
 }
 
-function EventDetailDrawer({ event, onClose }: { event: EventRow; onClose: () => void }) {
+function EventDetailDrawer({ event, visible, onClose }: { event: EventRow; visible: boolean; onClose: () => void }) {
   const meta = typeMeta[event.type];
   const Icon = meta.icon;
   const detailJson = JSON.stringify(
@@ -368,8 +381,14 @@ function EventDetailDrawer({ event, onClose }: { event: EventRow; onClose: () =>
   );
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+    <div
+      className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`}
+      onMouseDown={onClose}
+    >
+      <div
+        className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(visible)}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <div className="flex items-start justify-between border-b border-slate-200 p-5">
           <div className="flex items-start gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-md bg-slate-100">

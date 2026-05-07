@@ -36,3 +36,9 @@ class CleanupMediaAssetsRequest(BaseModel):
 class CleanupMediaAssetsResponse(BaseModel):
     deleted_total: int
     deleted_by_asset_type: dict[str, int]
+
+
+class MediaAssetPresignedUrlResponse(BaseModel):
+    asset_id: UUID
+    url: str
+    expires_in: int

@@ -1,20 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Building2,
   CalendarClock,
   ChevronLeft,
   ChevronRight,
   Database,
+  KeyRound,
   LayoutDashboard,
+  LogOut,
   Radio,
   UserRound,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { apiFetch } from "@/lib/api-client";
+import { clearAuthTokens, getRefreshToken } from "@/lib/auth-client";
+import { useOutsideClick } from "@/lib/use-outside-click";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -28,7 +33,40 @@ const navItems = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const router = useRouter();
+
+  useOutsideClick(accountMenuRef, accountMenuOpen, () => setAccountMenuOpen(false));
+
+  if (pathname === "/login") {
+    return <div className="min-h-screen bg-slate-50 text-slate-950">{children}</div>;
+  }
+
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+
+    try {
+      const refreshToken = getRefreshToken();
+      if (refreshToken) {
+        await apiFetch<{ status: string }>("/auth/logout", {
+          method: "POST",
+          withAuth: true,
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      }
+    } catch {
+      // Local session cleanup still needs to happen if the token is already invalid or the backend is unavailable.
+    } finally {
+      clearAuthTokens();
+      setAccountMenuOpen(false);
+      setLoggingOut(false);
+      router.push("/login");
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -78,14 +116,60 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="border-t border-slate-200 p-3">
-          <div className={cn("flex items-center gap-3 rounded-md bg-slate-50 p-2", collapsed && "justify-center")}>
-            <UserRound className="h-5 w-5 text-slate-500" />
-            {!collapsed && (
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">admin</div>
-                <div className="truncate text-xs text-slate-500">Local mock session</div>
+          <div ref={accountMenuRef} className="relative">
+            {accountMenuOpen ? (
+              <div
+                className={cn(
+                  "absolute bottom-12 z-40 overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl",
+                  collapsed ? "left-0 w-56" : "left-0 right-0",
+                )}
+              >
+                <button
+                  type="button"
+                  disabled
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-400 disabled:cursor-not-allowed"
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Đổi thông tin đăng nhập
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <LogOut className="h-4 w-4" />
+                  {loggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
+                </button>
               </div>
-            )}
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((value) => !value)}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md bg-slate-50 p-2 text-left transition hover:bg-slate-100",
+                collapsed && "justify-center",
+              )}
+              aria-expanded={accountMenuOpen}
+              aria-haspopup="menu"
+            >
+              <UserRound className="h-5 w-5 text-slate-500" />
+              {!collapsed && (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">admin</div>
+                    <div className="truncate text-xs text-slate-500">Admin session</div>
+                  </div>
+                  <ChevronRight
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-slate-400 transition-transform",
+                      accountMenuOpen && "-rotate-90",
+                    )}
+                  />
+                </>
+              )}
+            </button>
           </div>
         </div>
       </aside>

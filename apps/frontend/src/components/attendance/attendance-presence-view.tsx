@@ -3,12 +3,14 @@
 import Image from "next/image";
 import { Building2, CalendarSearch, ChevronLeft, ChevronRight, Clock, Eye, ImageIcon, Loader2, Printer, Search, Users, UserX, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { AttendanceEvent, Department, MediaAsset, Person } from "@/lib/types";
+import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
+import { useOutsideClick } from "@/lib/use-outside-click";
 import { formatTime } from "@/lib/utils";
 
 const WORK_DATE = "2026-05-06";
@@ -58,6 +60,9 @@ export function AttendancePresenceView({
   const [reportLoading, setReportLoading] = useState(false);
   const [reportRows, setReportRows] = useState<PresenceReportRow[] | null>(null);
   const [selectedPresenceRow, setSelectedPresenceRow] = useState<PresenceRow | null>(null);
+  const reportDialog = useDialogTransition(reportDialogOpen ? true : null);
+  const presenceDialog = useDialogTransition(selectedPresenceRow);
+  const visiblePresenceRow = presenceDialog.value;
   const pageSize = 5;
 
   const departmentScopeIds = useMemo(() => getDepartmentScopeIds(departmentId, departments), [departmentId, departments]);
@@ -318,9 +323,15 @@ export function AttendancePresenceView({
         </CardContent>
       </Card>
 
-      {reportDialogOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4">
-          <div className="w-full max-w-5xl rounded-lg border border-slate-200 bg-white shadow-2xl">
+      {reportDialog.value ? (
+        <div
+          className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 ${dialogOverlayClass(reportDialog.visible)}`}
+          onMouseDown={() => setReportDialogOpen(false)}
+        >
+          <div
+            className={`w-full max-w-5xl rounded-lg border border-slate-200 bg-white shadow-2xl ${dialogPanelClass(reportDialog.visible)}`}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
               <div>
                 <h2 className="text-xl font-semibold text-slate-950">Tạo report chấm công</h2>
@@ -420,8 +431,14 @@ export function AttendancePresenceView({
         </div>
       ) : null}
 
-      {selectedPresenceRow ? (
-        <PresenceDetailDialog row={selectedPresenceRow} workDate={workDate} mediaAssets={mediaAssets} onClose={() => setSelectedPresenceRow(null)} />
+      {visiblePresenceRow ? (
+        <PresenceDetailDialog
+          row={visiblePresenceRow}
+          workDate={workDate}
+          mediaAssets={mediaAssets}
+          visible={presenceDialog.visible}
+          onClose={() => setSelectedPresenceRow(null)}
+        />
       ) : null}
 
     </div>
@@ -432,11 +449,13 @@ function PresenceDetailDialog({
   row,
   workDate,
   mediaAssets,
+  visible,
   onClose,
 }: {
   row: PresenceRow;
   workDate: string;
   mediaAssets: MediaAsset[];
+  visible: boolean;
   onClose: () => void;
 }) {
   const person = row.person;
@@ -444,8 +463,14 @@ function PresenceDetailDialog({
   const lastAsset = getEventSnapshotAsset(row.last_event, mediaAssets);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+    <div
+      className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`}
+      onMouseDown={onClose}
+    >
+      <div
+        className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(visible)}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <div className="flex items-start justify-between border-b border-slate-200 p-5">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -570,6 +595,7 @@ function StatusFilterSelect({
   onChange: (value: PresenceStatusFilter) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const options: Array<{ value: PresenceStatusFilter; label: string }> = [
     { value: "all", label: "Tất cả" },
     { value: "present", label: "present" },
@@ -578,8 +604,10 @@ function StatusFilterSelect({
   ];
   const selectedOption = options.find((option) => option.value === value) ?? options[0];
 
+  useOutsideClick(containerRef, open, () => setOpen(false));
+
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -708,17 +736,20 @@ function DatePicker({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [visibleMonth, setVisibleMonth] = useState(() => monthStart(value));
   const selectedDate = parseDate(value);
   const days = calendarDays(visibleMonth);
   const monthLabel = visibleMonth.toLocaleDateString("vi-VN", { month: "long", year: "numeric", timeZone: "UTC" });
+
+  useOutsideClick(containerRef, open, () => setOpen(false));
 
   function shiftMonth(offset: number) {
     setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + offset, 1)));
   }
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -842,6 +873,7 @@ function DepartmentTreeSelect({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     new Set(departments.filter((department) => department.parent_id === null).map((department) => department.id)),
@@ -850,6 +882,8 @@ function DepartmentTreeSelect({
   const selectedDepartment = departments.find((department) => department.id === value);
   const selectedLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : "Tất cả phòng ban";
   const normalizedQuery = query.trim().toLowerCase();
+
+  useOutsideClick(containerRef, open, () => setOpen(false));
 
   function toggleDepartment(departmentId: string) {
     setExpandedIds((current) => {
@@ -861,7 +895,7 @@ function DepartmentTreeSelect({
   }
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}

@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, Eye, Pencil, Plus, Save, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Building2, ChevronRight, Eye, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input, Select } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
 import type { Department } from "@/lib/types";
+import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
+import { useOutsideClick } from "@/lib/use-outside-click";
 
 type DepartmentDraft = {
   id?: string;
@@ -34,6 +36,10 @@ export function DepartmentsManager({
   const [departments, setDepartments] = useState<Department[]>(initialDepartments);
   const [draft, setDraft] = useState<DepartmentDraft | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
+  const draftDialog = useDialogTransition(draft);
+  const deleteDialog = useDialogTransition(deleteTarget);
+  const visibleDraft = draftDialog.value;
+  const visibleDeleteTarget = deleteDialog.value;
 
   const activeDepartments = useMemo(() => departments.filter((department) => department.is_active), [departments]);
 
@@ -197,16 +203,22 @@ export function DepartmentsManager({
         </Card>
       </div>
 
-      {draft ? (
-        <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl overflow-hidden rounded-lg bg-white shadow-2xl">
+      {visibleDraft ? (
+        <div
+          className={`fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(draftDialog.visible)}`}
+          onMouseDown={() => setDraft(null)}
+        >
+          <div
+            className={`w-full max-w-xl overflow-visible rounded-lg bg-white shadow-2xl ${dialogPanelClass(draftDialog.visible)}`}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
               <div className="flex items-start gap-3">
                 <div className="grid h-10 w-10 place-items-center rounded-md bg-slate-100">
                   <Building2 className="h-5 w-5 text-slate-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold">{draft.id ? "Sửa phòng ban" : "Thêm phòng ban"}</h2>
+                  <h2 className="text-lg font-semibold">{visibleDraft.id ? "Sửa phòng ban" : "Thêm phòng ban"}</h2>
                   <p className="mt-1 text-sm text-slate-500">Form mock theo contract departments.</p>
                 </div>
               </div>
@@ -219,29 +231,23 @@ export function DepartmentsManager({
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2">
                   <span className="text-sm font-medium">Mã phòng ban</span>
-                  <Input value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value })} placeholder="ENG" />
+                  <Input value={visibleDraft.code} onChange={(event) => setDraft({ ...visibleDraft, code: event.target.value })} placeholder="ENG" />
                 </label>
                 <label className="space-y-2">
                   <span className="text-sm font-medium">Tên phòng ban</span>
-                  <Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Engineering" />
+                  <Input value={visibleDraft.name} onChange={(event) => setDraft({ ...visibleDraft, name: event.target.value })} placeholder="Engineering" />
                 </label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2">
                   <span className="text-sm font-medium">Trực thuộc</span>
-                  <Select
-                    value={draft.parent_id ?? ""}
-                    onChange={(event) => setDraft({ ...draft, parent_id: event.target.value || null })}
-                  >
-                    <option value="">Không trực thuộc</option>
-                    {parentCandidates().map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.code} · {department.name}
-                      </option>
-                    ))}
-                  </Select>
-                  {draft.id ? (
+                  <DepartmentTreeSelect
+                    departments={parentCandidates()}
+                    value={visibleDraft.parent_id ?? ""}
+                    onChange={(value) => setDraft({ ...visibleDraft, parent_id: value || null })}
+                  />
+                  {visibleDraft.id ? (
                     <span className="text-xs text-slate-500">
                       Không thể chọn chính phòng ban này hoặc phòng ban con/cháu làm trực thuộc.
                     </span>
@@ -249,13 +255,10 @@ export function DepartmentsManager({
                 </label>
                 <label className="space-y-2">
                   <span className="text-sm font-medium">Trạng thái</span>
-                  <Select
-                    value={draft.is_active ? "active" : "inactive"}
-                    onChange={(event) => setDraft({ ...draft, is_active: event.target.value === "active" })}
-                  >
-                    <option value="active">active</option>
-                    <option value="inactive">inactive</option>
-                  </Select>
+                  <DepartmentStatusSelect
+                    value={visibleDraft.is_active}
+                    onChange={(value) => setDraft({ ...visibleDraft, is_active: value })}
+                  />
                 </label>
               </div>
             </div>
@@ -272,9 +275,15 @@ export function DepartmentsManager({
       ) : null}
 
 
-      {deleteTarget ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl">
+      {visibleDeleteTarget ? (
+        <div
+          className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
+          onMouseDown={() => setDeleteTarget(null)}
+        >
+          <div
+            className={`w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(deleteDialog.visible)}`}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
             <div className="border-b border-slate-200 p-5">
               <div className="flex items-start gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-700">
@@ -283,7 +292,7 @@ export function DepartmentsManager({
                 <div>
                   <h2 className="text-lg font-semibold">Xóa phòng ban?</h2>
                   <p className="mt-2 text-sm text-slate-600">
-                    Bạn có chắc muốn xóa {deleteTarget.name}? Thao tác này chỉ xóa dữ liệu mock trên giao diện hiện tại.
+                    Bạn có chắc muốn xóa {visibleDeleteTarget.name}? Thao tác này chỉ xóa dữ liệu mock trên giao diện hiện tại.
                   </p>
                 </div>
               </div>
@@ -301,3 +310,228 @@ export function DepartmentsManager({
     </>
   );
 }
+
+function DepartmentTreeSelect({
+  departments,
+  value,
+  onChange,
+}: {
+  departments: Department[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [query, setQuery] = useState("");
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    new Set(departments.filter((department) => department.parent_id === null).map((department) => department.id)),
+  );
+
+  const selectedDepartment = departments.find((department) => department.id === value);
+  const selectedLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : "Không trực thuộc";
+  const normalizedQuery = query.trim().toLowerCase();
+
+  useOutsideClick(containerRef, open, () => setOpen(false));
+
+  function toggleDepartment(departmentId: string) {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(departmentId)) next.delete(departmentId);
+      else next.add(departmentId);
+      return next;
+    });
+  }
+
+  const rootDepartments = departments.filter(
+    (department) => department.parent_id === null || !departments.some((item) => item.id === department.parent_id),
+  );
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+      </button>
+
+      {open ? (
+        <div className="absolute left-0 top-11 z-[80] w-[360px] max-w-[calc(100vw-3rem)] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+          <div className="border-b border-slate-100 p-2">
+            <div className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Tìm phòng ban"
+                className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="thin-scrollbar max-h-64 overflow-y-auto p-2">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+              }}
+              className={value === "" ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+            >
+              <Building2 className="h-4 w-4" />
+              Không trực thuộc
+            </button>
+
+            <div className="mt-1 space-y-1">
+              {rootDepartments.map((department) => (
+                <DepartmentTreeOption
+                  key={department.id}
+                  department={department}
+                  departments={departments}
+                  selectedId={value}
+                  depth={0}
+                  expandedIds={expandedIds}
+                  query={normalizedQuery}
+                  onToggle={toggleDepartment}
+                  onSelect={(departmentId) => {
+                    onChange(departmentId);
+                    setOpen(false);
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DepartmentStatusSelect({
+  value,
+  onChange,
+}: {
+  value: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const options = [
+    { value: true, label: "active" },
+    { value: false, label: "inactive" },
+  ];
+
+  useOutsideClick(containerRef, open, () => setOpen(false));
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <DepartmentStatusBadge active={value} />
+        </span>
+        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+      </button>
+
+      {open ? (
+        <div className="absolute left-0 top-11 z-30 w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+          {options.map((option) => (
+            <button
+              key={option.label}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className={value === option.value ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+            >
+              <DepartmentStatusBadge active={option.value} />
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DepartmentStatusBadge({ active }: { active: boolean }) {
+  return <Badge variant={active ? "success" : "default"}>{active ? "active" : "inactive"}</Badge>;
+}
+
+function DepartmentTreeOption({
+  department,
+  departments,
+  selectedId,
+  depth,
+  expandedIds,
+  query,
+  onToggle,
+  onSelect,
+}: {
+  department: Department;
+  departments: Department[];
+  selectedId: string;
+  depth: number;
+  expandedIds: Set<string>;
+  query: string;
+  onToggle: (departmentId: string) => void;
+  onSelect: (departmentId: string) => void;
+}) {
+  const children = departments.filter((item) => item.parent_id === department.id);
+  const expanded = expandedIds.has(department.id);
+  const hasChildren = children.length > 0;
+  const matchesQuery =
+    query.length === 0 ||
+    department.name.toLowerCase().includes(query) ||
+    department.code.toLowerCase().includes(query) ||
+    children.some((child) => child.name.toLowerCase().includes(query) || child.code.toLowerCase().includes(query));
+
+  if (!matchesQuery) return null;
+
+  return (
+    <div>
+      <div
+        className={selectedId === department.id ? "flex items-center gap-2 rounded-md bg-slate-950 px-2 py-2 text-sm font-medium text-white" : "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-slate-50"}
+        style={{ paddingLeft: 8 + depth * 18 }}
+      >
+        <button
+          type="button"
+          disabled={!hasChildren}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle(department.id);
+          }}
+          className="grid h-5 w-5 shrink-0 place-items-center rounded hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-transparent"
+          aria-label={expanded ? `Thu gọn ${department.name}` : `Mở rộng ${department.name}`}
+        >
+          <ChevronRight className={expanded ? "h-4 w-4 rotate-90 transition-transform" : "h-4 w-4 transition-transform"} />
+        </button>
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => onSelect(department.id)}>
+          <Building2 className="h-4 w-4 shrink-0" />
+          <span className="truncate">{department.code} · {department.name}</span>
+        </button>
+      </div>
+      {expanded || query.length > 0
+        ? children.map((child) => (
+            <DepartmentTreeOption
+              key={child.id}
+              department={child}
+              departments={departments}
+              selectedId={selectedId}
+              depth={depth + 1}
+              expandedIds={expandedIds}
+              query={query}
+              onToggle={onToggle}
+              onSelect={onSelect}
+            />
+          ))
+        : null}
+    </div>
+  );
+}
+

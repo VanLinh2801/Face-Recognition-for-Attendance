@@ -7,7 +7,7 @@ export function PageHeader({
   actionHref,
 }: {
   title: string;
-  description: string;
+  description?: string;
   action?: string;
   actionHref?: string;
 }) {
@@ -15,7 +15,7 @@ export function PageHeader({
     <div className="flex flex-col gap-3 border-b border-slate-200 bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h1 className="text-xl font-semibold">{title}</h1>
-        <p className="mt-1 text-sm text-slate-500">{description}</p>
+        {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
       </div>
       {action && actionHref ? (
         <a

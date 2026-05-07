@@ -27,7 +27,11 @@ from app.application.use_cases.attendance_exceptions import (
     ListAttendanceExceptionsUseCase,
     UpdateAttendanceExceptionUseCase,
 )
-from app.application.use_cases.media_assets import CleanupMediaAssetsUseCase, ListMediaAssetsUseCase
+from app.application.use_cases.media_assets import (
+    CleanupMediaAssetsUseCase,
+    GetMediaAssetPresignedUrlUseCase,
+    ListMediaAssetsUseCase,
+)
 from app.application.use_cases.event_ingestion import (
     IngestRecognitionEventUseCase,
     IngestSpoofAlertEventUseCase,
@@ -147,6 +151,12 @@ class Container:
             repository=SqlAlchemyMediaAssetRepository(session),
             storage_gateway=MinioStorageGateway(self.settings),
             settings=self.settings,
+        )
+
+    def build_get_media_asset_presigned_url_use_case(self, session: Session) -> GetMediaAssetPresignedUrlUseCase:
+        return GetMediaAssetPresignedUrlUseCase(
+            repository=SqlAlchemyMediaAssetRepository(session),
+            storage_gateway=MinioStorageGateway(self.settings),
         )
 
     def build_list_attendance_events_use_case(self, session: Session) -> ListAttendanceEventsUseCase:
