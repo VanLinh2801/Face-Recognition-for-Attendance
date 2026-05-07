@@ -38,7 +38,7 @@ class RegistrationRequestedHandler:
 
         person_id = payload["person_id"]
         registration_id = payload["registration_id"]
-        media_asset = payload["face_media_asset"]
+        media_asset = payload["source_media_asset"]
 
         logger.info(
             "registration.requested person_id=%s registration_id=%s",

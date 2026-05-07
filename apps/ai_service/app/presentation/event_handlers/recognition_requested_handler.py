@@ -38,36 +38,56 @@ class RecognitionRequestedHandler:
         payload = event.get("payload", {})
         correlation_id = event.get("correlation_id") or str(uuid.uuid4())
 
-        stream_id = payload["stream_id"]
-        frame_id = payload["frame_id"]
-        frame_sequence = payload["frame_sequence"]
-        captured_at = payload["captured_at"]
+        stream_id = payload.get("stream_id", "unknown")
+        frame_id = payload.get("frame_id", "unknown")
+        frame_sequence = payload.get("frame_sequence", 0)
+        captured_at = payload.get("captured_at")
         faces = payload.get("faces", [])
 
         logger.info(
-            "recognition.requested stream_id=%s frame_id=%s faces=%d",
-            stream_id,
-            frame_id,
-            len(faces),
+            "====> [RECOGNITION] Received event: stream_id=%s, frame_id=%s, faces_count=%d",
+            stream_id, frame_id, len(faces)
         )
 
         for face_data in faces:
-            track_id = face_data["track_id"]
-            media_asset = face_data["face_media_asset"]
+            track_id = face_data.get("track_id", "unknown")
+            media_asset = face_data.get("face_media_asset")
+            image_b64 = face_data.get("cropped_face_b64")
 
             try:
-                image_bytes = await self._minio.download(
-                    bucket_name=media_asset["bucket_name"],
-                    object_key=media_asset["object_key"],
-                )
+                # Ưu tiên dùng ảnh base64 gửi kèm để giảm độ trễ MinIO
+                if image_b64:
+                    import base64
+                    # Loại bỏ header base64 nếu có (ví dụ: data:image/jpeg;base64,...)
+                    if "," in image_b64:
+                        image_b64 = image_b64.split(",")[1]
+                    image_bytes = base64.b64decode(image_b64)
+                    logger.info("Successfully decoded base64 image for track_id=%s (size=%d bytes)", track_id, len(image_bytes))
+                elif media_asset:
+                    logger.info("Downloading image from MinIO for track_id=%s...", track_id)
+                    image_bytes = await self._minio.download(
+                        bucket_name=media_asset["bucket_name"],
+                        object_key=media_asset["object_key"],
+                    )
+                else:
+                    raise ValueError(f"No image data or media asset for track_id={track_id}")
 
-                bbox_raw = face_data.get("bbox", {})
-                bbox = BoundingBox(
-                    x=bbox_raw.get("x", 0),
-                    y=bbox_raw.get("y", 0),
-                    width=bbox_raw.get("width", 0),
-                    height=bbox_raw.get("height", 0),
-                ) if bbox_raw else None
+                logger.info("Starting face identification for track_id=%s...", track_id)
+
+                bbox_raw = face_data.get("bbox")
+                if isinstance(bbox_raw, list) and len(bbox_raw) == 4:
+                    # Pipeline gửi [x1, y1, x2, y2]
+                    x1, y1, x2, y2 = bbox_raw
+                    bbox = BoundingBox(x=x1, y=y1, width=x2-x1, height=y2-y1)
+                elif isinstance(bbox_raw, dict):
+                    bbox = BoundingBox(
+                        x=bbox_raw.get("x", 0),
+                        y=bbox_raw.get("y", 0),
+                        width=bbox_raw.get("width", 0),
+                        height=bbox_raw.get("height", 0),
+                    )
+                else:
+                    bbox = None
 
                 face_input = FaceInput(
                     track_id=track_id,

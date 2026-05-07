@@ -48,7 +48,7 @@ class InsightFaceEmbedder(IFaceEmbedder):
 
         def _infer() -> np.ndarray:
             img = Image.open(io.BytesIO(face.image_data)).convert("RGB")
-            img_array = np.array(img)
+            img_array = np.array(img)[:, :, ::-1]  # RGB → BGR cho InsightFace
             faces = self._app.get(img_array)
             if not faces:
                 raise ValueError(

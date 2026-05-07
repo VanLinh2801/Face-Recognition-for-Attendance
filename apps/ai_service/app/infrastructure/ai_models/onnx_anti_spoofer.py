@@ -24,13 +24,24 @@ class OnnxAntiSpoofer(IAntiSpoofer):
     def __init__(self) -> None:
         self._session: ort.InferenceSession | None = None
         self._lock = asyncio.Lock()
+        self._enabled = True
 
     async def _ensure_loaded(self) -> None:
-        if self._session is not None:
+        if self._session is not None or not self._enabled:
             return
         async with self._lock:
-            if self._session is not None:
+            if self._session is not None or not self._enabled:
                 return
+            
+            import os
+            if not os.path.exists(settings.ANTI_SPOOF_MODEL_PATH):
+                logger.warning(
+                    "Anti-spoof model NOT FOUND at %s. Anti-spoofing will be BYPASSED (returning 1.0 for all faces).",
+                    settings.ANTI_SPOOF_MODEL_PATH
+                )
+                self._enabled = False
+                return
+
             self._session = ort.InferenceSession(
                 settings.ANTI_SPOOF_MODEL_PATH,
                 providers=[settings.ONNX_EXECUTION_PROVIDER],
@@ -51,6 +62,10 @@ class OnnxAntiSpoofer(IAntiSpoofer):
 
     async def predict(self, face: FaceInput) -> float:
         await self._ensure_loaded()
+        
+        if not self._enabled:
+            return 1.0  # Bypass: always return "Real" score
+            
         loop = asyncio.get_running_loop()
 
         def _infer() -> float:

@@ -32,13 +32,13 @@ class Settings(BaseSettings):
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
 
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
-    redis_stream_ai_events: str = Field(default="ai.backend.events", alias="REDIS_STREAM_AI_EVENTS")
+    redis_stream_ai_events: str = Field(default="ai_backend", alias="REDIS_STREAM_AI_EVENTS")
     redis_stream_pipeline_events: str = Field(
         default="pipeline.backend.events",
         alias="REDIS_STREAM_PIPELINE_EVENTS",
     )
     redis_stream_backend_pipeline: str = Field(
-        default="backend.pipeline.events",
+        default="pipeline_backend",
         alias="REDIS_STREAM_BACKEND_PIPELINE",
     )
     redis_consumer_group: str = Field(default="backend-consumers", alias="REDIS_CONSUMER_GROUP")

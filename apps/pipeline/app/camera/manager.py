@@ -34,7 +34,6 @@ class CameraManager:
                 if frame is not None:
                     task = asyncio.create_task(self.process_callback(source, frame))
                     task.add_done_callback(_on_task_done)
-                    logger.debug(f"Pushed frame from {source} to processing task.")
                 # Throttle: chỉ lấy frame để xử lý theo FRAME_INTERVAL
                 # Background thread vẫn đọc 30fps để giữ _latest_frame luôn mới
                 await asyncio.sleep(settings.FRAME_INTERVAL)

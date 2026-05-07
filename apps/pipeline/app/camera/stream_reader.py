@@ -76,11 +76,11 @@ class StreamReader:
                     self._latest_frame = frame
                 self._frame_count += 1
 
-                # Log FPS mỗi 100 frame
                 if self._frame_count % 100 == 0:
-                    elapsed = time.time() - self._fps_start
-                    fps = self._frame_count / elapsed if elapsed > 0 else 0
-                    logger.info(f"[StreamReader] {self.source} — FPS: {fps:.1f} ({self._frame_count} frames read)")
+                    pass
+
+                # self._frame_count += 1 (keeping count but removing logs)
+                self._frame_count += 1
             else:
                 logger.warning(f"Failed to read frame from: {self.source}")
                 time.sleep(0.1)
