@@ -1,0 +1,15 @@
+# Môi trường ảo (Virtual Environment)
+venv/
+env/
+
+# Biến môi trường và thông tin bảo mật
+.env
+
+# Python Cache (Các file sinh ra tự động trong quá trình chạy)
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE / Editor (Cấu hình riêng của từng phần mềm code)
+.vscode/
+.idea/

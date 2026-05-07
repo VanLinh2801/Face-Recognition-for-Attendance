@@ -1,1 +1,22 @@
-# ai_service dependencies
+# ── Web framework ──────────────────────────────────────────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# ── Config ─────────────────────────────────────────────────────────────────
+pydantic-settings==2.6.1
+
+# ── Redis ──────────────────────────────────────────────────────────────────
+redis==5.2.1
+
+# ── Vector DB ──────────────────────────────────────────────────────────────
+qdrant-client==1.12.1
+
+# ── Object Storage ─────────────────────────────────────────────────────────
+minio==7.2.11
+
+# ── AI / ML ────────────────────────────────────────────────────────────────
+insightface==0.7.3
+onnxruntime==1.20.1      # CPU-only; swap for onnxruntime-gpu if GPU available
+numpy==1.26.4
+Pillow==11.0.0
+opencv-python-headless==4.10.0.84   # required by insightface (no GUI)
