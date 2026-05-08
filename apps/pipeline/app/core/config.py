@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # Redis Stream Keys
     STREAM_VISION_PROCESS: str = "pipeline_ai"
     STREAM_REGISTRATION_REQ: str = "pipeline_backend"
+    STREAM_PIPELINE_EVENTS: str = "pipeline.backend.events"
     
     # MinIO
     MINIO_ENDPOINT: str = "minio:9000"

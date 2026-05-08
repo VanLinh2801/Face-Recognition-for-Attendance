@@ -22,11 +22,18 @@ class StorageClient:
         except Exception as e:
             logger.error(f"Error checking/creating bucket: {e}")
 
-    def upload_image(self, object_key: str, content: bytes, content_type: str = "image/jpeg"):
+    def upload_image(
+        self,
+        object_key: str,
+        content: bytes,
+        content_type: str = "image/jpeg",
+        bucket_name: Optional[str] = None,
+    ):
+        bucket = bucket_name or settings.MINIO_BUCKET_NAME
         try:
             data = io.BytesIO(content)
             self.client.put_object(
-                settings.MINIO_BUCKET_NAME,
+                bucket,
                 object_key,
                 data,
                 len(content),
@@ -38,9 +45,10 @@ class StorageClient:
             logger.error(f"[MINIO] ✗ Upload failed: {e}")
             return False
 
-    def download_image(self, object_key: str) -> Optional[bytes]:
+    def download_image(self, object_key: str, bucket_name: Optional[str] = None) -> Optional[bytes]:
+        bucket = bucket_name or settings.MINIO_BUCKET_NAME
         try:
-            response = self.client.get_object(settings.MINIO_BUCKET_NAME, object_key)
+            response = self.client.get_object(bucket, object_key)
             return response.read()
         except Exception as e:
             logger.error(f"Error downloading from MinIO: {e}")

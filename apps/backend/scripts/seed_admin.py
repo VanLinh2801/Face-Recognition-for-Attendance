@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Tự động thêm thư mục gốc (apps/backend) vào sys.path để import được 'app'
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from app.bootstrap.container import build_container
 from app.core.security import hash_password
 from app.infrastructure.persistence.repositories.user_repository import SqlAlchemyUserRepository

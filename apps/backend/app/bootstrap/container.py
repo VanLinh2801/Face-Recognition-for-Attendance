@@ -216,6 +216,9 @@ class Container:
     def build_pipeline_event_publisher(self) -> PipelineEventPublisher:
         return PipelineEventPublisher(self.settings)
 
+    def build_object_storage_gateway(self) -> MinioStorageGateway:
+        return MinioStorageGateway(self.settings)
+
     def build_ingest_recognition_event_use_case(
         self,
         session: Session,

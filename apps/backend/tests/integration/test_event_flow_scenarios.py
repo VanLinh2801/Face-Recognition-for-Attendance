@@ -77,7 +77,7 @@ class _FakeApplyRegistrationInputValidationUseCase:
 
     def execute(self, command):
         now = datetime.now(timezone.utc)
-        registration_status = RegistrationStatus.FAILED if command.status == "rejected" else RegistrationStatus.PENDING
+        registration_status = RegistrationStatus.FAILED if command.status == "rejected" else RegistrationStatus.VALIDATED
         return PersonFaceRegistration(
             id=command.registration_id,
             person_id=self._person_id,
@@ -360,7 +360,7 @@ def test_registration_success_flow_from_api_to_pipeline_and_ai_events(monkeypatc
             validated_message = ws.receive_json()
             assert validated_message["event_type"] == "registration_input.validated"
             assert validated_message["payload"]["status"] == "accepted"
-            assert validated_message["payload"]["registration_status"] == "pending"
+            assert validated_message["payload"]["registration_status"] == "validated"
 
             anyio.run(
                 consumer._handle_records,

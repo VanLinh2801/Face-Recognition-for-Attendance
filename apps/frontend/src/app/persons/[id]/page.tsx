@@ -1,15 +1,49 @@
+"use client";
+
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/data/page-header";
-import { DirectionBadge, PersonStatusBadge, RegistrationStatusBadge } from "@/components/data/status-badge";
+import { DirectionBadge, PersonStatusBadge } from "@/components/data/status-badge";
+import { PersonFaceRegistrations } from "@/components/persons/person-face-registrations";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDepartmentName, getPerson, listAttendanceEvents, listRegistrations } from "@/lib/mock-repository";
+import type { Person } from "@/lib/types";
 import { formatDateTime, percent } from "@/lib/utils";
 
-export default async function PersonDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const person = getPerson(id);
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+
+export default function PersonDetailPage() {
+  const params = useParams<{ id: string }>();
+  const id = params.id;
+  const [person, setPerson] = useState<Person>(() => getPerson(id));
+  const [error, setError] = useState<string | null>(null);
   const registrations = listRegistrations(person.id).items;
   const attendance = listAttendanceEvents(person.id).items;
+
+  useEffect(() => {
+    const token = window.localStorage.getItem("access_token");
+    if (!token) return;
+
+    const controller = new AbortController();
+    async function loadPerson() {
+      setError(null);
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/persons/${id}`, {
+          headers: { authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.message ?? data?.detail ?? `HTTP ${res.status}`);
+        setPerson(data as Person);
+      } catch (err) {
+        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Failed to load person");
+      }
+    }
+
+    void loadPerson();
+    return () => controller.abort();
+  }, [id]);
 
   return (
     <div>
@@ -18,38 +52,20 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
         <Card>
           <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
+            {error ? <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-800">{error}</div> : null}
             <div className="grid aspect-square place-items-center rounded-lg bg-slate-100 text-5xl font-semibold text-slate-400">
               {person.full_name.split(" ").slice(-1)[0][0]}
             </div>
             <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><PersonStatusBadge status={person.status} /></div>
-            <div className="flex items-center justify-between"><span className="text-slate-500">Title</span><span>{person.title}</span></div>
-            <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><span>{person.email}</span></div>
-            <div className="flex items-center justify-between"><span className="text-slate-500">Phone</span><span>{person.phone}</span></div>
-            <div className="flex items-center justify-between"><span className="text-slate-500">Joined</span><span>{person.joined_at}</span></div>
+            <div className="flex items-center justify-between"><span className="text-slate-500">Title</span><span>{person.title ?? "N/A"}</span></div>
+            <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><span>{person.email ?? "N/A"}</span></div>
+            <div className="flex items-center justify-between"><span className="text-slate-500">Phone</span><span>{person.phone ?? "N/A"}</span></div>
+            <div className="flex items-center justify-between"><span className="text-slate-500">Joined</span><span>{person.joined_at ?? "N/A"}</span></div>
           </CardContent>
         </Card>
 
         <div className="space-y-4">
-          <Card>
-            <CardHeader><CardTitle>Face registrations</CardTitle></CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2">
-              {registrations.map((registration) => (
-                <div key={registration.id} className="rounded-lg border border-slate-200 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="font-mono text-xs text-slate-500">{registration.id}</span>
-                    <RegistrationStatusBadge status={registration.registration_status} />
-                  </div>
-                  <div className="grid aspect-video place-items-center rounded-md bg-slate-100 text-sm text-slate-500">Face crop preview</div>
-                  <div className="mt-3 space-y-1 text-sm">
-                    <div>Model: {registration.embedding_model ?? "N/A"}</div>
-                    <div>Version: {registration.embedding_version ?? "N/A"}</div>
-                    <div>Indexed: {registration.indexed_at ? formatDateTime(registration.indexed_at) : "Pending"}</div>
-                  </div>
-                </div>
-              ))}
-              {registrations.length === 0 ? <div className="rounded-md border border-dashed border-slate-300 p-6 text-sm text-slate-500">No registrations.</div> : null}
-            </CardContent>
-          </Card>
+          <PersonFaceRegistrations personId={person.id} initialRegistrations={registrations} />
 
           <Card>
             <CardHeader><CardTitle>Attendance history</CardTitle></CardHeader>
@@ -69,6 +85,9 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
                         <td><Badge variant={event.is_valid ? "success" : "danger"}>{event.is_valid ? "valid" : "invalid"}</Badge></td>
                       </tr>
                     ))}
+                    {attendance.length === 0 ? (
+                      <tr><td colSpan={5} className="py-6 text-center text-slate-500">No attendance events.</td></tr>
+                    ) : null}
                   </tbody>
                 </table>
               </div>

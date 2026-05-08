@@ -63,6 +63,7 @@ from app.infrastructure.integrations.pipeline_client import PipelineEventPublish
 from app.infrastructure.realtime.websocket_hub import WebSocketHub
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from app.application.interfaces.realtime_event_bus import RealtimeEventBus
+from app.application.interfaces.storage_gateway import ObjectStorageGateway
 
 
 def get_container(request: Request) -> Container:
@@ -242,6 +243,12 @@ def get_pipeline_event_publisher(
     container: Container = Depends(get_container),
 ) -> PipelineEventPublisher:
     return container.build_pipeline_event_publisher()
+
+
+def get_object_storage_gateway(
+    container: Container = Depends(get_container),
+) -> ObjectStorageGateway:
+    return container.build_object_storage_gateway()
 
 
 def get_list_attendance_events_use_case(

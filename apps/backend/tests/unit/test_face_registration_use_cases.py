@@ -34,8 +34,11 @@ class FakePersonRepo:
 
 
 class FakeMediaRepo:
+    def __init__(self):
+        self.assets_by_location = {}
+
     def create_media_asset(self, **kwargs):
-        return MediaAsset(
+        asset = MediaAsset(
             id=uuid4(),
             storage_provider=StorageProvider(kwargs["storage_provider"]),
             bucket_name=kwargs["bucket_name"],
@@ -48,6 +51,11 @@ class FakeMediaRepo:
             uploaded_by_person_id=kwargs.get("uploaded_by_person_id"),
             created_at=datetime.now(timezone.utc),
         )
+        self.assets_by_location[(asset.bucket_name, asset.object_key)] = asset
+        return asset
+
+    def get_media_asset_by_location(self, *, bucket_name, object_key):
+        return self.assets_by_location.get((bucket_name, object_key))
 
 
 class FakeRegistrationRepo:
@@ -76,6 +84,9 @@ class FakeRegistrationRepo:
             return None
         self.registration.registration_status = kwargs["status"]
         self.registration.embedding_model = kwargs.get("embedding_model")
+        face_image_media_asset_id = kwargs.get("face_image_media_asset_id")
+        if face_image_media_asset_id is not None:
+            self.registration.face_image_media_asset_id = face_image_media_asset_id
         return self.registration
 
     def apply_registration_input_validation(self, registration_id, **kwargs):
@@ -83,8 +94,12 @@ class FakeRegistrationRepo:
             return None
         if kwargs.get("rejected"):
             self.registration.registration_status = RegistrationStatus.FAILED
+        else:
+            self.registration.registration_status = RegistrationStatus.VALIDATED
         self.registration.validation_notes = kwargs.get("validation_notes")
-        self.registration.face_image_media_asset_id = kwargs.get("face_image_media_asset_id")
+        face_image_media_asset_id = kwargs.get("face_image_media_asset_id")
+        if face_image_media_asset_id is not None:
+            self.registration.face_image_media_asset_id = face_image_media_asset_id
         return self.registration
 
 
@@ -150,3 +165,82 @@ def test_apply_registration_input_validation_use_case_marks_failed_when_rejected
 
     assert updated.registration_status == RegistrationStatus.FAILED
     assert updated.validation_notes == "blurred image"
+
+
+def test_apply_registration_input_validation_use_case_marks_validated_when_accepted():
+    reg_repo = FakeRegistrationRepo()
+    media_repo = FakeMediaRepo()
+    created = reg_repo.create_registration(person_id=uuid4(), source_media_asset_id=uuid4())
+    use_case = ApplyRegistrationInputValidationUseCase(reg_repo, media_repo)
+
+    updated = use_case.execute(
+        RegistrationInputValidatedCommand(
+            registration_id=created.id,
+            status="accepted",
+            validation_notes=None,
+            prepared_face_media_asset={
+                "storage_provider": "minio",
+                "bucket_name": "attendance",
+                "object_key": "registration_faces/1.jpg",
+                "original_filename": "1.jpg",
+                "mime_type": "image/jpeg",
+                "file_size": 10,
+                "checksum": None,
+                "asset_type": "registration_face",
+            },
+        )
+    )
+
+    assert updated.registration_status == RegistrationStatus.VALIDATED
+    assert updated.face_image_media_asset_id is not None
+
+
+def test_complete_face_registration_use_case_failed_keeps_prepared_face_asset():
+    reg_repo = FakeRegistrationRepo()
+    media_repo = FakeMediaRepo()
+    created = reg_repo.create_registration(person_id=uuid4(), source_media_asset_id=uuid4())
+    prepared_asset_id = uuid4()
+    reg_repo.registration.face_image_media_asset_id = prepared_asset_id
+    use_case = CompleteFaceRegistrationUseCase(reg_repo, media_repo)
+
+    updated = use_case.execute(
+        RegistrationCompletedCommand(
+            registration_id=created.id,
+            status=RegistrationStatus.FAILED,
+            validation_notes="embedding failed",
+        )
+    )
+
+    assert updated.registration_status == RegistrationStatus.FAILED
+    assert updated.face_image_media_asset_id == prepared_asset_id
+
+
+def test_complete_face_registration_reuses_existing_prepared_face_asset():
+    reg_repo = FakeRegistrationRepo()
+    media_repo = FakeMediaRepo()
+    created = reg_repo.create_registration(person_id=uuid4(), source_media_asset_id=uuid4())
+    media_ref = {
+        "storage_provider": "minio",
+        "bucket_name": "face-recognition",
+        "object_key": "registration_faces/person/face.jpg",
+        "original_filename": "face.jpg",
+        "mime_type": "image/jpeg",
+        "file_size": 10,
+        "checksum": None,
+        "asset_type": "registration_face",
+    }
+    existing_asset = media_repo.create_media_asset(**media_ref)
+    reg_repo.registration.face_image_media_asset_id = existing_asset.id
+    use_case = CompleteFaceRegistrationUseCase(reg_repo, media_repo)
+
+    updated = use_case.execute(
+        RegistrationCompletedCommand(
+            registration_id=created.id,
+            status=RegistrationStatus.INDEXED,
+            embedding_model="buffalo_l",
+            face_image_media_asset=media_ref,
+        )
+    )
+
+    assert updated.registration_status == RegistrationStatus.INDEXED
+    assert updated.face_image_media_asset_id == existing_asset.id

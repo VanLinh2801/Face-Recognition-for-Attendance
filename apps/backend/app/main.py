@@ -10,10 +10,12 @@ import contextlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.bootstrap.container import Container, build_container
 from app.bootstrap.logging import configure_logging
+from app.core.config import get_settings
 from app.core.db import ping_database
 from app.core.exceptions import AppError, InfrastructureError
 from app.core.security import hash_password
@@ -67,6 +69,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Backend Service", version="0.1.0", lifespan=lifespan)
+_settings = get_settings()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(api_router)
 
 

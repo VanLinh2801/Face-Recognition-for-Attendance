@@ -83,6 +83,16 @@ class SqlAlchemyMediaAssetRepository(MediaAssetRepository):
             return None
         return to_media_asset(item)
 
+    def get_media_asset_by_location(self, *, bucket_name: str, object_key: str) -> MediaAsset | None:
+        stmt = select(MediaAssetModel).where(
+            MediaAssetModel.bucket_name == bucket_name,
+            MediaAssetModel.object_key == object_key,
+        )
+        item = self._session.execute(stmt).scalar_one_or_none()
+        if item is None:
+            return None
+        return to_media_asset(item)
+
     def list_expired_assets(
         self,
         *,

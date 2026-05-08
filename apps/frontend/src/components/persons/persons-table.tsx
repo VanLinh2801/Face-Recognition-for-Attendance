@@ -1,8 +1,8 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { Building2, ChevronRight, Eye, MoreHorizontal, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Building2, ChevronRight, Eye, Loader2, MoreHorizontal, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { PersonStatusBadge } from "@/components/data/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +14,9 @@ type PersonRow = Person & {
 };
 
 type PersonStatusFilter = "all" | Person["status"];
+type BackendPersonListResponse = {
+  items: Person[];
+};
 
 type DeleteRequest =
   | {
@@ -37,6 +40,8 @@ export function PersonsTable({
   departments: Department[];
 }) {
   const [persons, setPersons] = useState<PersonRow[]>(initialPersons);
+  const [loadingBackendPersons, setLoadingBackendPersons] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [editingPerson, setEditingPerson] = useState<PersonRow | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
@@ -57,6 +62,42 @@ export function PersonsTable({
     if (selectedCount === 0) return `${visiblePersons.length} records`;
     return `${selectedCount}/${visiblePersons.length} selected`;
   }, [selectedCount, visiblePersons.length]);
+
+  useEffect(() => {
+    const token = window.localStorage.getItem("access_token");
+    if (!token) return;
+
+    const controller = new AbortController();
+    async function loadPersons() {
+      setLoadingBackendPersons(true);
+      setBackendError(null);
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000"}/api/v1/persons?page_size=100`, {
+          headers: { authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        const data = (await res.json().catch(() => ({}))) as BackendPersonListResponse & { detail?: unknown; message?: string };
+        if (!res.ok) {
+          throw new Error(typeof data.message === "string" ? data.message : `HTTP ${res.status}`);
+        }
+        setPersons(
+          data.items.map((person) => ({
+            ...person,
+            department_name: departments.find((department) => department.id === person.department_id)?.name ?? "No department",
+          })),
+        );
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setBackendError(err instanceof Error ? err.message : "Failed to load backend persons");
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoadingBackendPersons(false);
+      }
+    }
+
+    void loadPersons();
+    return () => controller.abort();
+  }, [departments]);
 
   function toggleAll(checked: boolean) {
     setSelectedIds((current) => {
@@ -151,6 +192,12 @@ export function PersonsTable({
           <Button variant="outline" disabled={selectedCount === 0} onClick={requestDeleteSelected}>
             <Trash2 className="h-4 w-4" /> Xóa
           </Button>
+          {loadingBackendPersons || backendError ? (
+            <div className="md:col-span-4 flex items-center gap-2 text-sm text-slate-500">
+              {loadingBackendPersons ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {loadingBackendPersons ? "Đang tải nhân sự từ backend..." : `Backend persons fallback: ${backendError}`}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

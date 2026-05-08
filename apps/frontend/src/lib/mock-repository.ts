@@ -17,7 +17,8 @@ export function listPersons() {
 }
 
 export function getPerson(id: string) {
-  return persons.find((person) => person.id === id) ?? persons[0];
+  const person = persons.find((item) => item.id === id);
+  return person ?? { ...persons[0], id };
 }
 
 export function listDepartments() {
