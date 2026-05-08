@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,6 +14,7 @@ from app.infrastructure.persistence.models.base import Base
 
 class DepartmentModel(Base):
     __tablename__ = "departments"
+    __table_args__ = (UniqueConstraint("code", name="uq_departments_code"),)
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
     code: Mapped[str] = mapped_column(String(50), nullable=False)

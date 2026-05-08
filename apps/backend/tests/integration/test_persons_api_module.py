@@ -25,7 +25,7 @@ class _FakePublisher:
         return None
 
 
-def _build_person():
+def _build_person(status: PersonStatus = PersonStatus.ACTIVE):
     now = datetime.now(timezone.utc)
     return Person(
         id=uuid4(),
@@ -35,7 +35,7 @@ def _build_person():
         title=None,
         email=None,
         phone=None,
-        status=PersonStatus.ACTIVE,
+        status=status,
         joined_at=None,
         notes=None,
         created_at=now,
@@ -62,8 +62,16 @@ def _build_registration(person_id):
 
 
 class _UseCaseCreatePerson:
-    def execute(self, _cmd):
-        return _build_person()
+    def execute(self, cmd):
+        return _build_person(status=cmd.status or PersonStatus.ACTIVE)
+
+
+class _UseCaseListPersons:
+    last_query = None
+
+    def execute(self, query):
+        self.__class__.last_query = query
+        return type("R", (), {"items": [_build_person()], "total": 1, "page": 1, "page_size": 20})()
 
 
 class _UseCaseGetPerson:
@@ -144,6 +152,7 @@ def test_persons_module_endpoints(monkeypatch):
     importlib.reload(app_main)
 
     app_main.app.dependency_overrides[dependencies.get_admin_user] = lambda: _build_admin_user()
+    app_main.app.dependency_overrides[dependencies.get_list_persons_use_case] = lambda: _UseCaseListPersons()
     app_main.app.dependency_overrides[dependencies.get_create_person_use_case] = lambda: _UseCaseCreatePerson()
     app_main.app.dependency_overrides[dependencies.get_get_person_use_case] = lambda: _UseCaseGetPerson()
     app_main.app.dependency_overrides[dependencies.get_update_person_use_case] = lambda: _UseCaseUpdatePerson()
@@ -161,9 +170,24 @@ def test_persons_module_endpoints(monkeypatch):
     registration_id = str(uuid4())
 
     with TestClient(app_main.app) as client:
-        assert client.post("/api/v1/persons", json={"employee_code": "E100", "full_name": "Mock"}).status_code == 201
+        list_response = client.get(f"/api/v1/persons?department_id={person_id}")
+        assert list_response.status_code == 200
+        assert str(_UseCaseListPersons.last_query.department_id) == person_id
+        assert client.get("/api/v1/persons?status=inactive").status_code == 422
+
+        create_response = client.post(
+            "/api/v1/persons",
+            json={"employee_code": "E100", "full_name": "Mock", "status": "resigned"},
+        )
+        assert create_response.status_code == 201
+        assert create_response.json()["status"] == "resigned"
+        assert client.post(
+            "/api/v1/persons",
+            json={"employee_code": "E101", "full_name": "Deleted", "status": "inactive"},
+        ).status_code == 422
         assert client.get(f"/api/v1/persons/{person_id}").status_code == 200
         assert client.patch(f"/api/v1/persons/{person_id}", json={"full_name": "Updated"}).status_code == 200
+        assert client.patch(f"/api/v1/persons/{person_id}", json={"status": "inactive"}).status_code == 422
         assert client.delete(f"/api/v1/persons/{person_id}").status_code == 204
         assert client.post("/api/v1/persons/bulk-delete", json={"person_ids": [person_id]}).status_code == 200
 

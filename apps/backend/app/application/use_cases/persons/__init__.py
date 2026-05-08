@@ -17,6 +17,7 @@ from app.domain.shared.enums import PersonStatus
 class ListPersonsQuery:
     page: int = 1
     page_size: int = 20
+    department_id: UUID | None = None
     status: PersonStatus | None = None
     created_from: datetime | None = None
     created_to: datetime | None = None
@@ -30,8 +31,9 @@ class CreatePersonCommand:
     title: str | None
     email: str | None
     phone: str | None
-    joined_at: date | None
-    notes: str | None
+    status: PersonStatus | None = None
+    joined_at: date | None = None
+    notes: str | None = None
 
 
 @dataclass(slots=True, kw_only=True)
@@ -52,10 +54,12 @@ class ListPersonsUseCase:
         self._repository = repository
 
     def execute(self, query: ListPersonsQuery) -> PageResult[Person]:
+        _ensure_status_is_not_inactive(query.status)
         page_query = PageQuery(page=query.page, page_size=query.page_size)
         items, total = self._repository.list_persons(
             page=page_query.page,
             page_size=page_query.page_size,
+            department_id=query.department_id,
             status=query.status,
             created_from=query.created_from,
             created_to=query.created_to,
@@ -68,9 +72,11 @@ class CreatePersonUseCase:
         self._repository = repository
 
     def execute(self, command: CreatePersonCommand) -> Person:
+        _ensure_status_is_not_inactive(command.status)
         existing = self._repository.get_person_by_employee_code(command.employee_code)
         if existing is not None:
             raise ValidationError("employee_code already exists", details={"employee_code": command.employee_code})
+        self._validate_unique_contact(email=command.email, phone=command.phone)
         return self._repository.create_person(
             employee_code=command.employee_code,
             full_name=command.full_name,
@@ -78,9 +84,20 @@ class CreatePersonUseCase:
             title=command.title,
             email=command.email,
             phone=command.phone,
+            status=command.status,
             joined_at=command.joined_at,
             notes=command.notes,
         )
+
+    def _validate_unique_contact(self, *, email: str | None, phone: str | None) -> None:
+        if email:
+            existing = self._repository.get_person_by_email(email)
+            if existing is not None:
+                raise ValidationError("email already exists", details={"email": email})
+        if phone:
+            existing = self._repository.get_person_by_phone(phone)
+            if existing is not None:
+                raise ValidationError("phone already exists", details={"phone": phone})
 
 
 class GetPersonUseCase:
@@ -99,6 +116,15 @@ class UpdatePersonUseCase:
         self._repository = repository
 
     def execute(self, command: UpdatePersonCommand) -> Person:
+        _ensure_status_is_not_inactive(command.status)
+        current = self._repository.get_person(command.person_id)
+        if current is None:
+            raise NotFoundError("Person not found")
+        self._validate_unique_contact(
+            person_id=command.person_id,
+            email=command.email,
+            phone=command.phone,
+        )
         person = self._repository.update_person(
             command.person_id,
             full_name=command.full_name,
@@ -113,6 +139,16 @@ class UpdatePersonUseCase:
         if person is None:
             raise NotFoundError("Person not found")
         return person
+
+    def _validate_unique_contact(self, *, person_id: UUID, email: str | None, phone: str | None) -> None:
+        if email:
+            existing = self._repository.get_person_by_email(email, exclude_person_id=person_id)
+            if existing is not None:
+                raise ValidationError("email already exists", details={"email": email})
+        if phone:
+            existing = self._repository.get_person_by_phone(phone, exclude_person_id=person_id)
+            if existing is not None:
+                raise ValidationError("phone already exists", details={"phone": phone})
 
 
 class DeletePersonUseCase:
@@ -132,3 +168,8 @@ class BulkDeletePersonsUseCase:
         if not person_ids:
             raise ValidationError("person_ids cannot be empty")
         return self._repository.bulk_soft_delete_persons(person_ids)
+
+
+def _ensure_status_is_not_inactive(status: PersonStatus | None) -> None:
+    if status == PersonStatus.INACTIVE:
+        raise ValidationError("inactive status is reserved for deleted persons", details={"status": status.value})

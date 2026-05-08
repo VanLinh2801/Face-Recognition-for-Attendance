@@ -1,21 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   Building2,
   CalendarClock,
   ChevronLeft,
   ChevronRight,
   Database,
+  KeyRound,
   LayoutDashboard,
+  LogOut,
   Radio,
   UserRound,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { apiFetch, SESSION_EXPIRED_EVENT } from "@/lib/api-client";
+import { clearAuthTokens, getRefreshToken } from "@/lib/auth-client";
+import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
+import { useOutsideClick } from "@/lib/use-outside-click";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -29,7 +35,59 @@ const navItems = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const router = useRouter();
+  const sessionExpiredDialog = useDialogTransition(sessionExpiredMessage);
+  const visibleSessionExpiredMessage = sessionExpiredDialog.value;
+
+  useOutsideClick(accountMenuRef, accountMenuOpen, () => setAccountMenuOpen(false));
+
+  useEffect(() => {
+    function handleSessionExpired(event: Event) {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      setSessionExpiredMessage(detail?.message ?? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+    }
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+  }, []);
+
+  if (pathname === "/login") {
+    return <div className="min-h-screen bg-slate-50 text-slate-950">{children}</div>;
+  }
+
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+
+    try {
+      const refreshToken = getRefreshToken();
+      if (refreshToken) {
+        await apiFetch<{ status: string }>("/auth/logout", {
+          method: "POST",
+          withAuth: true,
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      }
+    } catch {
+      // Local session cleanup still needs to happen if the token is already invalid or the backend is unavailable.
+    } finally {
+      clearAuthTokens();
+      setAccountMenuOpen(false);
+      setLoggingOut(false);
+      router.push("/login");
+    }
+  }
+
+  function confirmSessionExpired() {
+    clearAuthTokens();
+    setSessionExpiredMessage(null);
+    router.push("/login");
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -79,31 +137,90 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="border-t border-slate-200 p-3">
-          <div className={cn("flex items-center gap-3 rounded-md bg-slate-50 p-2", collapsed && "justify-center")}>
-            <UserRound className="h-5 w-5 text-slate-500" />
-            {!collapsed && (
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">admin</div>
-                <div className="truncate text-xs text-slate-500">Local mock session</div>
+          <div ref={accountMenuRef} className="relative">
+            {accountMenuOpen ? (
+              <div
+                className={cn(
+                  "absolute bottom-12 z-40 overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl",
+                  collapsed ? "left-0 w-56" : "left-0 right-0",
+                )}
+              >
+                <button
+                  type="button"
+                  disabled
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-400 disabled:cursor-not-allowed"
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Đổi thông tin đăng nhập
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <LogOut className="h-4 w-4" />
+                  {loggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
+                </button>
               </div>
-            )}
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((value) => !value)}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md bg-slate-50 p-2 text-left transition hover:bg-slate-100",
+                collapsed && "justify-center",
+              )}
+              aria-expanded={accountMenuOpen}
+              aria-haspopup="menu"
+            >
+              <UserRound className="h-5 w-5 text-slate-500" />
+              {!collapsed && (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">admin</div>
+                    <div className="truncate text-xs text-slate-500">Admin session</div>
+                  </div>
+                  <ChevronRight
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-slate-400 transition-transform",
+                      accountMenuOpen && "-rotate-90",
+                    )}
+                  />
+                </>
+              )}
+            </button>
           </div>
         </div>
       </aside>
 
       <main className={cn("min-h-screen transition-all duration-200", collapsed ? "pl-[72px]" : "pl-64")}>
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-6 backdrop-blur">
-          <div>
-            <div className="text-sm font-semibold">Frontend - Face Recognition</div>
-            <div className="text-xs text-slate-500">UI mock mode, backend disconnected</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="success">Backend ready</Badge>
-            <Badge variant="info">WS mock</Badge>
-          </div>
-        </header>
         {children}
       </main>
+
+      {visibleSessionExpiredMessage ? (
+        <div
+          className={`fixed inset-0 z-[100] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm ${dialogOverlayClass(sessionExpiredDialog.visible)}`}
+        >
+          <div className={`w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(sessionExpiredDialog.visible)}`}>
+            <div className="border-b border-slate-200 p-5">
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-700">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">Phiên đăng nhập đã hết hạn</h2>
+                  <p className="mt-2 text-sm text-slate-600">{visibleSessionExpiredMessage}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end p-5">
+              <Button onClick={confirmSessionExpired}>OK</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

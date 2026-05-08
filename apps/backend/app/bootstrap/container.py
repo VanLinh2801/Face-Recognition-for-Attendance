@@ -27,7 +27,12 @@ from app.application.use_cases.attendance_exceptions import (
     ListAttendanceExceptionsUseCase,
     UpdateAttendanceExceptionUseCase,
 )
-from app.application.use_cases.media_assets import CleanupMediaAssetsUseCase, ListMediaAssetsUseCase
+from app.application.use_cases.media_assets import (
+    CleanupMediaAssetsUseCase,
+    GetMediaAssetPresignedUrlUseCase,
+    ListMediaAssetsUseCase,
+    UploadMediaAssetUseCase,
+)
 from app.application.use_cases.event_ingestion import (
     IngestRecognitionEventUseCase,
     IngestSpoofAlertEventUseCase,
@@ -45,6 +50,7 @@ from app.application.use_cases.departments import (
     CreateDepartmentUseCase,
     DeleteDepartmentUseCase,
     GetDepartmentUseCase,
+    ListDepartmentPersonsUseCase,
     ListDepartmentsUseCase,
     UpdateDepartmentUseCase,
 )
@@ -130,6 +136,12 @@ class Container:
     def build_delete_department_use_case(self, session: Session) -> DeleteDepartmentUseCase:
         return DeleteDepartmentUseCase(SqlAlchemyDepartmentRepository(session))
 
+    def build_list_department_persons_use_case(self, session: Session) -> ListDepartmentPersonsUseCase:
+        return ListDepartmentPersonsUseCase(
+            department_repository=SqlAlchemyDepartmentRepository(session),
+            person_repository=SqlAlchemyPersonRepository(session),
+        )
+
     def build_list_recognition_events_use_case(self, session: Session) -> ListRecognitionEventsUseCase:
         return ListRecognitionEventsUseCase(SqlAlchemyRecognitionEventRepository(session))
 
@@ -144,6 +156,19 @@ class Container:
 
     def build_cleanup_media_assets_use_case(self, session: Session) -> CleanupMediaAssetsUseCase:
         return CleanupMediaAssetsUseCase(
+            repository=SqlAlchemyMediaAssetRepository(session),
+            storage_gateway=MinioStorageGateway(self.settings),
+            settings=self.settings,
+        )
+
+    def build_get_media_asset_presigned_url_use_case(self, session: Session) -> GetMediaAssetPresignedUrlUseCase:
+        return GetMediaAssetPresignedUrlUseCase(
+            repository=SqlAlchemyMediaAssetRepository(session),
+            storage_gateway=MinioStorageGateway(self.settings),
+        )
+
+    def build_upload_media_asset_use_case(self, session: Session) -> UploadMediaAssetUseCase:
+        return UploadMediaAssetUseCase(
             repository=SqlAlchemyMediaAssetRepository(session),
             storage_gateway=MinioStorageGateway(self.settings),
             settings=self.settings,

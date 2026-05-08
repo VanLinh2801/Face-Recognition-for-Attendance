@@ -32,9 +32,10 @@ class StorageClient:
                 len(content),
                 content_type=content_type
             )
+            logger.info(f"[MINIO] ✓ Uploaded {len(content)//1024}KB → {object_key}")
             return True
         except Exception as e:
-            logger.error(f"Error uploading to MinIO: {e}")
+            logger.error(f"[MINIO] ✗ Upload failed: {e}")
             return False
 
     def download_image(self, object_key: str) -> Optional[bytes]:

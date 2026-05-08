@@ -53,7 +53,7 @@ class RedisStreamPublisher:
 
         entry_id = await self._client.xadd(
             stream_name,
-            {"data": json.dumps(envelope, default=str)},
+            {"envelope": json.dumps(envelope, default=str)},
         )
         logger.debug(
             "Published event_name=%s stream=%s entry_id=%s",

@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://redis:6379/0"
     
     # Redis Stream Keys
-    STREAM_VISION_PROCESS: str = "stream:vision:frames_to_process"
-    STREAM_REGISTRATION_REQ: str = "stream:pipeline:registration_requested"
+    STREAM_VISION_PROCESS: str = "pipeline_ai"
+    STREAM_REGISTRATION_REQ: str = "pipeline_backend"
     
     # MinIO
     MINIO_ENDPOINT: str = "minio:9000"
@@ -24,16 +24,16 @@ class Settings(BaseSettings):
     
     # Camera Settings
     # Chứa danh sách URL camera hoặc ID, phân tách bằng dấu phẩy
-    # Ví dụ: "/dev/video0,rtsp://user:pass@192.168.1.1/stream"
-    CAMERA_SOURCES: str = "0"
+    # Ví dụ: "rtsp://localhost:8554/mystream"
+    CAMERA_SOURCES: str = "rtsp://localhost:8554/mystream"
     
     # Thresholds & AI Settings
-    MOTION_THRESHOLD: float = 0.05  # 5% pixel thay đổi
+    MOTION_THRESHOLD: float = 0.005  # 0.5% pixel thay đổi → có chuyển động thực sự
     FRAME_INTERVAL: float = 0.1     # Giây giữa các lần đọc frame (10 FPS)
     
     # SCRFD & Tracking
     SCRFD_MODEL_PATH: str = r"app\models\scrfd_2.5g_bnkps.onnx"
-    FACE_DETECTION_THRESHOLD: float = 0.5
+    FACE_DETECTION_THRESHOLD: float = 0.65
     FACE_TRACKER_COOLDOWN: int = 300  # 5 phút (300 giây)
     MAX_INITIAL_SNAPSHOTS: int = 3   # Số ảnh tối đa trong 2 giây đầu
 

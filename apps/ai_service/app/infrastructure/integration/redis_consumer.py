@@ -73,7 +73,7 @@ class RedisStreamConsumer:
                 for _stream_name, entries in messages:
                     for entry_id, data in entries:
                         try:
-                            payload = json.loads(data.get("data", "{}"))
+                            payload = json.loads(data.get("envelope", "{}"))
                             await handler(payload)
                             await self._client.xack(self._stream, self._group, entry_id)
                         except Exception as exc:
@@ -88,6 +88,9 @@ class RedisStreamConsumer:
                 break
             except Exception as exc:
                 logger.error("Consumer loop error: %s", exc, exc_info=True)
+                if "NOGROUP" in str(exc):
+                    logger.info("Consumer group missing, attempting to reconnect/recreate...")
+                    await self.connect()
                 await asyncio.sleep(1)
 
         logger.info("Consumer stopped stream='%s'", self._stream)

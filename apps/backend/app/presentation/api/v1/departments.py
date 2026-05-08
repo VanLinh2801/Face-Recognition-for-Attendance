@@ -11,6 +11,8 @@ from app.application.use_cases.departments import (
     CreateDepartmentUseCase,
     DeleteDepartmentUseCase,
     GetDepartmentUseCase,
+    ListDepartmentPersonsQuery,
+    ListDepartmentPersonsUseCase,
     ListDepartmentsQuery,
     ListDepartmentsUseCase,
     UpdateDepartmentCommand,
@@ -21,6 +23,7 @@ from app.core.dependencies import (
     get_create_department_use_case,
     get_delete_department_use_case,
     get_get_department_use_case,
+    get_list_department_persons_use_case,
     get_list_departments_use_case,
     get_update_department_use_case,
     get_unit_of_work,
@@ -33,6 +36,8 @@ from app.presentation.schemas.departments import (
     DepartmentListResponse,
     UpdateDepartmentRequest,
 )
+from app.domain.shared.enums import PersonStatus
+from app.presentation.schemas.persons import PersonItemResponse, PersonListResponse
 
 router = APIRouter(prefix="/departments", tags=["departments"])
 
@@ -82,6 +87,33 @@ def get_department(
     return DepartmentItemResponse.model_validate(use_case.execute(department_id), from_attributes=True)
 
 
+@router.get("/{department_id}/persons", response_model=PersonListResponse)
+def list_department_persons(
+    department_id: UUID,
+    include_descendants: bool = Query(default=True),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    status: PersonStatus | None = Query(default=None),
+    _admin: User = Depends(get_admin_user),
+    use_case: ListDepartmentPersonsUseCase = Depends(get_list_department_persons_use_case),
+) -> PersonListResponse:
+    result = use_case.execute(
+        ListDepartmentPersonsQuery(
+            department_id=department_id,
+            include_descendants=include_descendants,
+            page=page,
+            page_size=page_size,
+            status=status,
+        )
+    )
+    return PersonListResponse(
+        items=[PersonItemResponse.model_validate(item, from_attributes=True) for item in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+    )
+
+
 @router.patch("/{department_id}", response_model=DepartmentItemResponse)
 def update_department(
     department_id: UUID,
@@ -96,6 +128,7 @@ def update_department(
             code=request.code,
             name=request.name,
             parent_id=request.parent_id,
+            parent_id_provided="parent_id" in request.model_fields_set,
             is_active=request.is_active,
         )
     )

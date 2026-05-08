@@ -25,10 +25,15 @@ class MotionProcessor(BaseProcessor):
         frame_delta = cv2.absdiff(self.prev_frame, gray)
         thresh = cv2.threshold(frame_delta, 25, 255, cv2.THRESH_BINARY)[1]
         thresh = cv2.dilate(thresh, None, iterations=2)
-        
+
         changed_pixels_ratio = np.count_nonzero(thresh) / thresh.size
+        motion_detected = changed_pixels_ratio > self.threshold
+
+        # Luôn cập nhật prev_frame để so sánh frame liên tiếp.
+        # Nếu không cập nhật khi có motion, reference bị đóng băng
+        # → diff luôn lớn → motion = True mãi dù người đứng yên.
         self.prev_frame = gray
-        
+
         context['motion_ratio'] = changed_pixels_ratio
-        context['motion_detected'] = changed_pixels_ratio > self.threshold
+        context['motion_detected'] = motion_detected
         return context

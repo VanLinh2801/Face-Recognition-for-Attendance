@@ -45,6 +45,7 @@ services:
       - "1935:1935" # RTMP
       - "8888:8888" # HLS
       - "8889:8889" # WebRTC
+      - "8189:8189/udp" # WebRTC ICE/UDP
 
   redis:
     image: redis:7-alpine

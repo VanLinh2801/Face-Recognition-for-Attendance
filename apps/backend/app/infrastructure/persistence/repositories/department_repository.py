@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -28,11 +28,7 @@ class SqlAlchemyDepartmentRepository(DepartmentRepository):
         stmt = select(DepartmentModel)
         count_stmt = select(func.count()).select_from(DepartmentModel)
 
-        # Default: only show active departments.
-        if is_active is None:
-            stmt = stmt.where(DepartmentModel.is_active.is_(True))
-            count_stmt = count_stmt.where(DepartmentModel.is_active.is_(True))
-        else:
+        if is_active is not None:
             stmt = stmt.where(DepartmentModel.is_active == is_active)
             count_stmt = count_stmt.where(DepartmentModel.is_active == is_active)
 
@@ -48,11 +44,29 @@ class SqlAlchemyDepartmentRepository(DepartmentRepository):
         return to_department(item)
 
     def get_department_by_code(self, *, code: str) -> Department | None:
-        stmt = select(DepartmentModel).where(DepartmentModel.code == code)
+        stmt = select(DepartmentModel).where(func.lower(DepartmentModel.code) == code.lower())
         item = self._session.execute(stmt).scalar_one_or_none()
         if item is None:
             return None
         return to_department(item)
+
+    def list_department_descendant_ids(self, department_id: UUID) -> set[UUID]:
+        rows = self._session.execute(select(DepartmentModel.id, DepartmentModel.parent_id)).all()
+        children_by_parent: dict[UUID, list[UUID]] = {}
+        for row in rows:
+            if row.parent_id is None:
+                continue
+            children_by_parent.setdefault(row.parent_id, []).append(row.id)
+
+        descendants: set[UUID] = set()
+        pending = list(children_by_parent.get(department_id, []))
+        while pending:
+            current_id = pending.pop()
+            if current_id in descendants:
+                continue
+            descendants.add(current_id)
+            pending.extend(children_by_parent.get(current_id, []))
+        return descendants
 
     def create_department(
         self,
@@ -64,6 +78,7 @@ class SqlAlchemyDepartmentRepository(DepartmentRepository):
     ) -> Department:
         now = datetime.now(timezone.utc)
         item = DepartmentModel(
+            id=uuid4(),
             code=code,
             name=name,
             parent_id=parent_id,
@@ -82,6 +97,7 @@ class SqlAlchemyDepartmentRepository(DepartmentRepository):
         code: str | None = None,
         name: str | None = None,
         parent_id: UUID | None = None,
+        parent_id_provided: bool = False,
         is_active: bool | None = None,
     ) -> Department | None:
         item = self._session.get(DepartmentModel, department_id)
@@ -92,7 +108,7 @@ class SqlAlchemyDepartmentRepository(DepartmentRepository):
             item.code = code
         if name is not None:
             item.name = name
-        if parent_id is not None:
+        if parent_id_provided:
             item.parent_id = parent_id
         if is_active is not None:
             item.is_active = is_active
@@ -109,4 +125,3 @@ class SqlAlchemyDepartmentRepository(DepartmentRepository):
         item.updated_at = datetime.now(timezone.utc)
         self._session.flush()
         return True
-

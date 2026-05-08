@@ -62,23 +62,35 @@ class SCRFDFaceDetector(BaseProcessor):
 
         detections = []
         if self.session:
-            detections = self._run_inference(frame)
+            try:
+                detections = self._run_inference(frame)
+            except Exception as e:
+                logger.error(f"[DETECTOR] _run_inference CRASHED: {e}", exc_info=True)
         
         context['detections'] = detections
         return context
 
     def _run_inference(self, img):
-        # KHÔNG RESIZE ẢNH - CHỈ THÊM PADDING ĐỂ KÍCH THƯỚC LÀ BỘI SỐ CỦA 32
         h, w = img.shape[:2]
-        pad_h = (32 - h % 32) % 32
-        pad_w = (32 - w % 32) % 32
         
-        if pad_h > 0 or pad_w > 0:
-            padded_img = cv2.copyMakeBorder(img, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=[0, 0, 0])
-        else:
-            padded_img = img
+        # --- Letterbox resize về 640x640 ---
+        # Scale để vừa trong 640x640 mà giữ tỷ lệ khung hình
+        input_size = 640
+        scale = min(input_size / h, input_size / w)
+        new_h = int(h * scale)
+        new_w = int(w * scale)
+        resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        
+        # Pad viền phải/dưới để đủ 640x640
+        pad_top = 0
+        pad_left = 0
+        pad_bottom = input_size - new_h
+        pad_right  = input_size - new_w
+        padded_img = cv2.copyMakeBorder(resized, pad_top, pad_bottom, pad_left, pad_right,
+                                         cv2.BORDER_CONSTANT, value=[0, 0, 0])
 
-        padded_h, padded_w = padded_img.shape[:2]
+        padded_h, padded_w = padded_img.shape[:2]  # 640x640
+        logger.debug(f"[DETECTOR] Inference info: orig={w}x{h}, scale={scale:.4f}, pads=(t:{pad_top}, l:{pad_left})")
 
         # Tiền xử lý
         blob = cv2.dnn.blobFromImage(padded_img, 1.0/128, (padded_w, padded_h), (127.5, 127.5, 127.5), swapRB=True)
@@ -95,6 +107,11 @@ class SCRFDFaceDetector(BaseProcessor):
             scores = net_outs[idx]
             bbox_preds = net_outs[idx + self._fmc]
             kps_preds = net_outs[idx + self._fmc * 2]
+
+            # Reshape về dạng (Anchors, Features) và nhân Stride để ra pixel thực
+            scores = scores.reshape(-1, 1)
+            bbox_preds = bbox_preds.reshape(-1, 4) * stride
+            kps_preds = kps_preds.reshape(-1, 10) * stride
 
             height = padded_h // stride
             width = padded_w // stride
@@ -140,25 +157,42 @@ class SCRFDFaceDetector(BaseProcessor):
         kpss = kpss[keep]
         scores = scores[keep]
 
-        # Loại bỏ các box nằm hoàn toàn trong phần Padding (nếu có lỗi logic, thường không xảy ra vì pad là viền đen)
+        # --- Scale ngược tọa độ từ letterbox space về ảnh gốc ---
         valid_detections = []
+        logger.debug(f"[DETECTOR] Total raw detections before filter: {len(bboxes)}")
         for i in range(len(bboxes)):
-            bbox = bboxes[i]
-            # Đảm bảo tọa độ không vượt qua ảnh gốc
-            x1, y1, x2, y2 = bbox
-            x1 = max(0, min(x1, w))
-            y1 = max(0, min(y1, h))
-            x2 = max(0, min(x2, w))
-            y2 = max(0, min(y2, h))
-            
-            # Nếu bị thu hẹp diện tích về 0 thì bỏ qua
-            if x2 <= x1 or y2 <= y1:
+            x1, y1, x2, y2 = bboxes[i]
+
+            # Bỏ padding rồi chia scale để về tọa độ gốc
+            x1 = (x1 - pad_left) / scale
+            y1 = (y1 - pad_top) / scale
+            x2 = (x2 - pad_left) / scale
+            y2 = (y2 - pad_top) / scale
+
+            # Clip vào kích thước ảnh gốc
+            x1 = max(0.0, min(x1, w))
+            y1 = max(0.0, min(y1, h))
+            x2 = max(0.0, min(x2, w))
+            y2 = max(0.0, min(y2, h))
+
+            fw = x2 - x1
+            fh = y2 - y1
+            score = float(scores[i][0])
+            logger.debug(f"[DETECTOR] bbox {i}: size={fw:.1f}x{fh:.1f}, score={score:.3f}, pos=({x1:.0f},{y1:.0f})")
+
+            if fw < 40 or fh < 40:
+                logger.debug(f"[DETECTOR] --> FILTERED OUT (too small: {fw:.1f}x{fh:.1f})")
                 continue
-                
+
+            # Scale keypoints về gốc
+            kps = kpss[i].reshape((5, 2))
+            kps[:, 0] = (kps[:, 0] - pad_left) / scale
+            kps[:, 1] = (kps[:, 1] - pad_top) / scale
+
             valid_detections.append({
-                "bbox": [x1, y1, x2, y2],
-                "score": float(scores[i][0]),
-                "kpss": kpss[i].reshape((5, 2)).tolist()
+                "bbox": [float(x1), float(y1), float(x2), float(y2)],
+                "score": score,
+                "kpss": kps.tolist()
             })
 
         return valid_detections

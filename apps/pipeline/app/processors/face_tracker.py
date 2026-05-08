@@ -3,6 +3,7 @@ import uuid
 import numpy as np
 from app.core.config import settings
 from app.processors.base import BaseProcessor
+from app.utils.logger import logger
 
 class FaceTracker(BaseProcessor):
     def __init__(self):
@@ -31,10 +32,8 @@ class FaceTracker(BaseProcessor):
             track_id = self._match_track(bbox)
             
             if track_id not in self.tracks:
-                # Tính lại centroid để lưu
-                x1, y1, x2, y2 = bbox
-                
                 # 1. Phát hiện mới
+                x1, y1, x2, y2 = bbox
                 self.tracks[track_id] = {
                     "first_seen": current_time,
                     "last_seen": current_time,
@@ -42,6 +41,7 @@ class FaceTracker(BaseProcessor):
                     "initial_count": 1,
                     "centroid": ((x1+x2)/2.0, (y1+y2)/2.0)
                 }
+                logger.info(f"[TRACKER] New face detected: {track_id}")
                 faces_to_emit.append({"track_id": track_id, "bbox": bbox, "score": score, "type": "NEW"})
             else:
                 track = self.tracks[track_id]
@@ -50,12 +50,18 @@ class FaceTracker(BaseProcessor):
                 # 2. Giai đoạn Initial Burst (3 ảnh trong 2 giây đầu)
                 if current_time - track["first_seen"] < 2.0 and track["initial_count"] < self.max_initial:
                     track["initial_count"] += 1
+                    logger.info(f"[TRACKER] Initial burst for {track_id} ({track['initial_count']}/{self.max_initial})")
                     faces_to_emit.append({"track_id": track_id, "bbox": bbox, "score": score, "type": "INITIAL"})
                 
-                # 3. Giai đoạn định kỳ (Mỗi 5 phút)
+                # 3. Giai đoạn định kỳ (Mặc định là self.cooldown - 5 phút)
                 elif current_time - track["last_snapshot"] >= self.cooldown:
                     track["last_snapshot"] = current_time
+                    logger.info(f"[TRACKER] Periodic snapshot for {track_id}")
                     faces_to_emit.append({"track_id": track_id, "bbox": bbox, "score": score, "type": "PERIODIC"})
+                else:
+                    # Log định kỳ mỗi 30 frame để không spam terminal
+                    if int(current_time * 10) % 30 == 0:
+                        logger.debug(f"[TRACKER] Face {track_id} is stable, skipping...")
 
         # Dọn dẹp các track đã biến mất quá lâu (VD: 10 giây)
         self._cleanup_tracks(current_time)
@@ -71,7 +77,7 @@ class FaceTracker(BaseProcessor):
         
         best_track_id = None
         min_dist = float('inf')
-        dist_threshold = 100.0 # Bán kính tối đa để coi là cùng 1 người giữa 2 frame liên tiếp
+        dist_threshold = 200.0 # Tăng lên 200px vì mặt to sát cam di chuyển centroid rất nhanh
         
         # Tìm track gần nhất
         for tid, t_data in self.tracks.items():

@@ -11,3 +11,6 @@ Các tầng chính:
 - `migrations`: Alembic migration files
 
 Trạng thái hiện tại: đây là skeleton thư mục để bắt đầu implementation phase 1.
+
+
+uvicorn app.main:app --reload --port 8002

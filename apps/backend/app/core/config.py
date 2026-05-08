@@ -32,13 +32,13 @@ class Settings(BaseSettings):
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
 
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
-    redis_stream_ai_events: str = Field(default="ai.backend.events", alias="REDIS_STREAM_AI_EVENTS")
+    redis_stream_ai_events: str = Field(default="ai_backend", alias="REDIS_STREAM_AI_EVENTS")
     redis_stream_pipeline_events: str = Field(
         default="pipeline.backend.events",
         alias="REDIS_STREAM_PIPELINE_EVENTS",
     )
     redis_stream_backend_pipeline: str = Field(
-        default="backend.pipeline.events",
+        default="pipeline_backend",
         alias="REDIS_STREAM_BACKEND_PIPELINE",
     )
     redis_consumer_group: str = Field(default="backend-consumers", alias="REDIS_CONSUMER_GROUP")
@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     media_cleanup_enabled: bool = Field(default=False, alias="MEDIA_CLEANUP_ENABLED")
     media_cleanup_interval_days: int = Field(default=1, alias="MEDIA_CLEANUP_INTERVAL_DAYS")
     media_cleanup_batch_size: int = Field(default=500, alias="MEDIA_CLEANUP_BATCH_SIZE")
+    media_upload_max_bytes: int = Field(default=10 * 1024 * 1024, alias="MEDIA_UPLOAD_MAX_BYTES")
 
     minio_endpoint: str = Field(default="minio:9000", alias="MINIO_ENDPOINT")
     minio_access_key: str = Field(default="minioadmin", alias="MINIO_ACCESS_KEY")

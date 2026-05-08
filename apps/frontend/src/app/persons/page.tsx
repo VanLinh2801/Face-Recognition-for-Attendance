@@ -1,13 +1,54 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/data/page-header";
 import { PersonsTable } from "@/components/persons/persons-table";
-import { getDepartmentName, listDepartments, listPersons } from "@/lib/mock-repository";
+import { ApiError, apiFetch } from "@/lib/api-client";
+import type { Department, PageResult, Person } from "@/lib/types";
+
+type PersonRow = Person & {
+  department_name: string;
+};
 
 export default function PersonsPage() {
-  const persons = listPersons().items.map((person) => ({
-    ...person,
-    department_name: getDepartmentName(person.department_id),
-  }));
-  const departments = listDepartments().items;
+  const [persons, setPersons] = useState<Person[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadData() {
+      setLoading(true);
+      setError("");
+      try {
+        const [personsResponse, departmentsResponse] = await Promise.all([
+          apiFetch<PageResult<Person>>("/persons?page=1&page_size=100", { withAuth: true }),
+          apiFetch<PageResult<Department>>("/departments?page=1&page_size=100&is_active=true", { withAuth: true }),
+        ]);
+        if (!mounted) return;
+        setPersons(personsResponse.items);
+        setDepartments(departmentsResponse.items);
+      } catch (err) {
+        if (!mounted) return;
+        setError(err instanceof ApiError ? err.message : "Không tải được danh sách nhân sự.");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    void loadData();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const personRows: PersonRow[] = useMemo(() => {
+    const departmentMap = new Map(departments.map((department) => [department.id, department.name]));
+    return persons.map((person) => ({
+      ...person,
+      department_name: person.department_id ? departmentMap.get(person.department_id) ?? "Unknown" : "No department",
+    }));
+  }, [persons, departments]);
 
   return (
     <div>
@@ -18,7 +59,9 @@ export default function PersonsPage() {
         actionHref="/persons/new"
       />
       <div className="space-y-4 p-6">
-        <PersonsTable persons={persons} departments={departments} />
+        {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+        {loading ? <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Đang tải dữ liệu nhân sự...</div> : null}
+        {!loading ? <PersonsTable persons={personRows} departments={departments} /> : null}
       </div>
     </div>
   );

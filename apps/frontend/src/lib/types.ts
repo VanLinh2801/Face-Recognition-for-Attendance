@@ -51,10 +51,18 @@ export type FaceRegistration = {
   updated_at: string;
 };
 
+export type CreatePersonRegistrationResponse = {
+  registration: FaceRegistration;
+  stream_id: string;
+  message_id: string;
+  correlation_id: string;
+};
+
 export type AttendanceEvent = {
   id: string;
   person_id: string;
   person_full_name: string;
+  snapshot_media_asset_id?: string | null;
   recognized_at: string;
   event_direction: EventDirection;
   match_score: number;
@@ -118,6 +126,7 @@ export type MediaAsset = {
   mime_type: string;
   file_size: number;
   checksum: string | null;
+  preview_url?: string | null;
   asset_type:
     | "registration_face"
     | "recognition_snapshot"

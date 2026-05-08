@@ -24,6 +24,7 @@ class SqlAlchemyPersonRepository(PersonRepository):
         *,
         page: int,
         page_size: int,
+        department_id: UUID | None = None,
         status: PersonStatus | None = None,
         created_from: datetime | None = None,
         created_to: datetime | None = None,
@@ -37,6 +38,9 @@ class SqlAlchemyPersonRepository(PersonRepository):
         else:
             stmt = stmt.where(PersonModel.status == status)
             count_stmt = count_stmt.where(PersonModel.status == status)
+        if department_id is not None:
+            stmt = stmt.where(PersonModel.department_id == department_id)
+            count_stmt = count_stmt.where(PersonModel.department_id == department_id)
         if created_from is not None:
             stmt = stmt.where(PersonModel.created_at >= created_from)
             count_stmt = count_stmt.where(PersonModel.created_at >= created_from)
@@ -56,8 +60,70 @@ class SqlAlchemyPersonRepository(PersonRepository):
             return None
         return to_person(item)
 
+    def list_persons_by_department_ids(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        department_ids: set[UUID],
+        status: PersonStatus | None = None,
+    ) -> tuple[list[Person], int]:
+        if not department_ids:
+            return ([], 0)
+
+        stmt = select(PersonModel).where(PersonModel.department_id.in_(department_ids))
+        count_stmt = select(func.count()).select_from(PersonModel).where(PersonModel.department_id.in_(department_ids))
+
+        if status is None:
+            stmt = stmt.where(PersonModel.status != PersonStatus.INACTIVE)
+            count_stmt = count_stmt.where(PersonModel.status != PersonStatus.INACTIVE)
+        else:
+            stmt = stmt.where(PersonModel.status == status)
+            count_stmt = count_stmt.where(PersonModel.status == status)
+
+        stmt = stmt.order_by(PersonModel.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        items = self._session.execute(stmt).scalars().all()
+        total = self._session.execute(count_stmt).scalar_one()
+        return ([to_person(item) for item in items], total)
+
     def get_person_by_employee_code(self, employee_code: str) -> Person | None:
         stmt = select(PersonModel).where(PersonModel.employee_code == employee_code)
+        item = self._session.execute(stmt).scalar_one_or_none()
+        if item is None:
+            return None
+        return to_person(item)
+
+    def get_person_by_email(
+        self,
+        email: str,
+        *,
+        exclude_person_id: UUID | None = None,
+        include_inactive: bool = False,
+    ) -> Person | None:
+        stmt = select(PersonModel).where(PersonModel.email == email)
+        if not include_inactive:
+            stmt = stmt.where(PersonModel.status != PersonStatus.INACTIVE)
+        if exclude_person_id is not None:
+            stmt = stmt.where(PersonModel.id != exclude_person_id)
+        stmt = stmt.limit(1)
+        item = self._session.execute(stmt).scalar_one_or_none()
+        if item is None:
+            return None
+        return to_person(item)
+
+    def get_person_by_phone(
+        self,
+        phone: str,
+        *,
+        exclude_person_id: UUID | None = None,
+        include_inactive: bool = False,
+    ) -> Person | None:
+        stmt = select(PersonModel).where(PersonModel.phone == phone)
+        if not include_inactive:
+            stmt = stmt.where(PersonModel.status != PersonStatus.INACTIVE)
+        if exclude_person_id is not None:
+            stmt = stmt.where(PersonModel.id != exclude_person_id)
+        stmt = stmt.limit(1)
         item = self._session.execute(stmt).scalar_one_or_none()
         if item is None:
             return None
@@ -72,6 +138,7 @@ class SqlAlchemyPersonRepository(PersonRepository):
         title: str | None,
         email: str | None,
         phone: str | None,
+        status: PersonStatus | None = None,
         joined_at: date | None,
         notes: str | None,
     ) -> Person:
@@ -84,7 +151,7 @@ class SqlAlchemyPersonRepository(PersonRepository):
             title=title,
             email=email,
             phone=phone,
-            status=PersonStatus.ACTIVE,
+            status=status or PersonStatus.ACTIVE,
             joined_at=joined_at,
             notes=notes,
             created_at=now,
