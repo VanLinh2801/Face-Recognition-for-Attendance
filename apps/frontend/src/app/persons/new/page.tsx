@@ -28,7 +28,7 @@ import type { Department, Person } from "@/lib/types";
 import { useOutsideClick } from "@/lib/use-outside-click";
 
 const DEFAULT_JOINED_AT = "2026-05-06";
-type PersonStatusValue = Person["status"];
+type PersonStatusValue = Exclude<Person["status"], "inactive">;
 type DepartmentListResponse = {
   items: Department[];
 };
@@ -116,13 +116,13 @@ export default function NewPersonPage() {
         joined_at: joinedAt || null,
         notes: notes.trim() || null,
       };
-      const created = await apiFetch<CreatePersonResponse>("/persons", {
+      await apiFetch<CreatePersonResponse>("/persons", {
         method: "POST",
         withAuth: true,
         body: JSON.stringify(payload),
       });
       setSuccess("Tạo nhân sự thành công.");
-      router.push(`/persons/${created.id}`);
+      router.push("/persons");
     } catch (err) {
       const duplicateField = getDuplicatePersonField(err);
       if (duplicateField === "employee_code") {
@@ -534,7 +534,7 @@ function StatusSelect({
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const options: PersonStatusValue[] = ["active", "inactive", "resigned"];
+  const options: PersonStatusValue[] = ["active", "resigned"];
 
   useOutsideClick(containerRef, open, () => setOpen(false));
 

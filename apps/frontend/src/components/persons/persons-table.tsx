@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { Building2, CalendarSearch, ChevronLeft, ChevronRight, Eye, MoreHorizontal, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { Building2, CalendarSearch, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eye, MoreHorizontal, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PersonStatusBadge } from "@/components/data/status-badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,8 @@ type PersonRow = Person & {
   department_name: string;
 };
 
-type PersonStatusFilter = "all" | Person["status"];
+export type EditablePersonStatus = Exclude<Person["status"], "inactive">;
+type PersonStatusFilter = "all" | EditablePersonStatus;
 
 type DeleteRequest =
   | {
@@ -94,9 +95,10 @@ export function PersonsTable({
   const allSelected = paginatedPersons.length > 0 && paginatedPersons.every((person) => selectedIds.has(person.id));
   const pageRangeStart = filteredPersons.length === 0 ? 0 : pageStartIndex + 1;
   const pageRangeEnd = Math.min(pageStartIndex + paginatedPersons.length, filteredPersons.length);
+  const paginationPages = getVisiblePageNumbers(safeCurrentPage, totalPages);
 
   const selectedCount = selectedFilteredCount;
-  const selectedText = selectedCount === 0 ? `${filteredPersons.length} records` : `${selectedCount}/${filteredPersons.length} selected`;
+  const selectedText = selectedCount === 0 ? "Chưa chọn nhân sự" : `${selectedCount} đã chọn`;
 
   useEffect(() => {
     if (!toast) return;
@@ -117,6 +119,21 @@ export function PersonsTable({
   function closeToast() {
     setToastVisible(false);
     window.setTimeout(() => setToast(null), 300);
+  }
+
+  function handleSearchQueryChange(value: string) {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  }
+
+  function handleDepartmentIdChange(value: string) {
+    setDepartmentId(value);
+    setCurrentPage(1);
+  }
+
+  function handleStatusFilterChange(value: PersonStatusFilter) {
+    setStatusFilter(value);
+    setCurrentPage(1);
   }
 
   function toggleAll(checked: boolean) {
@@ -308,11 +325,11 @@ export function PersonsTable({
         <CardContent className="grid gap-3 md:grid-cols-[minmax(240px,0.78fr)_220px_280px_auto]">
           <Input
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(event) => handleSearchQueryChange(event.target.value)}
             placeholder="Tìm theo tên hoặc mã nhân viên"
           />
-          <StatusFilterSelect value={statusFilter} onChange={setStatusFilter} />
-          <DepartmentTreeSelect departments={departments} value={departmentId} onChange={setDepartmentId} />
+          <StatusFilterSelect value={statusFilter} onChange={handleStatusFilterChange} />
+          <DepartmentTreeSelect departments={departments} value={departmentId} onChange={handleDepartmentIdChange} />
           <Button variant="outline" disabled={selectedCount === 0 || deleting} onClick={requestDeleteSelected}>
             <Trash2 className="h-4 w-4" /> Xóa
           </Button>
@@ -431,24 +448,61 @@ export function PersonsTable({
               </div>
             ) : null}
           </div>
-          <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-            <span>Trang {safeCurrentPage}/{totalPages} · {pageRangeStart}-{pageRangeEnd}/{filteredPersons.length} records · {selectedText}</span>
-            <div className="flex gap-2">
+          <div className="mt-4 flex flex-col gap-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+            <span>Hiển thị {pageRangeStart}-{pageRangeEnd}/{filteredPersons.length} nhân sự · {selectedText}</span>
+            <div className="flex flex-wrap items-center gap-1">
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
+                className="h-8 w-8"
                 disabled={safeCurrentPage <= 1}
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                onClick={() => setCurrentPage(1)}
+                aria-label="Về trang đầu"
               >
-                Previous
+                <ChevronsLeft className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safeCurrentPage <= 1}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                aria-label="Lùi một trang"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {paginationPages.map((page) => (
+                <Button
+                  key={page}
+                  variant={page === safeCurrentPage ? "default" : "outline"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage(page)}
+                  aria-label={`Đi tới trang ${page}`}
+                  aria-current={page === safeCurrentPage ? "page" : undefined}
+                >
+                  {page}
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
                 disabled={safeCurrentPage >= totalPages}
                 onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                aria-label="Tiến một trang"
               >
-                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safeCurrentPage >= totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                aria-label="Tới trang cuối"
+              >
+                <ChevronsRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -665,6 +719,27 @@ function getDepartmentScopeIds(departmentId: string, departments: Department[]) 
   return ids;
 }
 
+function getVisiblePageNumbers(currentPage: number, totalPages: number) {
+  const maxVisiblePages = 5;
+  if (totalPages <= maxVisiblePages) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const halfWindow = Math.floor(maxVisiblePages / 2);
+  let startPage = currentPage - halfWindow;
+  let endPage = currentPage + halfWindow;
+
+  if (startPage < 1) {
+    startPage = 1;
+    endPage = maxVisiblePages;
+  } else if (endPage > totalPages) {
+    endPage = totalPages;
+    startPage = totalPages - maxVisiblePages + 1;
+  }
+
+  return Array.from({ length: endPage - startPage + 1 }, (_, index) => startPage + index);
+}
+
 function getDuplicatePersonField(error: unknown) {
   if (!(error instanceof ApiError)) return null;
   const message = error.message.toLowerCase();
@@ -690,7 +765,7 @@ function getErrorDetailsText(details: unknown) {
   }
 }
 
-function DatePicker({
+export function DatePicker({
   value,
   onChange,
   placement = "bottom",
@@ -827,16 +902,16 @@ function formatDateLabel(value: string) {
   });
 }
 
-function PersonStatusSelect({
+export function PersonStatusSelect({
   value,
   onChange,
 }: {
   value: Person["status"];
-  onChange: (value: Person["status"]) => void;
+  onChange: (value: EditablePersonStatus) => void;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const options: Person["status"][] = ["active", "inactive", "resigned"];
+  const options: EditablePersonStatus[] = ["active", "resigned"];
 
   useOutsideClick(containerRef, open, () => setOpen(false));
 
@@ -886,7 +961,6 @@ function StatusFilterSelect({
   const options: Array<{ value: PersonStatusFilter; label: string }> = [
     { value: "all", label: "Tất cả" },
     { value: "active", label: "active" },
-    { value: "inactive", label: "inactive" },
     { value: "resigned", label: "resigned" },
   ];
   const selectedOption = options.find((option) => option.value === value) ?? options[0];
@@ -935,7 +1009,7 @@ function StatusFilterSelect({
   );
 }
 
-function DepartmentTreeSelect({
+export function DepartmentTreeSelect({
   departments,
   value,
   onChange,

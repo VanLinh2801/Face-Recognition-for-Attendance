@@ -54,6 +54,7 @@ class ListPersonsUseCase:
         self._repository = repository
 
     def execute(self, query: ListPersonsQuery) -> PageResult[Person]:
+        _ensure_status_is_not_inactive(query.status)
         page_query = PageQuery(page=query.page, page_size=query.page_size)
         items, total = self._repository.list_persons(
             page=page_query.page,
@@ -71,6 +72,7 @@ class CreatePersonUseCase:
         self._repository = repository
 
     def execute(self, command: CreatePersonCommand) -> Person:
+        _ensure_status_is_not_inactive(command.status)
         existing = self._repository.get_person_by_employee_code(command.employee_code)
         if existing is not None:
             raise ValidationError("employee_code already exists", details={"employee_code": command.employee_code})
@@ -114,6 +116,7 @@ class UpdatePersonUseCase:
         self._repository = repository
 
     def execute(self, command: UpdatePersonCommand) -> Person:
+        _ensure_status_is_not_inactive(command.status)
         current = self._repository.get_person(command.person_id)
         if current is None:
             raise NotFoundError("Person not found")
@@ -165,3 +168,8 @@ class BulkDeletePersonsUseCase:
         if not person_ids:
             raise ValidationError("person_ids cannot be empty")
         return self._repository.bulk_soft_delete_persons(person_ids)
+
+
+def _ensure_status_is_not_inactive(status: PersonStatus | None) -> None:
+    if status == PersonStatus.INACTIVE:
+        raise ValidationError("inactive status is reserved for deleted persons", details={"status": status.value})

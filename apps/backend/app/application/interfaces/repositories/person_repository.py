@@ -37,9 +37,21 @@ class PersonRepository(Protocol):
 
     def get_person_by_employee_code(self, employee_code: str) -> Person | None: ...
 
-    def get_person_by_email(self, email: str, *, exclude_person_id: UUID | None = None) -> Person | None: ...
+    def get_person_by_email(
+        self,
+        email: str,
+        *,
+        exclude_person_id: UUID | None = None,
+        include_inactive: bool = False,
+    ) -> Person | None: ...
 
-    def get_person_by_phone(self, phone: str, *, exclude_person_id: UUID | None = None) -> Person | None: ...
+    def get_person_by_phone(
+        self,
+        phone: str,
+        *,
+        exclude_person_id: UUID | None = None,
+        include_inactive: bool = False,
+    ) -> Person | None: ...
 
     def create_person(
         self,

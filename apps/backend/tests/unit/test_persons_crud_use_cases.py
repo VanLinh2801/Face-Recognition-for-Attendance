@@ -8,6 +8,8 @@ from app.application.use_cases.persons import (
     CreatePersonCommand,
     CreatePersonUseCase,
     DeletePersonUseCase,
+    ListPersonsQuery,
+    ListPersonsUseCase,
     UpdatePersonCommand,
     UpdatePersonUseCase,
 )
@@ -26,17 +28,26 @@ class FakePersonRepository:
                 return person
         return None
 
-    def get_person_by_email(self, email: str, *, exclude_person_id=None):
+    def get_person_by_email(self, email: str, *, exclude_person_id=None, include_inactive=False):
         for person in self._store.values():
+            if not include_inactive and person.status == PersonStatus.INACTIVE:
+                continue
             if person.email == email and person.id != exclude_person_id:
                 return person
         return None
 
-    def get_person_by_phone(self, phone: str, *, exclude_person_id=None):
+    def get_person_by_phone(self, phone: str, *, exclude_person_id=None, include_inactive=False):
         for person in self._store.values():
+            if not include_inactive and person.status == PersonStatus.INACTIVE:
+                continue
             if person.phone == phone and person.id != exclude_person_id:
                 return person
         return None
+
+    def list_persons(self, **kwargs):
+        _ = kwargs
+        items = [person for person in self._store.values() if person.status != PersonStatus.INACTIVE]
+        return (items, len(items))
 
     def get_person(self, person_id):
         return self._store.get(str(person_id))
@@ -166,6 +177,72 @@ def test_create_person_use_case_raises_on_duplicate_phone():
         )
 
 
+def test_create_person_use_case_keeps_employee_code_unique_for_inactive_person():
+    repo = FakePersonRepository()
+    use_case = CreatePersonUseCase(repo)
+    person = use_case.execute(
+        CreatePersonCommand(
+            employee_code="E001",
+            full_name="A",
+            department_id=None,
+            title=None,
+            email="old@example.com",
+            phone="0900000001",
+            joined_at=None,
+            notes=None,
+        )
+    )
+    DeletePersonUseCase(repo).execute(person.id)
+
+    with pytest.raises(ValidationError):
+        use_case.execute(
+            CreatePersonCommand(
+                employee_code="E001",
+                full_name="B",
+                department_id=None,
+                title=None,
+                email=None,
+                phone=None,
+                joined_at=None,
+                notes=None,
+            )
+        )
+
+
+def test_create_person_use_case_allows_contact_reuse_from_inactive_person():
+    repo = FakePersonRepository()
+    use_case = CreatePersonUseCase(repo)
+    person = use_case.execute(
+        CreatePersonCommand(
+            employee_code="E001",
+            full_name="A",
+            department_id=None,
+            title=None,
+            email="person@example.com",
+            phone="0900000001",
+            joined_at=None,
+            notes=None,
+        )
+    )
+    DeletePersonUseCase(repo).execute(person.id)
+
+    created = use_case.execute(
+        CreatePersonCommand(
+            employee_code="E002",
+            full_name="B",
+            department_id=None,
+            title=None,
+            email="person@example.com",
+            phone="0900000001",
+            joined_at=None,
+            notes=None,
+        )
+    )
+
+    assert created.email == "person@example.com"
+    assert created.phone == "0900000001"
+
+
 def test_update_person_use_case_raises_on_duplicate_email_or_phone():
     repo = FakePersonRepository()
     create_use_case = CreatePersonUseCase(repo)
@@ -221,6 +298,80 @@ def test_update_person_use_case_allows_current_email_and_phone():
     )
 
     assert updated.full_name == "Updated"
+
+
+def test_update_person_use_case_allows_contact_reuse_from_inactive_person():
+    repo = FakePersonRepository()
+    create_use_case = CreatePersonUseCase(repo)
+    inactive = create_use_case.execute(
+        CreatePersonCommand(
+            employee_code="E001",
+            full_name="A",
+            department_id=None,
+            title=None,
+            email="old@example.com",
+            phone="0900000001",
+            joined_at=None,
+            notes=None,
+        )
+    )
+    active = create_use_case.execute(
+        CreatePersonCommand(
+            employee_code="E002",
+            full_name="B",
+            department_id=None,
+            title=None,
+            email="new@example.com",
+            phone="0900000002",
+            joined_at=None,
+            notes=None,
+        )
+    )
+    DeletePersonUseCase(repo).execute(inactive.id)
+
+    updated = UpdatePersonUseCase(repo).execute(
+        UpdatePersonCommand(person_id=active.id, email="old@example.com", phone="0900000001")
+    )
+
+    assert updated.email == "old@example.com"
+    assert updated.phone == "0900000001"
+
+
+def test_create_update_and_list_reject_inactive_status():
+    repo = FakePersonRepository()
+
+    with pytest.raises(ValidationError):
+        CreatePersonUseCase(repo).execute(
+            CreatePersonCommand(
+                employee_code="E001",
+                full_name="A",
+                department_id=None,
+                title=None,
+                email=None,
+                phone=None,
+                status=PersonStatus.INACTIVE,
+                joined_at=None,
+                notes=None,
+            )
+        )
+
+    person = CreatePersonUseCase(repo).execute(
+        CreatePersonCommand(
+            employee_code="E002",
+            full_name="B",
+            department_id=None,
+            title=None,
+            email=None,
+            phone=None,
+            joined_at=None,
+            notes=None,
+        )
+    )
+
+    with pytest.raises(ValidationError):
+        UpdatePersonUseCase(repo).execute(UpdatePersonCommand(person_id=person.id, status=PersonStatus.INACTIVE))
+    with pytest.raises(ValidationError):
+        ListPersonsUseCase(repo).execute(ListPersonsQuery(status=PersonStatus.INACTIVE))
 
 
 def test_delete_person_use_case_raises_for_missing_person():

@@ -173,6 +173,7 @@ def test_persons_module_endpoints(monkeypatch):
         list_response = client.get(f"/api/v1/persons?department_id={person_id}")
         assert list_response.status_code == 200
         assert str(_UseCaseListPersons.last_query.department_id) == person_id
+        assert client.get("/api/v1/persons?status=inactive").status_code == 422
 
         create_response = client.post(
             "/api/v1/persons",
@@ -180,8 +181,13 @@ def test_persons_module_endpoints(monkeypatch):
         )
         assert create_response.status_code == 201
         assert create_response.json()["status"] == "resigned"
+        assert client.post(
+            "/api/v1/persons",
+            json={"employee_code": "E101", "full_name": "Deleted", "status": "inactive"},
+        ).status_code == 422
         assert client.get(f"/api/v1/persons/{person_id}").status_code == 200
         assert client.patch(f"/api/v1/persons/{person_id}", json={"full_name": "Updated"}).status_code == 200
+        assert client.patch(f"/api/v1/persons/{person_id}", json={"status": "inactive"}).status_code == 422
         assert client.delete(f"/api/v1/persons/{person_id}").status_code == 204
         assert client.post("/api/v1/persons/bulk-delete", json={"person_ids": [person_id]}).status_code == 200
 

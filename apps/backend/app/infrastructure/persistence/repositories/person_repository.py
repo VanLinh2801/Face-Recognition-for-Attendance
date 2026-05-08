@@ -93,8 +93,16 @@ class SqlAlchemyPersonRepository(PersonRepository):
             return None
         return to_person(item)
 
-    def get_person_by_email(self, email: str, *, exclude_person_id: UUID | None = None) -> Person | None:
+    def get_person_by_email(
+        self,
+        email: str,
+        *,
+        exclude_person_id: UUID | None = None,
+        include_inactive: bool = False,
+    ) -> Person | None:
         stmt = select(PersonModel).where(PersonModel.email == email)
+        if not include_inactive:
+            stmt = stmt.where(PersonModel.status != PersonStatus.INACTIVE)
         if exclude_person_id is not None:
             stmt = stmt.where(PersonModel.id != exclude_person_id)
         stmt = stmt.limit(1)
@@ -103,8 +111,16 @@ class SqlAlchemyPersonRepository(PersonRepository):
             return None
         return to_person(item)
 
-    def get_person_by_phone(self, phone: str, *, exclude_person_id: UUID | None = None) -> Person | None:
+    def get_person_by_phone(
+        self,
+        phone: str,
+        *,
+        exclude_person_id: UUID | None = None,
+        include_inactive: bool = False,
+    ) -> Person | None:
         stmt = select(PersonModel).where(PersonModel.phone == phone)
+        if not include_inactive:
+            stmt = stmt.where(PersonModel.status != PersonStatus.INACTIVE)
         if exclude_person_id is not None:
             stmt = stmt.where(PersonModel.id != exclude_person_id)
         stmt = stmt.limit(1)

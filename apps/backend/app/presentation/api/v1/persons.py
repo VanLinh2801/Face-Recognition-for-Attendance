@@ -27,6 +27,7 @@ from app.core.dependencies import (
     get_unit_of_work,
     get_update_person_use_case,
 )
+from app.core.exceptions import ValidationError
 from app.domain.shared.enums import PersonStatus
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from app.presentation.schemas.persons import (
@@ -51,6 +52,7 @@ def list_persons(
     to_at: datetime | None = Query(default=None),
     use_case: ListPersonsUseCase = Depends(get_list_persons_use_case),
 ) -> PersonListResponse:
+    _ensure_status_is_not_inactive(status)
     result = use_case.execute(
         ListPersonsQuery(
             page=page,
@@ -75,6 +77,7 @@ def create_person(
     use_case: CreatePersonUseCase = Depends(get_create_person_use_case),
     uow: SqlAlchemyUnitOfWork = Depends(get_unit_of_work),
 ) -> PersonItemResponse:
+    _ensure_status_is_not_inactive(request.status)
     person = use_case.execute(
         CreatePersonCommand(
             employee_code=request.employee_code,
@@ -107,6 +110,7 @@ def update_person(
     use_case: UpdatePersonUseCase = Depends(get_update_person_use_case),
     uow: SqlAlchemyUnitOfWork = Depends(get_unit_of_work),
 ) -> PersonItemResponse:
+    _ensure_status_is_not_inactive(request.status)
     person = use_case.execute(
         UpdatePersonCommand(
             person_id=person_id,
@@ -144,3 +148,8 @@ def bulk_delete_persons(
     deleted_count = use_case.execute(request.person_ids)
     uow.commit()
     return BulkDeletePersonsResponse(deleted_count=deleted_count)
+
+
+def _ensure_status_is_not_inactive(status: PersonStatus | None) -> None:
+    if status == PersonStatus.INACTIVE:
+        raise ValidationError("inactive status is reserved for deleted persons", details={"status": status.value})

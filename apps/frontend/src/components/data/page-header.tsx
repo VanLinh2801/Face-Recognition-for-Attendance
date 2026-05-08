@@ -5,11 +5,13 @@ export function PageHeader({
   description,
   action,
   actionHref,
+  actionOnClick,
 }: {
   title: string;
   description?: string;
   action?: string;
   actionHref?: string;
+  actionOnClick?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3 border-b border-slate-200 bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
@@ -25,7 +27,7 @@ export function PageHeader({
           {action}
         </a>
       ) : action ? (
-        <Button>{action}</Button>
+        <Button type="button" onClick={actionOnClick}>{action}</Button>
       ) : null}
     </div>
   );
