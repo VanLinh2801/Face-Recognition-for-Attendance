@@ -21,19 +21,21 @@ class PipelineService:
         self.face_cropper = FaceCropper()
         self.frame_count = 0
         self.track_frame_refs = {}
-        self._prev_motion_state = None  # để chỉ log khi trạng thái thay đổi
-        self._no_face_streak = 0        # đếm liên tiếp không thấy mặt
+        self._no_face_streak = 0
+        self._track_burst_counts = {}   # đếm burst để log tên lớn hơn
 
     async def handle_realtime_frame(self, source_id: str, frame):
         self.frame_count += 1
+        h, w = frame.shape[:2]
 
         if self.frame_count % 100 == 0:
-            h, w = frame.shape[:2]
             logger.info(f"[PIPELINE] ♥ Heartbeat frame={self.frame_count} res={w}x{h}")
 
         context = {
             "source_id": source_id,
             "frame": frame,
+            "frame_width": w,
+            "frame_height": h,
             "frame_sequence": self.frame_count,
             "captured_at": datetime.utcnow().isoformat(),
             "full_frame_ref": None
@@ -42,15 +44,6 @@ class PipelineService:
         # 1. Phát hiện chuyển động
         context = self.motion_processor.process(context)
         motion = context.get('motion_detected')
-        ratio  = context.get('motion_ratio', 0)
-
-        # Chỉ log khi trạng thái thay đổi (có ↔ không)
-        if motion != self._prev_motion_state:
-            if motion:
-                logger.info(f"[MOTION] ✓ Started  ratio={ratio:.4f}")
-            else:
-                logger.info(f"[MOTION] ✕ Stopped  ratio={ratio:.4f}")
-            self._prev_motion_state = motion
 
         if not motion:
             return
@@ -64,14 +57,23 @@ class PipelineService:
                 logger.debug(f"[DETECTOR] No face x{self._no_face_streak}")
             return
         self._no_face_streak = 0
-        logger.info(f"[DETECTOR] {len(detections)} face(s) detected")
+        logger.debug(f"[DETECTOR] {len(detections)} face(s) detected")
 
         # 3. Tracking
         context = self.face_tracker.process(context)
         faces_to_emit = context.get('faces_to_emit', [])
         if not faces_to_emit:
             return
-        logger.info(f"[TRACKER]  {len(faces_to_emit)} face(s) to emit")
+
+        # only log when actual upload/emit will happen (i.e. face is NEW or PERIODIC)
+        for face in faces_to_emit:
+            face_type = face['type']
+            if face_type in ('NEW', 'PERIODIC'):
+                logger.info(f"[TRACKER] {face_type} face: {face['track_id']}")
+            elif face_type == 'INITIAL':
+                self._track_burst_counts[face['track_id']] = self._track_burst_counts.get(face['track_id'], 0) + 1
+                if self._track_burst_counts[face['track_id']] == 1:
+                    logger.debug(f"[TRACKER] Initial burst {face['track_id']} ({self.face_tracker.max_initial} snapshots)")
 
         # 4. Upload ảnh gốc
         needs_upload = any(face['type'] in ['NEW', 'PERIODIC'] for face in faces_to_emit)
@@ -115,6 +117,8 @@ class PipelineService:
                     "stream_id": context.get('source_id', 'default_cam'),
                     "frame_id": f"frame_{context['frame_sequence']}",
                     "frame_sequence": context['frame_sequence'],
+                    "frame_width": context['frame_width'],
+                    "frame_height": context['frame_height'],
                     "captured_at": context['captured_at'],
                     "faces": [{
                         "track_id": face['track_id'],

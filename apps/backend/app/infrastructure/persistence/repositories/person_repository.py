@@ -56,6 +56,11 @@ class SqlAlchemyPersonRepository(PersonRepository):
             return None
         return to_person(item)
 
+    def exists(self, person_id: UUID) -> bool:
+        stmt = select(PersonModel.id).where(PersonModel.id == person_id)
+        result = self._session.execute(stmt).scalar_one_or_none()
+        return result is not None
+
     def get_person_by_employee_code(self, employee_code: str) -> Person | None:
         stmt = select(PersonModel).where(PersonModel.employee_code == employee_code)
         item = self._session.execute(stmt).scalar_one_or_none()

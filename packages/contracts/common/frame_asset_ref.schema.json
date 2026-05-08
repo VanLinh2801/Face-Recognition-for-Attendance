@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/common/frame_asset_ref.schema.json",
+  "title": "FrameAssetRef",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bucket_name",
+    "object_key"
+  ],
+  "properties": {
+    "bucket_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "object_key": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

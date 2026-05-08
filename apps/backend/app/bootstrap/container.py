@@ -97,6 +97,9 @@ class Container:
     def create_uow(self, session: Session) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(session)
 
+    def create_person_repository(self, session: Session) -> SqlAlchemyPersonRepository:
+        return SqlAlchemyPersonRepository(session)
+
     def build_list_persons_use_case(self, session: Session) -> ListPersonsUseCase:
         return ListPersonsUseCase(SqlAlchemyPersonRepository(session))
 

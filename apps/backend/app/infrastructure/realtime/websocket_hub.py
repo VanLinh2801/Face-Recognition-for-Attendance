@@ -80,12 +80,20 @@ class WebSocketHub:
 
     async def publish(self, envelope: RealtimeEnvelope) -> None:
         message = envelope.to_message()
+        logger.debug(
+            "[WS_HUB] publish channel=%s event_type=%s dedupe_key=%s connections=%d",
+            envelope.channel.value,
+            envelope.event_type,
+            envelope.dedupe_key,
+            len(self._connections),
+        )
         dead_connections: list[str] = []
         async with self._lock:
             targets = list(self._connections.values())
         for conn in targets:
             if envelope.channel not in conn.subscriptions:
                 continue
+            logger.debug("[WS_HUB] enqueuing for conn_id=%s", conn.id)
             try:
                 conn.queue.put_nowait(message)
             except asyncio.QueueFull:
@@ -98,6 +106,7 @@ class WebSocketHub:
     async def _sender_loop(self, conn: _Connection) -> None:
         while True:
             message = await conn.queue.get()
+            logger.debug("[WS_HUB] _sender_loop sending to conn_id=%s message=%s", conn.id, message.get("event_type"))
             await conn.websocket.send_json(message)
             self._metrics.sent_messages += 1
 

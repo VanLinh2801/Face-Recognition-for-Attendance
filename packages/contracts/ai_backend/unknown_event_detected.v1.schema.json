@@ -98,7 +98,7 @@
             "snapshot_media_asset": {
               "anyOf": [
                 {
-                  "$ref": "../common/media_asset_ref.schema.json"
+                  "$ref": "../common/frame_asset_ref.schema.json"
                 },
                 {
                   "type": "null"
@@ -110,6 +110,17 @@
                 "object",
                 "null"
               ]
+            },
+            "bbox": {
+              "$ref": "../common/bbox.schema.json"
+            },
+            "frame_width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "frame_height": {
+              "type": "integer",
+              "minimum": 1
             }
           }
         }

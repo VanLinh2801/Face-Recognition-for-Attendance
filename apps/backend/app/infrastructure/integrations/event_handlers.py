@@ -32,10 +32,85 @@ class BackendEventHandlers:
 
     async def handle_recognition_event(self, envelope: dict[str, Any], _payload: dict[str, Any]) -> bool:
         with self._container.session_factory() as session:
+            person_repo = self._container.create_person_repository(session)
             uow = self._container.create_uow(session)
             use_case = self._container.build_ingest_recognition_event_use_case(session, uow)
+
+            # Validate person_id exists in Postgres before persisting
+            raw_payload = envelope.get("payload") or {}
+            person_id_str = raw_payload.get("person_id")
+            person_uuid: UUID | None = None
+
+            if person_id_str:
+                try:
+                    person_uuid = UUID(person_id_str)
+                    if not person_repo.exists(person_uuid):
+                        logger.warning(
+                            "recognition_event rejected: person_id=%s not found in Postgres — "
+                            "converting to unknown_event.detected. dedupe_key=%s",
+                            person_id_str,
+                            raw_payload.get("dedupe_key"),
+                        )
+                        # Convert to unknown event by calling handle_unknown_event logic inline
+                        unknown_use_case = self._container.build_ingest_unknown_event_use_case(session, uow)
+                        unknown_result = unknown_use_case.execute(envelope)
+                        logger.info(
+                            "ingest unknown (fallback) result=%s message_id=%s dedupe_key=%s",
+                            unknown_result.status,
+                            envelope.get("message_id"),
+                            raw_payload.get("dedupe_key"),
+                        )
+                        return unknown_result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
+                except (ValueError, Exception) as exc:
+                    logger.error(
+                        "invalid person_id=%s in recognition_event: %s — converting to unknown_event",
+                        person_id_str,
+                        exc,
+                    )
+                    unknown_use_case = self._container.build_ingest_unknown_event_use_case(session, uow)
+                    unknown_result = unknown_use_case.execute(envelope)
+                    logger.info(
+                        "ingest unknown (fallback) result=%s message_id=%s dedupe_key=%s",
+                        unknown_result.status,
+                        envelope.get("message_id"),
+                        raw_payload.get("dedupe_key"),
+                    )
+                    return unknown_result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
+
             result = use_case.execute(envelope)
+            logger.debug(
+                "ingest recognition result=%s message_id=%s track_id=%s dedupe_key=%s",
+                result.status,
+                envelope.get("message_id"),
+                raw_payload.get("track_id"),
+                raw_payload.get("dedupe_key"),
+            )
             if result.status == IngestStatus.PROCESSED:
+                logger.info(
+                    "[WS_DEBUG] Publishing recognition_event to WS: track_id=%s bbox=%s",
+                    raw_payload.get("track_id"),
+                    raw_payload.get("bbox"),
+                )
+                # Enrich payload with person full_name for WebSocket push
+                if person_uuid:
+                    try:
+                        person = person_repo.get_person(person_uuid)
+                        if person:
+                            enriched_payload = dict(raw_payload)
+                            enriched_payload["full_name"] = person.full_name
+                            enriched_payload["employee_code"] = person.employee_code
+                            enriched_envelope = dict(envelope)
+                            enriched_envelope["payload"] = enriched_payload
+                            await self._container.realtime_event_bus.publish(
+                                self._to_realtime_envelope(
+                                    channel=RealtimeChannel.EVENTS_BUSINESS,
+                                    event_type="recognition_event.detected",
+                                    envelope=enriched_envelope,
+                                )
+                            )
+                            return True
+                    except Exception:
+                        pass  # Non-fatal: WS event still goes through without enrichment
                 await self._container.realtime_event_bus.publish(
                     self._to_realtime_envelope(
                         channel=RealtimeChannel.EVENTS_BUSINESS,
@@ -47,7 +122,7 @@ class BackendEventHandlers:
                 "ingest recognition result=%s message_id=%s dedupe_key=%s",
                 result.status,
                 envelope.get("message_id"),
-                (envelope.get("payload") or {}).get("dedupe_key"),
+                raw_payload.get("dedupe_key"),
             )
             return result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
 
@@ -56,7 +131,19 @@ class BackendEventHandlers:
             uow = self._container.create_uow(session)
             use_case = self._container.build_ingest_unknown_event_use_case(session, uow)
             result = use_case.execute(envelope)
+            logger.debug(
+                "ingest unknown result=%s message_id=%s track_id=%s dedupe_key=%s",
+                result.status,
+                envelope.get("message_id"),
+                (envelope.get("payload") or {}).get("track_id"),
+                (envelope.get("payload") or {}).get("dedupe_key"),
+            )
             if result.status == IngestStatus.PROCESSED:
+                logger.info(
+                    "[WS_DEBUG] Publishing unknown_event to WS: track_id=%s bbox=%s",
+                    (envelope.get("payload") or {}).get("track_id"),
+                    (envelope.get("payload") or {}).get("bbox"),
+                )
                 await self._container.realtime_event_bus.publish(
                     self._to_realtime_envelope(
                         channel=RealtimeChannel.EVENTS_BUSINESS,

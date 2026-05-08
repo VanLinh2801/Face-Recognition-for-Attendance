@@ -90,7 +90,7 @@ class SCRFDFaceDetector(BaseProcessor):
                                          cv2.BORDER_CONSTANT, value=[0, 0, 0])
 
         padded_h, padded_w = padded_img.shape[:2]  # 640x640
-        logger.debug(f"[DETECTOR] Inference info: orig={w}x{h}, scale={scale:.4f}, pads=(t:{pad_top}, l:{pad_left})")
+        logger.debug(f"[DETECTOR] orig={w}x{h}, scale={scale:.4f}, pads=(t:{pad_top}, l:{pad_left})")
 
         # Tiền xử lý
         blob = cv2.dnn.blobFromImage(padded_img, 1.0/128, (padded_w, padded_h), (127.5, 127.5, 127.5), swapRB=True)
@@ -159,7 +159,7 @@ class SCRFDFaceDetector(BaseProcessor):
 
         # --- Scale ngược tọa độ từ letterbox space về ảnh gốc ---
         valid_detections = []
-        logger.debug(f"[DETECTOR] Total raw detections before filter: {len(bboxes)}")
+        logger.debug(f"[DETECTOR] raw detections after NMS: {len(bboxes)}")
         for i in range(len(bboxes)):
             x1, y1, x2, y2 = bboxes[i]
 
@@ -178,10 +178,8 @@ class SCRFDFaceDetector(BaseProcessor):
             fw = x2 - x1
             fh = y2 - y1
             score = float(scores[i][0])
-            logger.debug(f"[DETECTOR] bbox {i}: size={fw:.1f}x{fh:.1f}, score={score:.3f}, pos=({x1:.0f},{y1:.0f})")
 
             if fw < 40 or fh < 40:
-                logger.debug(f"[DETECTOR] --> FILTERED OUT (too small: {fw:.1f}x{fh:.1f})")
                 continue
 
             # Scale keypoints về gốc
