@@ -1,12 +1,13 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { Building2, ChevronRight, Eye, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { Building2, ChevronRight, Eye, Pencil, Plus, PowerOff, Save, Search, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ApiError, apiFetch } from "@/lib/api-client";
 import type { Department } from "@/lib/types";
 import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { useOutsideClick } from "@/lib/use-outside-click";
@@ -18,6 +19,17 @@ type DepartmentDraft = {
   parent_id: string | null;
   is_active: boolean;
 };
+
+type DepartmentFieldErrors = {
+  code?: string;
+  parent_id?: string;
+};
+
+type ToastState = {
+  title: string;
+  description: string;
+  variant: "success" | "danger";
+} | null;
 
 function emptyDraft(): DepartmentDraft {
   return {
@@ -36,6 +48,11 @@ export function DepartmentsManager({
   const [departments, setDepartments] = useState<Department[]>(initialDepartments);
   const [draft, setDraft] = useState<DepartmentDraft | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<DepartmentFieldErrors>({});
+  const [toast, setToast] = useState<ToastState>(null);
+  const [toastVisible, setToastVisible] = useState(false);
   const draftDialog = useDialogTransition(draft);
   const deleteDialog = useDialogTransition(deleteTarget);
   const visibleDraft = draftDialog.value;
@@ -43,16 +60,39 @@ export function DepartmentsManager({
 
   const activeDepartments = useMemo(() => departments.filter((department) => department.is_active), [departments]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const hideTimer = window.setTimeout(() => setToastVisible(false), 3500);
+    const removeTimer = window.setTimeout(() => setToast(null), 3850);
+
+    return () => {
+      window.clearTimeout(hideTimer);
+      window.clearTimeout(removeTimer);
+    };
+  }, [toast]);
+
+  function showToast(nextToast: NonNullable<ToastState>) {
+    setToast(nextToast);
+    setToastVisible(true);
+  }
+
+  function closeToast() {
+    setToastVisible(false);
+    window.setTimeout(() => setToast(null), 300);
+  }
+
   function getDepartmentName(id: string | null) {
     if (!id) return "Không trực thuộc";
     return departments.find((department) => department.id === id)?.name ?? "Không xác định";
   }
 
   function openCreateDialog() {
+    setFieldErrors({});
     setDraft(emptyDraft());
   }
 
   function openEditDialog(department: Department) {
+    setFieldErrors({});
     setDraft({
       id: department.id,
       code: department.code,
@@ -62,54 +102,101 @@ export function DepartmentsManager({
     });
   }
 
-  function saveDraft() {
+  async function saveDraft() {
     if (!draft) return;
-    const now = new Date().toISOString();
-
-    if (draft.id) {
-      const updatedDepartment: Department = {
-        id: draft.id,
-        code: draft.code,
-        name: draft.name,
-        parent_id: draft.parent_id,
-        is_active: draft.is_active,
-        created_at: departments.find((department) => department.id === draft.id)?.created_at ?? now,
-        updated_at: now,
-      };
-
-      setDepartments((current) =>
-        current.map((department) =>
-          department.id === draft.id
-            ? {
-                ...department,
-                ...updatedDepartment,
-              }
-            : department,
-        ),
-      );
-
-    } else {
-      setDepartments((current) => [
-        ...current,
-        {
-          id: `dep-${Date.now()}`,
-          code: draft.code || "NEW",
-          name: draft.name || "New department",
-          parent_id: draft.parent_id,
-          is_active: draft.is_active,
-          created_at: now,
-          updated_at: now,
-        },
-      ]);
+    const code = draft.code.trim();
+    const name = draft.name.trim();
+    if (!code || !name) {
+      setFieldErrors({
+        code: !code ? "Mã phòng ban không được để trống." : undefined,
+      });
+      showToast({
+        title: "Dữ liệu chưa hợp lệ",
+        description: !code ? "Mã phòng ban không được để trống." : "Tên phòng ban không được để trống.",
+        variant: "danger",
+      });
+      return;
     }
 
-    setDraft(null);
+    setSaving(true);
+    setFieldErrors({});
+    try {
+      if (draft.id) {
+        const updatedDepartment = await apiFetch<Department>(`/departments/${draft.id}`, {
+          method: "PATCH",
+          withAuth: true,
+          body: JSON.stringify({
+            code,
+            name,
+            parent_id: draft.parent_id,
+            is_active: draft.is_active,
+          }),
+        });
+
+        setDepartments((current) => current.map((department) => (department.id === updatedDepartment.id ? updatedDepartment : department)));
+        showToast({
+          title: "Cập nhật thành công",
+          description: `Phòng ban ${updatedDepartment.name} đã được cập nhật.`,
+          variant: "success",
+        });
+      } else {
+        const createdDepartment = await apiFetch<Department>("/departments", {
+          method: "POST",
+          withAuth: true,
+          body: JSON.stringify({
+            code,
+            name,
+            parent_id: draft.parent_id,
+            is_active: draft.is_active,
+          }),
+        });
+        setDepartments((current) => [createdDepartment, ...current]);
+        showToast({
+          title: "Tạo phòng ban thành công",
+          description: `Phòng ban ${createdDepartment.name} đã được tạo.`,
+          variant: "success",
+        });
+      }
+      setDraft(null);
+    } catch (err) {
+      const nextErrors = getDepartmentFieldErrors(err);
+      setFieldErrors(nextErrors);
+      showToast({
+        title: draft.id ? "Cập nhật thất bại" : "Tạo phòng ban thất bại",
+        description: getDepartmentErrorMessage(err),
+        variant: "danger",
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!deleteTarget) return;
-    setDepartments((current) => current.filter((department) => department.id !== deleteTarget.id));
-    setDeleteTarget(null);
+    setDeleting(true);
+    try {
+      await apiFetch<void>(`/departments/${deleteTarget.id}`, {
+        method: "DELETE",
+        withAuth: true,
+      });
+      setDepartments((current) =>
+        current.map((department) => (department.id === deleteTarget.id ? { ...department, is_active: false } : department)),
+      );
+      showToast({
+        title: "Ngưng hoạt động thành công",
+        description: `Phòng ban ${deleteTarget.name} đã được chuyển sang inactive.`,
+        variant: "success",
+      });
+      setDeleteTarget(null);
+    } catch (err) {
+      showToast({
+        title: "Ngưng hoạt động thất bại",
+        description: err instanceof ApiError ? err.message : "Không thể ngưng hoạt động phòng ban.",
+        variant: "danger",
+      });
+    } finally {
+      setDeleting(false);
+    }
   }
 
   function descendantDepartmentIds(departmentId: string) {
@@ -189,8 +276,15 @@ export function DepartmentsManager({
                           <Button variant="outline" size="icon" aria-label={`Sửa ${department.name}`} onClick={() => openEditDialog(department)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button variant="outline" size="icon" aria-label={`Xóa ${department.name}`} onClick={() => setDeleteTarget(department)}>
-                            <Trash2 className="h-4 w-4 text-red-700" />
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label={department.is_active ? `Ngưng hoạt động ${department.name}` : `${department.name} đã ngưng hoạt động`}
+                            title={department.is_active ? `Ngưng hoạt động ${department.name}` : "Phòng ban đã ngưng hoạt động"}
+                            disabled={!department.is_active}
+                            onClick={() => setDeleteTarget(department)}
+                          >
+                            <PowerOff className={department.is_active ? "h-4 w-4 text-amber-700" : "h-4 w-4 text-slate-400 opacity-60"} />
                           </Button>
                         </div>
                       </td>
@@ -219,7 +313,7 @@ export function DepartmentsManager({
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold">{visibleDraft.id ? "Sửa phòng ban" : "Thêm phòng ban"}</h2>
-                  <p className="mt-1 text-sm text-slate-500">Form mock theo contract departments.</p>
+                  <p className="mt-1 text-sm text-slate-500">Dữ liệu sẽ được lưu trực tiếp vào backend.</p>
                 </div>
               </div>
               <Button variant="ghost" size="icon" onClick={() => setDraft(null)} aria-label="Đóng dialog phòng ban">
@@ -231,7 +325,16 @@ export function DepartmentsManager({
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2">
                   <span className="text-sm font-medium">Mã phòng ban</span>
-                  <Input value={visibleDraft.code} onChange={(event) => setDraft({ ...visibleDraft, code: event.target.value })} placeholder="ENG" />
+                  <Input
+                    value={visibleDraft.code}
+                    onChange={(event) => {
+                      setDraft({ ...visibleDraft, code: event.target.value });
+                      setFieldErrors((current) => ({ ...current, code: undefined }));
+                    }}
+                    placeholder="ENG"
+                    aria-invalid={fieldErrors.code ? true : undefined}
+                    className={fieldErrors.code ? "border-red-300 focus:border-red-400 focus:ring-red-100" : undefined}
+                  />
                 </label>
                 <label className="space-y-2">
                   <span className="text-sm font-medium">Tên phòng ban</span>
@@ -245,7 +348,11 @@ export function DepartmentsManager({
                   <DepartmentTreeSelect
                     departments={parentCandidates()}
                     value={visibleDraft.parent_id ?? ""}
-                    onChange={(value) => setDraft({ ...visibleDraft, parent_id: value || null })}
+                    onChange={(value) => {
+                      setDraft({ ...visibleDraft, parent_id: value || null });
+                      setFieldErrors((current) => ({ ...current, parent_id: undefined }));
+                    }}
+                    invalid={Boolean(fieldErrors.parent_id)}
                   />
                   {visibleDraft.id ? (
                     <span className="text-xs text-slate-500">
@@ -264,10 +371,10 @@ export function DepartmentsManager({
             </div>
 
             <div className="flex justify-end gap-2 border-t border-slate-200 p-5">
-              <Button variant="outline" onClick={() => setDraft(null)}>Hủy</Button>
-              <Button onClick={saveDraft}>
+              <Button variant="outline" onClick={() => setDraft(null)} disabled={saving}>Hủy</Button>
+              <Button onClick={saveDraft} disabled={saving}>
                 <Save className="h-4 w-4" />
-                Lưu
+                {saving ? "Đang lưu..." : "Lưu"}
               </Button>
             </div>
           </div>
@@ -286,24 +393,51 @@ export function DepartmentsManager({
           >
             <div className="border-b border-slate-200 p-5">
               <div className="flex items-start gap-3">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-700">
-                  <Trash2 className="h-5 w-5" />
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-700">
+                  <PowerOff className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold">Xóa phòng ban?</h2>
+                  <h2 className="text-lg font-semibold">Ngưng hoạt động phòng ban?</h2>
                   <p className="mt-2 text-sm text-slate-600">
-                    Bạn có chắc muốn xóa {visibleDeleteTarget.name}? Thao tác này chỉ xóa dữ liệu mock trên giao diện hiện tại.
+                    Bạn có chắc muốn ngưng hoạt động {visibleDeleteTarget.name}? Thao tác này sẽ chuyển phòng ban sang trạng thái inactive, không xóa dữ liệu.
                   </p>
                 </div>
               </div>
             </div>
             <div className="flex justify-end gap-2 p-5">
-              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Hủy</Button>
-              <Button variant="danger" onClick={confirmDelete}>
-                <Trash2 className="h-4 w-4" />
-                Xác nhận xóa
+              <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+                Hủy
+              </Button>
+              <Button variant="default" onClick={confirmDelete} disabled={deleting}>
+                <PowerOff className="h-4 w-4" />
+                {deleting ? "Đang xử lý..." : "Ngưng hoạt động"}
               </Button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {toast ? (
+        <div
+          className={`fixed bottom-5 right-5 z-[90] w-[min(420px,calc(100vw-2.5rem))] rounded-lg border bg-white p-4 shadow-xl transition-all duration-300 ${
+            toastVisible ? "translate-x-0 opacity-100" : "translate-x-6 opacity-0"
+          } ${toast.variant === "danger" ? "border-red-200" : "border-emerald-200"}`}
+        >
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <div className={toast.variant === "danger" ? "font-semibold text-red-800" : "font-semibold text-emerald-800"}>
+                {toast.title}
+              </div>
+              <div className="mt-1 text-sm text-slate-600">{toast.description}</div>
+            </div>
+            <button
+              type="button"
+              onClick={closeToast}
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-950"
+              aria-label="Đóng thông báo"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </div>
       ) : null}
@@ -315,10 +449,12 @@ function DepartmentTreeSelect({
   departments,
   value,
   onChange,
+  invalid = false,
 }: {
   departments: Department[];
   value: string;
   onChange: (value: string) => void;
+  invalid?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -351,7 +487,9 @@ function DepartmentTreeSelect({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        className={`flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:ring-2 ${
+          invalid ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-slate-200 focus:border-slate-400 focus:ring-slate-100"
+        }`}
       >
         <span className="truncate">{selectedLabel}</span>
         <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
@@ -362,11 +500,11 @@ function DepartmentTreeSelect({
           <div className="border-b border-slate-100 p-2">
             <div className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3">
               <Search className="h-4 w-4 text-slate-400" />
-              <input
+              <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Tìm phòng ban"
-                className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm focus:border-transparent focus:ring-0"
               />
             </div>
           </div>
@@ -534,4 +672,52 @@ function DepartmentTreeOption({
     </div>
   );
 }
+
+function getDepartmentFieldErrors(error: unknown): DepartmentFieldErrors {
+  if (!(error instanceof ApiError)) return {};
+
+  const details = getErrorDetailsText(error.details);
+  const text = `${error.message} ${details}`.toLowerCase();
+  const errors: DepartmentFieldErrors = {};
+
+  if (text.includes("code")) {
+    errors.code = "Mã phòng ban đã tồn tại hoặc chưa hợp lệ.";
+  }
+
+  if (text.includes("parent") || text.includes("cycle") || text.includes("circular") || text.includes("self")) {
+    errors.parent_id = "Phòng ban trực thuộc không hợp lệ.";
+  }
+
+  return errors;
+}
+
+function getDepartmentErrorMessage(error: unknown) {
+  if (!(error instanceof ApiError)) return "Không thể lưu phòng ban. Vui lòng thử lại.";
+
+  const details = getErrorDetailsText(error.details);
+  const text = `${error.message} ${details}`.toLowerCase();
+
+  if (text.includes("code")) {
+    return "Mã phòng ban đã tồn tại. Vui lòng kiểm tra lại.";
+  }
+
+  if (text.includes("parent") || text.includes("cycle") || text.includes("circular") || text.includes("self")) {
+    return "Phòng ban trực thuộc không hợp lệ. Vui lòng kiểm tra lại.";
+  }
+
+  return error.message || "Không thể lưu phòng ban. Vui lòng thử lại.";
+}
+
+function getErrorDetailsText(details: unknown): string {
+  if (!details) return "";
+  if (typeof details === "string") return details;
+
+  try {
+    return JSON.stringify(details);
+  } catch {
+    return "";
+  }
+}
+
+
 

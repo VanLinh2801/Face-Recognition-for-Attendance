@@ -24,6 +24,15 @@ class PersonRepository(Protocol):
         created_to: datetime | None = None,
     ) -> tuple[list[Person], int]: ...
 
+    def list_persons_by_department_ids(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        department_ids: set[UUID],
+        status: PersonStatus | None = None,
+    ) -> tuple[list[Person], int]: ...
+
     def get_person(self, person_id: UUID) -> Person | None: ...
 
     def get_person_by_employee_code(self, employee_code: str) -> Person | None: ...

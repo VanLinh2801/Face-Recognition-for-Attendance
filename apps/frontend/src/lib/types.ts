@@ -51,6 +51,13 @@ export type FaceRegistration = {
   updated_at: string;
 };
 
+export type CreatePersonRegistrationResponse = {
+  registration: FaceRegistration;
+  stream_id: string;
+  message_id: string;
+  correlation_id: string;
+};
+
 export type AttendanceEvent = {
   id: string;
   person_id: string;

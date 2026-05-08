@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 from app.core import dependencies
 from app.domain.departments.entities import Department
 from app.domain.auth.entities import User
+from app.domain.persons.entities import Person
+from app.domain.shared.enums import PersonStatus
 
 
 class _FakeUoW:
@@ -43,8 +45,11 @@ def _build_department(*, department_id=None) -> Department:
 
 
 class _UseCaseListDepartments:
+    last_query = None
+
     def execute(self, query):
-        items = [_build_department()]
+        self.__class__.last_query = query
+        items = [_build_department(), _build_department()]
         return type("R", (), {"items": items, "total": 1, "page": query.page, "page_size": query.page_size})()
 
 
@@ -68,6 +73,15 @@ class _UseCaseDeleteDepartment:
         return None
 
 
+class _UseCaseListDepartmentPersons:
+    last_query = None
+
+    def execute(self, query):
+        self.__class__.last_query = query
+        items = [_build_person(department_id=query.department_id)]
+        return type("R", (), {"items": items, "total": 1, "page": query.page, "page_size": query.page_size})()
+
+
 def test_departments_module_endpoints(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("ENABLE_EVENT_CONSUMER", "false")
@@ -87,12 +101,18 @@ def test_departments_module_endpoints(monkeypatch):
     app_main.app.dependency_overrides[dependencies.get_get_department_use_case] = lambda: _UseCaseGetDepartment()
     app_main.app.dependency_overrides[dependencies.get_update_department_use_case] = lambda: _UseCaseUpdateDepartment()
     app_main.app.dependency_overrides[dependencies.get_delete_department_use_case] = lambda: _UseCaseDeleteDepartment()
+    app_main.app.dependency_overrides[dependencies.get_list_department_persons_use_case] = (
+        lambda: _UseCaseListDepartmentPersons()
+    )
     app_main.app.dependency_overrides[dependencies.get_unit_of_work] = lambda: _FakeUoW()
 
     department_id = str(uuid4())
 
     with TestClient(app_main.app) as client:
         assert client.get("/api/v1/departments").status_code == 200
+        assert _UseCaseListDepartments.last_query.is_active is None
+        assert client.get("/api/v1/departments?is_active=true").status_code == 200
+        assert _UseCaseListDepartments.last_query.is_active is True
         assert client.post(
             "/api/v1/departments",
             json={"code": "D001", "name": "Sales", "parent_id": None, "is_active": True},
@@ -100,7 +120,29 @@ def test_departments_module_endpoints(monkeypatch):
         assert client.get(f"/api/v1/departments/{department_id}").status_code == 200
         assert client.patch(
             f"/api/v1/departments/{department_id}",
-            json={"name": "Sales Updated"},
+            json={"name": "Sales Updated", "parent_id": None},
         ).status_code == 200
+        assert client.get(
+            f"/api/v1/departments/{department_id}/persons?include_descendants=false&status=active",
+        ).status_code == 200
+        assert _UseCaseListDepartmentPersons.last_query.include_descendants is False
+        assert _UseCaseListDepartmentPersons.last_query.status == PersonStatus.ACTIVE
         assert client.delete(f"/api/v1/departments/{department_id}").status_code == 204
 
+
+def _build_person(*, department_id) -> Person:
+    now = datetime.now(timezone.utc)
+    return Person(
+        id=uuid4(),
+        employee_code="E001",
+        full_name="Person",
+        department_id=department_id,
+        title=None,
+        email=None,
+        phone=None,
+        status=PersonStatus.ACTIVE,
+        joined_at=None,
+        notes=None,
+        created_at=now,
+        updated_at=now,
+    )

@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     media_cleanup_enabled: bool = Field(default=False, alias="MEDIA_CLEANUP_ENABLED")
     media_cleanup_interval_days: int = Field(default=1, alias="MEDIA_CLEANUP_INTERVAL_DAYS")
     media_cleanup_batch_size: int = Field(default=500, alias="MEDIA_CLEANUP_BATCH_SIZE")
+    media_upload_max_bytes: int = Field(default=10 * 1024 * 1024, alias="MEDIA_UPLOAD_MAX_BYTES")
 
     minio_endpoint: str = Field(default="minio:9000", alias="MINIO_ENDPOINT")
     minio_access_key: str = Field(default="minioadmin", alias="MINIO_ACCESS_KEY")

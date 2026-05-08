@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import BinaryIO
 
 from minio import Minio
 from minio.error import S3Error
@@ -17,6 +18,25 @@ class MinioStorageGateway:
             access_key=settings.minio_access_key,
             secret_key=settings.minio_secret_key,
             secure=False,
+        )
+
+    def put_object(
+        self,
+        *,
+        bucket_name: str,
+        object_key: str,
+        data: BinaryIO,
+        length: int,
+        content_type: str,
+    ) -> None:
+        if not self._client.bucket_exists(bucket_name):
+            self._client.make_bucket(bucket_name)
+        self._client.put_object(
+            bucket_name=bucket_name,
+            object_name=object_key,
+            data=data,
+            length=length,
+            content_type=content_type,
         )
 
     def delete_object(self, *, bucket_name: str, object_key: str) -> None:

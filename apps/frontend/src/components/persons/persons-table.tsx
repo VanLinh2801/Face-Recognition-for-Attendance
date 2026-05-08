@@ -44,6 +44,8 @@ type EditFieldErrors = {
   phone?: string;
 };
 
+const PAGE_SIZE = 10;
+
 export function PersonsTable({
   persons: initialPersons,
   departments,
@@ -56,8 +58,10 @@ export function PersonsTable({
   const [editingPerson, setEditingPerson] = useState<PersonRow | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
   const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [departmentId, setDepartmentId] = useState("all");
   const [statusFilter, setStatusFilter] = useState<PersonStatusFilter>("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editFieldErrors, setEditFieldErrors] = useState<EditFieldErrors>({});
@@ -72,19 +76,27 @@ export function PersonsTable({
   useOutsideClick(actionMenuRef, openActionId !== null, () => setOpenActionId(null));
 
   const departmentScopeIds = useMemo(() => getDepartmentScopeIds(departmentId, departments), [departmentId, departments]);
-  const visiblePersons = persons.filter((person) => {
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredPersons = persons.filter((person) => {
+    const searchMatches =
+      normalizedSearchQuery.length === 0 ||
+      person.full_name.toLowerCase().includes(normalizedSearchQuery) ||
+      person.employee_code.toLowerCase().includes(normalizedSearchQuery);
     const departmentMatches = !departmentScopeIds || (person.department_id ? departmentScopeIds.has(person.department_id) : false);
     const statusMatches = statusFilter === "all" || person.status === statusFilter;
-    return departmentMatches && statusMatches;
+    return searchMatches && departmentMatches && statusMatches;
   });
-  const selectedVisibleCount = visiblePersons.filter((person) => selectedIds.has(person.id)).length;
-  const allSelected = visiblePersons.length > 0 && selectedVisibleCount === visiblePersons.length;
+  const totalPages = Math.max(1, Math.ceil(filteredPersons.length / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * PAGE_SIZE;
+  const paginatedPersons = filteredPersons.slice(pageStartIndex, pageStartIndex + PAGE_SIZE);
+  const selectedFilteredCount = filteredPersons.filter((person) => selectedIds.has(person.id)).length;
+  const allSelected = paginatedPersons.length > 0 && paginatedPersons.every((person) => selectedIds.has(person.id));
+  const pageRangeStart = filteredPersons.length === 0 ? 0 : pageStartIndex + 1;
+  const pageRangeEnd = Math.min(pageStartIndex + paginatedPersons.length, filteredPersons.length);
 
-  const selectedCount = selectedVisibleCount;
-  const selectedText = useMemo(() => {
-    if (selectedCount === 0) return `${visiblePersons.length} records`;
-    return `${selectedCount}/${visiblePersons.length} selected`;
-  }, [selectedCount, visiblePersons.length]);
+  const selectedCount = selectedFilteredCount;
+  const selectedText = selectedCount === 0 ? `${filteredPersons.length} records` : `${selectedCount}/${filteredPersons.length} selected`;
 
   useEffect(() => {
     if (!toast) return;
@@ -110,7 +122,7 @@ export function PersonsTable({
   function toggleAll(checked: boolean) {
     setSelectedIds((current) => {
       const next = new Set(current);
-      for (const person of visiblePersons) {
+      for (const person of paginatedPersons) {
         if (checked) next.add(person.id);
         else next.delete(person.id);
       }
@@ -219,7 +231,7 @@ export function PersonsTable({
   }
 
   function requestDeleteSelected() {
-    const ids = visiblePersons.filter((person) => selectedIds.has(person.id)).map((person) => person.id);
+    const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     setDeleteRequest({
       type: "bulk",
@@ -248,7 +260,20 @@ export function PersonsTable({
       }
 
       const ids = new Set(deleteRequest.ids);
-      setPersons((current) => current.filter((person) => !ids.has(person.id)));
+      const nextPersons = persons.filter((person) => !ids.has(person.id));
+      const nextFilteredPersons = nextPersons.filter((person) => {
+        const searchMatches =
+          normalizedSearchQuery.length === 0 ||
+          person.full_name.toLowerCase().includes(normalizedSearchQuery) ||
+          person.employee_code.toLowerCase().includes(normalizedSearchQuery);
+        const departmentMatches = !departmentScopeIds || (person.department_id ? departmentScopeIds.has(person.department_id) : false);
+        const statusMatches = statusFilter === "all" || person.status === statusFilter;
+        return searchMatches && departmentMatches && statusMatches;
+      });
+      const nextTotalPages = Math.max(1, Math.ceil(nextFilteredPersons.length / PAGE_SIZE));
+
+      setPersons(nextPersons);
+      setCurrentPage((page) => Math.min(page, nextTotalPages));
       setSelectedIds((current) => {
         const next = new Set(current);
         for (const id of ids) {
@@ -281,7 +306,11 @@ export function PersonsTable({
     <>
       <Card>
         <CardContent className="grid gap-3 md:grid-cols-[minmax(240px,0.78fr)_220px_280px_auto]">
-          <Input placeholder="Tìm theo tên hoặc mã nhân viên" />
+          <Input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Tìm theo tên hoặc mã nhân viên"
+          />
           <StatusFilterSelect value={statusFilter} onChange={setStatusFilter} />
           <DepartmentTreeSelect departments={departments} value={departmentId} onChange={setDepartmentId} />
           <Button variant="outline" disabled={selectedCount === 0 || deleting} onClick={requestDeleteSelected}>
@@ -316,7 +345,7 @@ export function PersonsTable({
                 </tr>
               </thead>
               <tbody>
-                {visiblePersons.map((person, index) => (
+                {paginatedPersons.map((person, index) => (
                   <tr key={person.id} className="border-b border-slate-100">
                     <td className="py-3">
                       <input
@@ -327,7 +356,7 @@ export function PersonsTable({
                         className="h-4 w-4 rounded border-slate-300"
                       />
                     </td>
-                    <td className="font-mono text-xs text-slate-500">{index + 1}</td>
+                    <td className="font-mono text-xs text-slate-500">{pageStartIndex + index + 1}</td>
                     <td className="truncate pr-4 font-medium">{person.full_name}</td>
                     <td className="truncate pr-4">{person.department_name}</td>
                     <td className="truncate pr-4">{person.title}</td>
@@ -396,12 +425,31 @@ export function PersonsTable({
                 ))}
               </tbody>
             </table>
+            {filteredPersons.length === 0 ? (
+              <div className="rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                Không tìm thấy nhân sự phù hợp.
+              </div>
+            ) : null}
           </div>
           <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-            <span>Page 1 · {selectedText}</span>
+            <span>Trang {safeCurrentPage}/{totalPages} · {pageRangeStart}-{pageRangeEnd}/{filteredPersons.length} records · {selectedText}</span>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm">Previous</Button>
-              <Button variant="outline" size="sm">Next</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safeCurrentPage <= 1}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safeCurrentPage >= totalPages}
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              >
+                Next
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -938,11 +986,11 @@ function DepartmentTreeSelect({
           <div className="border-b border-slate-100 p-2">
             <div className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3">
               <Search className="h-4 w-4 text-slate-400" />
-              <input
+              <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Tìm phòng ban"
-                className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm focus:border-transparent focus:ring-0"
               />
             </div>
           </div>

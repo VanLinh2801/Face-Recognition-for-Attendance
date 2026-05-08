@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import re
+from typing import BinaryIO
 from uuid import UUID
+from uuid import uuid4
 
 from app.application.dtos.pagination import PageQuery, PageResult
 from app.application.interfaces.storage_gateway import ObjectStorageGateway
 from app.application.interfaces.repositories.media_asset_repository import MediaAssetRepository
 from app.core.config import Settings
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ValidationError
 from app.domain.media_assets.entities import MediaAsset
 from app.domain.shared.enums import MediaAssetType
 
@@ -38,6 +41,68 @@ class ListMediaAssetsUseCase:
             created_to=query.created_to,
         )
         return PageResult(items=items, total=total, page=page_query.page, page_size=page_query.page_size)
+
+
+@dataclass(slots=True, kw_only=True)
+class UploadMediaAssetCommand:
+    file_data: BinaryIO
+    filename: str
+    mime_type: str
+    file_size: int
+    asset_type: MediaAssetType = MediaAssetType.REGISTRATION_FACE
+    uploaded_by_person_id: UUID | None = None
+
+
+class UploadMediaAssetUseCase:
+    _allowed_mime_types = {"image/jpeg", "image/png"}
+
+    def __init__(
+        self,
+        repository: MediaAssetRepository,
+        storage_gateway: ObjectStorageGateway,
+        settings: Settings,
+    ) -> None:
+        self._repository = repository
+        self._storage_gateway = storage_gateway
+        self._settings = settings
+
+    def execute(self, command: UploadMediaAssetCommand) -> MediaAsset:
+        if command.mime_type not in self._allowed_mime_types:
+            raise ValidationError("unsupported media type", details={"mime_type": command.mime_type})
+        if command.file_size <= 0:
+            raise ValidationError("file cannot be empty", details={"file_size": str(command.file_size)})
+        if command.file_size > self._settings.media_upload_max_bytes:
+            raise ValidationError(
+                "file is too large",
+                details={"max_bytes": str(self._settings.media_upload_max_bytes)},
+            )
+
+        bucket_name = self._settings.minio_bucket
+        object_key = f"registrations/raw/{uuid4()}-{_safe_filename(command.filename)}"
+        command.file_data.seek(0)
+        self._storage_gateway.put_object(
+            bucket_name=bucket_name,
+            object_key=object_key,
+            data=command.file_data,
+            length=command.file_size,
+            content_type=command.mime_type,
+        )
+
+        try:
+            return self._repository.create_media_asset(
+                storage_provider="minio",
+                bucket_name=bucket_name,
+                object_key=object_key,
+                original_filename=command.filename,
+                mime_type=command.mime_type,
+                file_size=command.file_size,
+                checksum=None,
+                asset_type=command.asset_type.value,
+                uploaded_by_person_id=command.uploaded_by_person_id,
+            )
+        except Exception:
+            self._storage_gateway.delete_object(bucket_name=bucket_name, object_key=object_key)
+            raise
 
 
 @dataclass(slots=True, kw_only=True)
@@ -130,3 +195,8 @@ class GetMediaAssetPresignedUrlUseCase:
             url=url,
             expires_in=query.expires_in,
         )
+
+
+def _safe_filename(filename: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", filename.strip()).strip(".-")
+    return normalized or "upload"

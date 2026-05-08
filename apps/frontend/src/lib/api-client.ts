@@ -2,6 +2,9 @@
 
 import { clearAuthTokens, getAccessToken, getAccessTokenExpiresAt, getRefreshToken, saveAuthTokens } from "@/lib/auth-client";
 
+export const SESSION_EXPIRED_EVENT = "auth:session-expired";
+const SESSION_EXPIRED_MESSAGE = "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
+
 type ApiErrorPayload = {
   code?: string;
   message?: string;
@@ -33,7 +36,11 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 async function apiFetchWithRetry<T>(path: string, options: ApiFetchOptions, allowRefresh: boolean): Promise<T> {
   const { withAuth = false, headers, ...rest } = options;
   if (withAuth && allowRefresh && path !== "/auth/refresh" && shouldRefreshBeforeRequest()) {
-    await refreshAccessToken();
+    const refreshed = await refreshAccessToken();
+    if (!refreshed) {
+      notifySessionExpired();
+      throw new ApiError(SESSION_EXPIRED_MESSAGE, 401, "session_expired");
+    }
   }
 
   const response = await fetch(`/api/v1${path}`, {
@@ -80,14 +87,15 @@ function shouldRefreshBeforeRequest() {
 function buildHeaders(headers: HeadersInit | undefined, body: BodyInit | null | undefined, withAuth: boolean) {
   const finalHeaders = new Headers(headers ?? {});
 
-  if (!finalHeaders.has("Content-Type") && body) {
+  if (!finalHeaders.has("Content-Type") && body && !(body instanceof FormData)) {
     finalHeaders.set("Content-Type", "application/json");
   }
 
   if (withAuth) {
     const accessToken = getAccessToken();
     if (!accessToken) {
-      throw new ApiError("Bạn chưa đăng nhập.", 401, "unauthorized");
+      notifySessionExpired();
+      throw new ApiError(SESSION_EXPIRED_MESSAGE, 401, "session_expired");
     }
     finalHeaders.set("Authorization", `Bearer ${accessToken}`);
   }
@@ -137,6 +145,7 @@ async function refreshAccessToken() {
 
   if (!response.ok) {
     clearAuthTokens();
+    notifySessionExpired();
     return false;
   }
 
@@ -154,4 +163,9 @@ async function refreshAccessToken() {
     expiresInSeconds: data.expires_in,
   });
   return true;
+}
+
+function notifySessionExpired() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { message: SESSION_EXPIRED_MESSAGE } }));
 }

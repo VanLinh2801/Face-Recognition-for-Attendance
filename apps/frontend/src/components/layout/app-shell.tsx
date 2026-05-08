@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   Building2,
   CalendarClock,
   ChevronLeft,
@@ -15,10 +16,11 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, SESSION_EXPIRED_EVENT } from "@/lib/api-client";
 import { clearAuthTokens, getRefreshToken } from "@/lib/auth-client";
+import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { useOutsideClick } from "@/lib/use-outside-click";
 import { cn } from "@/lib/utils";
 
@@ -35,11 +37,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const sessionExpiredDialog = useDialogTransition(sessionExpiredMessage);
+  const visibleSessionExpiredMessage = sessionExpiredDialog.value;
 
   useOutsideClick(accountMenuRef, accountMenuOpen, () => setAccountMenuOpen(false));
+
+  useEffect(() => {
+    function handleSessionExpired(event: Event) {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      setSessionExpiredMessage(detail?.message ?? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+    }
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+  }, []);
 
   if (pathname === "/login") {
     return <div className="min-h-screen bg-slate-50 text-slate-950">{children}</div>;
@@ -66,6 +81,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setLoggingOut(false);
       router.push("/login");
     }
+  }
+
+  function confirmSessionExpired() {
+    clearAuthTokens();
+    setSessionExpiredMessage(null);
+    router.push("/login");
   }
 
   return (
@@ -177,6 +198,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className={cn("min-h-screen transition-all duration-200", collapsed ? "pl-[72px]" : "pl-64")}>
         {children}
       </main>
+
+      {visibleSessionExpiredMessage ? (
+        <div
+          className={`fixed inset-0 z-[100] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm ${dialogOverlayClass(sessionExpiredDialog.visible)}`}
+        >
+          <div className={`w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(sessionExpiredDialog.visible)}`}>
+            <div className="border-b border-slate-200 p-5">
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-700">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">Phiên đăng nhập đã hết hạn</h2>
+                  <p className="mt-2 text-sm text-slate-600">{visibleSessionExpiredMessage}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end p-5">
+              <Button onClick={confirmSessionExpired}>OK</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

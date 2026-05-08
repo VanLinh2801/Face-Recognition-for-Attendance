@@ -476,11 +476,11 @@ function DepartmentTreeSelect({
           <div className="border-b border-slate-100 p-2">
             <div className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3">
               <Search className="h-4 w-4 text-slate-400" />
-              <input
+              <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Tìm phòng ban"
-                className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm focus:border-transparent focus:ring-0"
               />
             </div>
           </div>

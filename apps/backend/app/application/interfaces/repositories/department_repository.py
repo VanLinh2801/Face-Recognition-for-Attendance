@@ -23,6 +23,8 @@ class DepartmentRepository(Protocol):
 
     def get_department_by_code(self, *, code: str) -> Department | None: ...
 
+    def list_department_descendant_ids(self, department_id: UUID) -> set[UUID]: ...
+
     def create_department(
         self,
         *,
@@ -39,6 +41,7 @@ class DepartmentRepository(Protocol):
         code: str | None = None,
         name: str | None = None,
         parent_id: UUID | None = None,
+        parent_id_provided: bool = False,
         is_active: bool | None = None,
     ) -> Department | None: ...
 
