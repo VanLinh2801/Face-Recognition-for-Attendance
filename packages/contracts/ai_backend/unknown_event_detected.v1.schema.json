@@ -72,6 +72,12 @@
                 "null"
               ]
             },
+            "detection_confidence": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
             "event_source": {
               "type": "string",
               "minLength": 1,

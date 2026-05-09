@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 from app.core.config import settings
 from app.processors.base import BaseProcessor
@@ -22,6 +23,7 @@ class FaceQualityFilter(BaseProcessor):
         self.min_kps_dist = settings.MIN_KPS_DIST_PX
         self.overlap_iou_threshold = settings.FACE_OVERLAP_IOU_THRESHOLD
         self.max_yaw_deg = settings.MAX_FACE_YAW_DEG
+        self.min_sharpness = settings.MIN_FACE_SHARPNESS
 
     def process(self, context: dict):
         faces = context.get("faces_to_emit", [])
@@ -39,7 +41,8 @@ class FaceQualityFilter(BaseProcessor):
                 face["_frame_height"] = frame_h
 
         # Luôn giữ nguyên detections gốc để check overlap giữa các face
-        filtered = self._filter_faces(faces)
+        frame = context.get("frame")
+        filtered = self._filter_faces(faces, frame)
         context["filtered_faces"] = filtered
 
         # Feedback cho tracker: track_id → frame_sequence của các face đã pass
@@ -52,12 +55,16 @@ class FaceQualityFilter(BaseProcessor):
     # Core filter                                                          #
     # ------------------------------------------------------------------ #
 
-    def _filter_faces(self, faces: list) -> list:
+    def _filter_faces(self, faces: list, frame=None) -> list:
         total = len(faces)
         rejected = []
 
         # Pre-filter: reject face nhỏ trước để giảm overlap check
         candidates = [f for f in faces if self._check_min_size(f)]
+
+        # Check 2: SHARPNESS — reject face bị mờ
+        if frame is not None:
+            candidates = [f for f in candidates if self._check_sharpness(f, frame)]
 
         # Check 3: FULL_5_KPS — reject face thiếu/invalid 5 keypoints
         candidates = [f for f in candidates if self._check_full_kps(f)]
@@ -116,6 +123,38 @@ class FaceQualityFilter(BaseProcessor):
         face["_quality_side"] = min(fw, fh)
         face["_quality_crop_area"] = int((min(fw, fh) * 2.7) ** 2)
         return face["_quality_side"] >= self.min_face_size
+
+    # ------------------------------------------------------------------ #
+    # Check 1.5: SHARPNESS (Variance of Laplacian)                       #
+    # ------------------------------------------------------------------ #
+
+    def _check_sharpness(self, face: dict, frame) -> bool:
+        bbox = face.get("bbox")
+        if not bbox or frame is None:
+            return False
+
+        x1, y1, x2, y2 = [int(v) for v in bbox]
+        fh, fw = frame.shape[:2]
+
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(fw, x2), min(fh, y2)
+
+        if x2 <= x1 or y2 <= y1:
+            return False
+
+        crop = frame[y1:y2, x1:x2]
+        if crop.size == 0:
+            return False
+
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
+        face["_quality_sharpness"] = float(sharpness)
+
+        if sharpness < self.min_sharpness:
+            logger.debug(f"[QUALITY] {face.get('track_id')} blurry: sharpness={sharpness:.1f} < {self.min_sharpness}")
+            return False
+            
+        return True
 
     # ------------------------------------------------------------------ #
     # Check 2: SINGLE_FACE — IoU overlap                                 #
@@ -321,5 +360,9 @@ class FaceQualityFilter(BaseProcessor):
         roll_deg = face.get("_quality_roll_deg")
         if roll_deg is not None and roll_deg > self.max_yaw_deg:
             reasons.append(f"roll_angle({roll_deg:.1f}°>{self.max_yaw_deg}°)")
+
+        sharpness = face.get("_quality_sharpness")
+        if sharpness is not None and sharpness < self.min_sharpness:
+            reasons.append(f"sharpness({sharpness:.1f}<{self.min_sharpness})")
 
         return reasons

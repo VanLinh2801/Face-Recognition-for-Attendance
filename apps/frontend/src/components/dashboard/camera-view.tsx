@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { WebRTCPlayer, type VideoDimensions } from "./webrtc-player";
 import { CameraOverlay } from "./camera-overlay";
@@ -19,6 +19,9 @@ export function CameraView() {
   const [renderBoxes, setRenderBoxes] = useState<OverlayRenderBox[]>([]);
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("disconnected");
 
+  // Queue events that arrive before video is ready
+  const pendingEventsRef = useRef<any[]>([]);
+
   // ── Thêm recognition box mới ──────────────────────────────────────────────
   const addRecognitionBox = useCallback((data: { payload: Record<string, unknown>; event_type: string }) => {
     const payload = data.payload;
@@ -29,7 +32,11 @@ export function CameraView() {
       return;
     }
 
-    if (!videoDimensions) return;
+    if (!videoDimensions) {
+      // Queue the event if video is not ready
+      pendingEventsRef.current.push(data);
+      return;
+    }
 
     const bbox = payload.bbox as { x: number; y: number; width: number; height: number } | null;
     if (!bbox) return;
@@ -57,6 +64,16 @@ export function CameraView() {
       return [...prev, { ...newBox, expiresAt }];
     });
   }, [videoDimensions]);
+
+  // Process queued events when videoDimensions becomes available
+  useEffect(() => {
+    if (videoDimensions && pendingEventsRef.current.length > 0) {
+      pendingEventsRef.current.forEach((data) => {
+        addRecognitionBox(data);
+      });
+      pendingEventsRef.current = [];
+    }
+  }, [videoDimensions, addRecognitionBox]);
 
   // ── WebSocket connection ───────────────────────────────────────────────────
   useEffect(() => {

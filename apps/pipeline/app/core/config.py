@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     MIN_KPS_DIST_PX: float = 2.0      # Khoảng cách tối thiểu giữa 2 keypoints (tránh trùng)
     FACE_OVERLAP_IOU_THRESHOLD: float = 0.5  # IoU > 0.5 → reject face nhỏ hơn
     MAX_FACE_YAW_DEG: float = 45.0   # Góc nghiêng tối đa (3/4 face = 45°)
+    MIN_FACE_SHARPNESS: float = 25.0 # Ngưỡng phương sai Laplacian để lọc ảnh mờ
 
     class Config:
         env_file = ".env"
