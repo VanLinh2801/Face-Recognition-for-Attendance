@@ -34,6 +34,7 @@ class FaceEmbedding:
     vector: np.ndarray
     embedding_model: str
     embedding_version: str
+    detection_confidence: Optional[float] = None  # det_score from InsightFace [0, 1]
 
     class Config:
         # allow numpy array in frozen dataclass comparison

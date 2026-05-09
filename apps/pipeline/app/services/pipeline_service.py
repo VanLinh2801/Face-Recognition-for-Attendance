@@ -10,6 +10,7 @@ from app.processors.motion import MotionProcessor
 from app.processors.face_detector import SCRFDFaceDetector
 from app.processors.face_tracker import FaceTracker
 from app.processors.face_cropper import FaceCropper
+from app.processors.face_quality_filter import FaceQualityFilter
 from app.core.config import settings
 from app.utils.logger import logger
 
@@ -18,11 +19,11 @@ class PipelineService:
         self.motion_processor = MotionProcessor()
         self.face_detector = SCRFDFaceDetector()
         self.face_tracker = FaceTracker()
+        self.face_quality_filter = FaceQualityFilter()
         self.face_cropper = FaceCropper()
         self.frame_count = 0
         self.track_frame_refs = {}
         self._no_face_streak = 0
-        self._track_burst_counts = {}   # đếm burst để log tên lớn hơn
 
     async def handle_realtime_frame(self, source_id: str, frame):
         self.frame_count += 1
@@ -44,8 +45,8 @@ class PipelineService:
         # 1. Phát hiện chuyển động
         context = self.motion_processor.process(context)
         motion = context.get('motion_detected')
-
-        if not motion:
+        has_active_tracks = len(self.face_tracker.tracks) > 0
+        if not motion and not has_active_tracks:
             return
 
         # 2. Phát hiện khuôn mặt
@@ -53,37 +54,33 @@ class PipelineService:
         detections = context.get('detections', [])
         if not detections:
             self._no_face_streak += 1
-            if self._no_face_streak % 30 == 1:   # log mỗi 30 lần liên tiếp bị miss
+            if self._no_face_streak % 30 == 1:
                 logger.debug(f"[DETECTOR] No face x{self._no_face_streak}")
             return
         self._no_face_streak = 0
         logger.debug(f"[DETECTOR] {len(detections)} face(s) detected")
 
-        # 3. Tracking
+        # 3. Tracking — gán track_id cho mỗi detection
         context = self.face_tracker.process(context)
-        faces_to_emit = context.get('faces_to_emit', [])
-        if not faces_to_emit:
-            return
 
-        # only log when actual upload/emit will happen (i.e. face is NEW or PERIODIC)
-        for face in faces_to_emit:
-            face_type = face['type']
-            if face_type in ('NEW', 'PERIODIC'):
-                logger.info(f"[TRACKER] {face_type} face: {face['track_id']}")
-            elif face_type == 'INITIAL':
-                self._track_burst_counts[face['track_id']] = self._track_burst_counts.get(face['track_id'], 0) + 1
-                if self._track_burst_counts[face['track_id']] == 1:
-                    logger.debug(f"[TRACKER] Initial burst {face['track_id']} ({self.face_tracker.max_initial} snapshots)")
+        # 4. Quality filter — chạy SAU tracker để có track_id, set _filter_passed_track_ids
+        context = self.face_quality_filter.process(context)
 
-        # 4. Upload ảnh gốc
-        needs_upload = any(face['type'] in ['NEW', 'PERIODIC'] for face in faces_to_emit)
+        # Tracker đọc filter feedback để biết frame nào đã pass
+        self.face_tracker.sync_filter_passed(context.get('_filter_passed_track_ids', {}))
+
+        filtered_faces = context.get('filtered_faces', [])
+
+        # 5. Upload ảnh gốc — chỉ khi có face pass quality filter mới cần upload
+        needs_upload = bool(filtered_faces) and any(face['type'] in ['NEW', 'PERIODIC'] for face in filtered_faces)
         full_frame_ref = None
         if needs_upload:
             full_frame_ref = self._dispatch_background_upload(source_id, frame)
-            for face in faces_to_emit:
+            for face in filtered_faces:
                 self.track_frame_refs[face['track_id']] = full_frame_ref
 
-        # 5. Cắt mặt
+        # 6. Cắt mặt và publish — chỉ với face đã pass quality
+        context['faces_to_emit'] = filtered_faces
         context = self.face_cropper.process(context)
         processed_faces = context.get('processed_faces', [])
 
@@ -102,7 +99,6 @@ class PipelineService:
 
     async def _publish_to_ai_service(self, context, face):
         try:
-            # Convert bbox từ numpy float32 sang Python float để JSON serialize được
             raw_bbox = face.get('bbox') or []
             bbox = [float(v) for v in raw_bbox]
 
@@ -127,7 +123,8 @@ class PipelineService:
                         "detection_confidence": float(face['score']),
                         "cropped_face_b64": face['image_b64'],
                         "full_frame_b64": base64.b64encode(cv2.imencode('.jpg', context['frame'])[1]).decode('utf-8') if settings.DEBUG else None,
-                        "quality_status": "good"
+                        "quality_status": "good",
+                        "crop_pixel_area": face.get('_quality_crop_area', 0)
                     }]
                 }
             }
@@ -135,7 +132,11 @@ class PipelineService:
                 redis_stream_client.send_event(settings.STREAM_VISION_PROCESS, payload),
                 timeout=2.0
             )
-            logger.info(f"==> [SUCCESS] Published {face['track_id']} to AI Service")
+            det_conf = face.get('score', 0)
+            logger.info(
+                f"==> [SUCCESS] Published {face['track_id']} to AI Service | "
+                f"SCRFD det_conf={det_conf:.4f}"
+            )
         except asyncio.TimeoutError:
             logger.error(f"==> [TIMEOUT] Redis unreachable for track {face.get('track_id')}!")
         except Exception as e:

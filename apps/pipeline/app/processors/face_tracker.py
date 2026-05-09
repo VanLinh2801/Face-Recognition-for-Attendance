@@ -5,93 +5,112 @@ from app.core.config import settings
 from app.processors.base import BaseProcessor
 from app.utils.logger import logger
 
+
 class FaceTracker(BaseProcessor):
     def __init__(self):
-        # tracks: {track_id: {"last_seen": timestamp, "first_seen": timestamp, "last_snapshot": timestamp, "initial_count": int}}
+        # tracks: {track_id: {"last_seen": timestamp, "first_seen": timestamp, "last_snapshot": timestamp,
+        #                     "initial_count": int, "passed_photos": int}}
         self.tracks = {}
         self.cooldown = settings.FACE_TRACKER_COOLDOWN
         self.max_initial = settings.MAX_INITIAL_SNAPSHOTS
+        # {track_id: [frame_sequence_1, frame_sequence_2, ...]} — các frame đã pass quality
+        self._filter_passed = {}
 
     def process(self, context: dict):
         detections = context.get('detections', [])
         frame = context.get('frame')
         current_time = time.time()
-        
+
         faces_to_emit = []
 
-        # Logic Tracking đơn giản: 
-        # Trong thực tế, bạn nên dùng Centroid hoặc Kalman Filter.
-        # Ở đây ta sẽ giả định SCRFD trả về detections và ta gán Track ID.
-        # (Nếu chưa có Tracker thực sự, ta sẽ tạo ID mới cho mỗi detection để demo)
-        
         for det in detections:
             bbox = det.get('bbox')
             score = det.get('score')
-            
-            # Giả lập tìm kiếm track_id (thực tế sẽ dùng toán học để match)
+            kpss = det.get('kpss')
+
             track_id = self._match_track(bbox)
-            
-            if track_id not in self.tracks:
-                # 1. Phát hiện mới
+            is_new = track_id not in self.tracks
+
+            if is_new:
                 x1, y1, x2, y2 = bbox
                 self.tracks[track_id] = {
                     "first_seen": current_time,
                     "last_seen": current_time,
-                    "last_snapshot": current_time,
-                    "initial_count": 1,
+                    "last_snapshot": 0.0,
+                    "initial_count": 0,
+                    "passed_photos": 0,
                     "centroid": ((x1+x2)/2.0, (y1+y2)/2.0)
                 }
-                faces_to_emit.append({"track_id": track_id, "bbox": bbox, "score": score, "type": "NEW"})
+                logger.debug(f"[TRACKER] NEW track {track_id}")
             else:
-                track = self.tracks[track_id]
-                track["last_seen"] = current_time
+                self.tracks[track_id]["last_seen"] = current_time
 
-                # 2. Giai đoạn Initial Burst (3 ảnh trong 2 giây đầu)
-                if current_time - track["first_seen"] < 2.0 and track["initial_count"] < self.max_initial:
-                    track["initial_count"] += 1
-                    faces_to_emit.append({"track_id": track_id, "bbox": bbox, "score": score, "type": "INITIAL"})
+            track = self.tracks[track_id]
 
-                # 3. Giai đoạn định kỳ (Mặc định là self.cooldown - 5 phút)
-                elif current_time - track["last_snapshot"] >= self.cooldown:
-                    track["last_snapshot"] = current_time
-                    faces_to_emit.append({"track_id": track_id, "bbox": bbox, "score": score, "type": "PERIODIC"})
+            face_type = None
+            if track["passed_photos"] == 0:
+                face_type = "NEW"
+            elif track["passed_photos"] < self.max_initial:
+                face_type = "INITIAL"
+            elif (current_time - track["last_snapshot"]) >= self.cooldown:
+                face_type = "PERIODIC"
 
-        # Dọn dẹp các track đã biến mất quá lâu (VD: 10 giây)
+            if face_type:
+                faces_to_emit.append({
+                    "track_id": track_id, 
+                    "bbox": bbox, 
+                    "score": score, 
+                    "kpss": kpss, 
+                    "type": face_type
+                })
+
+        # Dọn dẹp các track đã biến mất quá lâu
         self._cleanup_tracks(current_time)
-        
+
         context['faces_to_emit'] = faces_to_emit
         return context
 
+    def sync_filter_passed(self, filter_result: dict):
+        """
+        Được gọi SAU quality filter.
+        filter_result = {track_id: frame_sequence} — track nào pass quality ở frame nào.
+        """
+        current_time = time.time()
+        for track_id in filter_result.keys():
+            if track_id in self.tracks:
+                track = self.tracks[track_id]
+                track["passed_photos"] += 1
+                track["initial_count"] += 1
+                
+                # Update snapshot time for NEW or PERIODIC
+                if track["passed_photos"] == 1 or track["passed_photos"] > self.max_initial:
+                    track["last_snapshot"] = current_time
+                
+                logger.debug(f"[TRACKER] {track_id} passed. Total passed={track['passed_photos']}")
+
     def _match_track(self, bbox):
-        # Tính toán tâm (Centroid) của khuôn mặt mới
         x1, y1, x2, y2 = bbox
         cx = (x1 + x2) / 2.0
         cy = (y1 + y2) / 2.0
-        
+
         best_track_id = None
         min_dist = float('inf')
-        dist_threshold = 200.0 # Tăng lên 200px vì mặt to sát cam di chuyển centroid rất nhanh
-        
-        # Tìm track gần nhất
+        dist_threshold = 200.0
+
         for tid, t_data in self.tracks.items():
             last_cx, last_cy = t_data.get('centroid', (0, 0))
             dist = np.sqrt((cx - last_cx)**2 + (cy - last_cy)**2)
             if dist < min_dist and dist < dist_threshold:
                 min_dist = dist
                 best_track_id = tid
-                
-        # Nếu tìm thấy, cập nhật lại tọa độ tâm mới nhất cho track đó
+
         if best_track_id:
             self.tracks[best_track_id]['centroid'] = (cx, cy)
             return best_track_id
-            
-        # Nếu không có track nào gần, tạo ID mới
+
         new_id = str(uuid.uuid4())[:8]
-        # (Lưu ý: Centroid sẽ được lưu vào track_data ở hàm process phía trên khi nó thấy ID mới)
         return new_id
 
     def _cleanup_tracks(self, current_time):
-        # 60 giây: đủ để người đứng yên không bị coi là người mới
-        # Khi track hết hạn, lần phát hiện tiếp theo sẽ là NEW → upload MinIO
         expire_time = 60.0
         self.tracks = {tid: t for tid, t in self.tracks.items() if current_time - t["last_seen"] < expire_time}

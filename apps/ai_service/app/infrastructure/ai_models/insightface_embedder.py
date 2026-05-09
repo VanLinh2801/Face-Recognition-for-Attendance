@@ -56,14 +56,21 @@ class InsightFaceEmbedder(IFaceEmbedder):
                 )
             # Pick the face with the largest bounding box area
             best = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
-            return best.normed_embedding  # L2-normalised 512-d vector
+            logger.debug(
+                "InsightFace detection track_id=%s det_score=%.4f bbox=%s",
+                face.track_id,
+                best.det_score,
+                best.bbox,
+            )
+            return best.normed_embedding, best.det_score
 
-        vector = await loop.run_in_executor(None, _infer)
+        vector, det_score = await loop.run_in_executor(None, _infer)
         return FaceEmbedding(
             track_id=face.track_id,
             vector=vector,
             embedding_model=settings.INSIGHTFACE_MODEL_NAME,
             embedding_version=settings.INSIGHTFACE_MODEL_VERSION,
+            detection_confidence=float(det_score),
         )
 
     @property

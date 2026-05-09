@@ -179,6 +179,7 @@ class RecognitionRequestedHandler:
                 "event_direction": "unknown",  # direction is determined by pipeline context
                 "match_score": result.match.match_score,
                 "spoof_score": result.spoof_score,
+                "detection_confidence": result.detection_confidence,
                 "event_source": "ai_service",
                 "dedupe_key": dedupe_key,
                 "snapshot_media_asset": snapshot_media_asset,
@@ -188,10 +189,11 @@ class RecognitionRequestedHandler:
         )
         await self._publisher.publish(settings.REDIS_STREAM_AI_BACKEND, envelope)
         logger.info(
-            "Published recognition_event.detected person_id=%s track_id=%s score=%.4f",
+            "Published recognition_event.detected person_id=%s track_id=%s score=%.4f det_conf=%.4f",
             result.match.person_id,
             track_id,
             result.match.match_score,
+            result.detection_confidence,
         )
 
     async def _publish_unknown(
@@ -214,6 +216,7 @@ class RecognitionRequestedHandler:
                 "event_direction": "unknown",
                 "match_score": nearest_score,
                 "spoof_score": result.spoof_score,
+                "detection_confidence": result.detection_confidence,
                 "event_source": "ai_service",
                 "dedupe_key": dedupe_key,
                 "review_status": "new",
