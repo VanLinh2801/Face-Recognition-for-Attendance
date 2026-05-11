@@ -5,7 +5,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Pencil, Save, X } from "lucide-react";
 import { PageHeader } from "@/components/data/page-header";
-import { DirectionBadge, PersonStatusBadge, RegistrationStatusBadge } from "@/components/data/status-badge";
+import { DirectionBadge, PersonStatusBadge } from "@/components/data/status-badge";
+import { PersonFaceRegistrations } from "@/components/persons/person-face-registrations";
 import { DatePicker, DepartmentTreeSelect, PersonStatusSelect, type EditablePersonStatus } from "@/components/persons/persons-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -251,26 +252,7 @@ export default function PersonDetailPage() {
         </Card>
 
         <div className="space-y-4">
-          <Card>
-            <CardHeader><CardTitle>Face registrations</CardTitle></CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2">
-              {registrations.map((registration) => (
-                <div key={registration.id} className="rounded-lg border border-slate-200 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="font-mono text-xs text-slate-500">{registration.id}</span>
-                    <RegistrationStatusBadge status={registration.registration_status} />
-                  </div>
-                  <div className="grid aspect-video place-items-center rounded-md bg-slate-100 text-sm text-slate-500">Face crop preview</div>
-                  <div className="mt-3 space-y-1 text-sm">
-                    <div>Model: {registration.embedding_model ?? "N/A"}</div>
-                    <div>Version: {registration.embedding_version ?? "N/A"}</div>
-                    <div>Indexed: {registration.indexed_at ? formatDateTime(registration.indexed_at) : "Pending"}</div>
-                  </div>
-                </div>
-              ))}
-              {registrations.length === 0 ? <div className="rounded-md border border-dashed border-slate-300 p-6 text-sm text-slate-500">No registrations.</div> : null}
-            </CardContent>
-          </Card>
+          <PersonFaceRegistrations personId={person.id} initialRegistrations={registrations} />
 
           <Card>
             <CardHeader><CardTitle>Attendance history</CardTitle></CardHeader>

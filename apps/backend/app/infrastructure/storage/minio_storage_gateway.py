@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from io import BytesIO
 from typing import BinaryIO
 
 from minio import Minio
@@ -20,6 +21,14 @@ class MinioStorageGateway:
             secure=False,
         )
 
+    def download_bytes(self, *, bucket_name: str, object_key: str) -> bytes:
+        response = self._client.get_object(bucket_name, object_key)
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
+
     def put_object(
         self,
         *,
@@ -36,6 +45,22 @@ class MinioStorageGateway:
             object_name=object_key,
             data=data,
             length=length,
+            content_type=content_type,
+        )
+
+    def upload_bytes(
+        self,
+        *,
+        bucket_name: str,
+        object_key: str,
+        content: bytes,
+        content_type: str,
+    ) -> None:
+        self.put_object(
+            bucket_name=bucket_name,
+            object_key=object_key,
+            data=BytesIO(content),
+            length=len(content),
             content_type=content_type,
         )
 

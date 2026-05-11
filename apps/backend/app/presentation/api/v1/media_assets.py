@@ -5,7 +5,11 @@ from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi import Depends, File, Form, Query, UploadFile
+from fastapi.responses import Response
+from minio.error import S3Error
+from sqlalchemy.orm import Session
 
+from app.application.interfaces.storage_gateway import ObjectStorageGateway
 from app.application.use_cases.media_assets import (
     CleanupMediaAssetsCommand,
     CleanupMediaAssetsUseCase,
@@ -19,12 +23,16 @@ from app.application.use_cases.media_assets import (
 from app.core.dependencies import (
     get_admin_user,
     get_cleanup_media_assets_use_case,
+    get_db_session,
     get_list_media_assets_use_case,
     get_media_asset_presigned_url_use_case,
+    get_object_storage_gateway,
     get_upload_media_asset_use_case,
     get_unit_of_work,
 )
+from app.core.exceptions import NotFoundError
 from app.domain.shared.enums import MediaAssetType
+from app.infrastructure.persistence.repositories.media_asset_repository import SqlAlchemyMediaAssetRepository
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from app.presentation.schemas.media_assets import (
     CleanupMediaAssetsRequest,
@@ -99,6 +107,36 @@ async def upload_media_asset(
     )
     uow.commit()
     return MediaAssetItemResponse.model_validate(media_asset, from_attributes=True)
+
+
+@router.get("/{media_asset_id}/content")
+def get_media_asset_content(
+    media_asset_id: UUID,
+    session: Session = Depends(get_db_session),
+    storage_gateway: ObjectStorageGateway = Depends(get_object_storage_gateway),
+) -> Response:
+    media_asset = SqlAlchemyMediaAssetRepository(session).get_media_asset(media_asset_id)
+    if media_asset is None:
+        raise NotFoundError("Media asset not found")
+
+    try:
+        content = storage_gateway.download_bytes(
+            bucket_name=media_asset.bucket_name,
+            object_key=media_asset.object_key,
+        )
+    except S3Error as exc:
+        if exc.code in {"NoSuchKey", "NoSuchBucket"}:
+            raise NotFoundError("Media asset content not found") from exc
+        raise
+
+    return Response(
+        content=content,
+        media_type=media_asset.mime_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{media_asset.original_filename}"',
+            "Cache-Control": "private, max-age=60",
+        },
+    )
 
 
 @internal_router.post("/cleanup", response_model=CleanupMediaAssetsResponse)

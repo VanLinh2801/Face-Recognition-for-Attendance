@@ -11,6 +11,7 @@ from app.application.interfaces.repositories.media_asset_repository import Media
 from app.application.interfaces.repositories.person_repository import PersonRepository
 from app.core.exceptions import NotFoundError
 from app.domain.face_registrations.entities import PersonFaceRegistration
+from app.domain.media_assets.entities import MediaAsset
 from app.domain.shared.enums import RegistrationStatus
 
 
@@ -47,7 +48,7 @@ class RegistrationInputValidatedCommand:
     prepared_face_media_asset: dict | None = None
 
 
-class CreateFaceRegistrationUseCase:
+class cCreateFaceRegistrationUseCase:
     def __init__(
         self,
         person_repository: PersonRepository,
@@ -141,16 +142,7 @@ class CompleteFaceRegistrationUseCase:
         face_media_asset_id: UUID | None = None
         media_ref = command.face_image_media_asset
         if media_ref is not None:
-            created_asset = self._media_asset_repository.create_media_asset(
-                storage_provider=media_ref["storage_provider"],
-                bucket_name=media_ref["bucket_name"],
-                object_key=media_ref["object_key"],
-                original_filename=media_ref["original_filename"],
-                mime_type=media_ref["mime_type"],
-                file_size=media_ref["file_size"],
-                checksum=media_ref.get("checksum"),
-                asset_type=media_ref["asset_type"],
-            )
+            created_asset = _get_or_create_media_asset(self._media_asset_repository, media_ref)
             face_media_asset_id = created_asset.id
 
         registration = self._registration_repository.update_registration_processing_result(
@@ -179,16 +171,7 @@ class ApplyRegistrationInputValidationUseCase:
         face_media_asset_id: UUID | None = None
         media_ref = command.prepared_face_media_asset
         if media_ref is not None:
-            created_asset = self._media_asset_repository.create_media_asset(
-                storage_provider=media_ref["storage_provider"],
-                bucket_name=media_ref["bucket_name"],
-                object_key=media_ref["object_key"],
-                original_filename=media_ref["original_filename"],
-                mime_type=media_ref["mime_type"],
-                file_size=media_ref["file_size"],
-                checksum=media_ref.get("checksum"),
-                asset_type=media_ref["asset_type"],
-            )
+            created_asset = _get_or_create_media_asset(self._media_asset_repository, media_ref)
             face_media_asset_id = created_asset.id
 
         rejected = command.status == "rejected"
@@ -202,3 +185,22 @@ class ApplyRegistrationInputValidationUseCase:
         if registration is None:
             raise NotFoundError("Registration not found")
         return registration
+
+
+def _get_or_create_media_asset(repository: MediaAssetRepository, media_ref: dict) -> MediaAsset:
+    existing = repository.get_media_asset_by_location(
+        bucket_name=media_ref["bucket_name"],
+        object_key=media_ref["object_key"],
+    )
+    if existing is not None:
+        return existing
+    return repository.create_media_asset(
+        storage_provider=media_ref["storage_provider"],
+        bucket_name=media_ref["bucket_name"],
+        object_key=media_ref["object_key"],
+        original_filename=media_ref["original_filename"],
+        mime_type=media_ref["mime_type"],
+        file_size=media_ref["file_size"],
+        checksum=media_ref.get("checksum"),
+        asset_type=media_ref["asset_type"],
+    )

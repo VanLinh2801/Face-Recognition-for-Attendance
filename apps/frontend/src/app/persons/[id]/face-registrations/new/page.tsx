@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Fingerprint, ImageUp, UploadCloud, X } from "lucide-react";
@@ -10,14 +11,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { getAccessToken } from "@/lib/auth-client";
-import type { CreatePersonRegistrationResponse, Department, MediaAsset, PageResult, Person } from "@/lib/types";
+import type { CreatePersonRegistrationResponse, Department, FaceRegistration, PageResult, Person } from "@/lib/types";
 
 const allowedImageTypes = new Set(["image/jpeg", "image/png"]);
+const REGISTRATION_POLL_INTERVAL_MS = 2000;
+const REGISTRATION_POLL_TIMEOUT_MS = 60000;
 
 type ToastState = {
   title: string;
   description: string;
-  variant: "success" | "danger";
+  variant: "success" | "danger" | "info";
 } | null;
 
 export default function NewPersonFaceRegistrationPage() {
@@ -27,9 +30,11 @@ export default function NewPersonFaceRegistrationPage() {
   const [person, setPerson] = useState<Person | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [notes, setNotes] = useState("register from admin panel");
+  const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [processingRegistration, setProcessingRegistration] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
   const [toastVisible, setToastVisible] = useState(false);
@@ -74,14 +79,22 @@ export default function NewPersonFaceRegistrationPage() {
 
   useEffect(() => {
     if (!toast) return;
-    const hideTimer = window.setTimeout(() => setToastVisible(false), 3500);
-    const removeTimer = window.setTimeout(() => setToast(null), 3850);
+    const hideTimer = window.setTimeout(() => setToastVisible(false), toast.variant === "info" ? 1800 : 3500);
+    const removeTimer = window.setTimeout(() => setToast(null), toast.variant === "info" ? 2150 : 3850);
 
     return () => {
       window.clearTimeout(hideTimer);
       window.clearTimeout(removeTimer);
     };
   }, [toast]);
+
+  useEffect(() => {
+    return () => {
+      if (selectedFilePreviewUrl) {
+        URL.revokeObjectURL(selectedFilePreviewUrl);
+      }
+    };
+  }, [selectedFilePreviewUrl]);
 
   const departmentName = useMemo(() => {
     if (!person?.department_id) return "Không trực thuộc";
@@ -99,13 +112,19 @@ export default function NewPersonFaceRegistrationPage() {
   }
 
   function handleFileChange(file: File | null) {
+    if (selectedFilePreviewUrl) {
+      URL.revokeObjectURL(selectedFilePreviewUrl);
+    }
+
     if (!file) {
       setSelectedFile(null);
+      setSelectedFilePreviewUrl(null);
       return;
     }
 
     if (!allowedImageTypes.has(file.type)) {
       setSelectedFile(null);
+      setSelectedFilePreviewUrl(null);
       showToast({
         title: "Ảnh không hợp lệ",
         description: "Vui lòng chọn file JPG hoặc PNG.",
@@ -115,6 +134,34 @@ export default function NewPersonFaceRegistrationPage() {
     }
 
     setSelectedFile(file);
+    setSelectedFilePreviewUrl(URL.createObjectURL(file));
+  }
+
+  async function waitForRegistrationCompletion(personIdValue: string, registrationId: string) {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < REGISTRATION_POLL_TIMEOUT_MS) {
+      const registration = await apiFetch<FaceRegistration>(
+        `/persons/${personIdValue}/registrations/${registrationId}`,
+        { withAuth: true },
+      );
+
+      if (registration.registration_status === "indexed") {
+        return registration;
+      }
+      if (registration.registration_status === "failed") {
+        const failureReason = registration.validation_notes?.trim();
+        throw new Error(
+          failureReason && failureReason.length > 0
+            ? translateFailureReason(failureReason)
+            : "Đăng ký khuôn mặt thất bại sau khi hệ thống xử lý ảnh.",
+        );
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, REGISTRATION_POLL_INTERVAL_MS));
+    }
+
+    throw new Error("Hệ thống xử lý quá thời gian chờ. Đăng ký khuôn mặt chưa hoàn tất.");
   }
 
   async function submitRegistration() {
@@ -139,47 +186,45 @@ export default function NewPersonFaceRegistrationPage() {
     }
 
     setSubmitting(true);
+    setProcessingRegistration(false);
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      formData.append("asset_type", "registration_face");
-      formData.append("uploaded_by_person_id", person.id);
+      formData.append("requested_by_person_id", person.id);
+      if (notes.trim()) {
+        formData.append("notes", notes.trim());
+      }
 
-      const mediaAsset = await apiFetch<MediaAsset>("/media-assets/upload", {
+      const response = await apiFetch<CreatePersonRegistrationResponse>(`/persons/${person.id}/registrations/upload`, {
         method: "POST",
         withAuth: true,
         body: formData,
       });
 
-      await apiFetch<CreatePersonRegistrationResponse>(`/persons/${person.id}/registrations`, {
-        method: "POST",
-        withAuth: true,
-        body: JSON.stringify({
-          requested_by_person_id: person.id,
-          source_media_asset: {
-            storage_provider: mediaAsset.storage_provider,
-            bucket_name: mediaAsset.bucket_name,
-            object_key: mediaAsset.object_key,
-            original_filename: mediaAsset.original_filename,
-            mime_type: mediaAsset.mime_type,
-            file_size: mediaAsset.file_size,
-            checksum: mediaAsset.checksum,
-            asset_type: mediaAsset.asset_type,
-          },
-          notes: notes.trim() || null,
-        }),
+      setProcessingRegistration(true);
+      showToast({
+        title: "Đang xử lý đăng ký khuôn mặt",
+        description: "Ảnh đã được gửi sang pipeline và AI service để xử lý.",
+        variant: "info",
       });
-
+      await waitForRegistrationCompletion(person.id, response.registration.id);
+      setProcessingRegistration(false);
       showToast({
         title: "Đăng ký khuôn mặt thành công",
-        description: "Ảnh đã được upload và registration đã được tạo.",
+        description: "Ảnh đã được xử lý xong và sẵn sàng sử dụng.",
         variant: "success",
       });
-      window.setTimeout(() => router.push(`/persons/${person.id}`), 700);
+      window.setTimeout(() => router.push(`/persons/${person.id}`), 1500);
     } catch (err) {
+      setProcessingRegistration(false);
       showToast({
         title: "Đăng ký khuôn mặt thất bại",
-        description: err instanceof ApiError ? err.message : "Không thể tạo đăng ký khuôn mặt. Vui lòng thử lại.",
+        description:
+          err instanceof ApiError
+            ? translateFailureReason(err.message)
+            : err instanceof Error
+              ? translateFailureReason(err.message)
+              : "Không thể tạo đăng ký khuôn mặt. Vui lòng thử lại.",
         variant: "danger",
       });
     } finally {
@@ -195,13 +240,18 @@ export default function NewPersonFaceRegistrationPage() {
       />
 
       <div className="mx-auto max-w-6xl space-y-4 p-6">
-        <Link href={person ? `/persons/${person.id}` : "/persons"} className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-950">
+        <Link
+          href={person ? `/persons/${person.id}` : "/persons"}
+          className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-950"
+        >
           <ArrowLeft className="h-4 w-4" />
           Quay lại chi tiết nhân sự
         </Link>
 
         {loading ? (
-          <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">Đang tải thông tin nhân sự...</div>
+          <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">
+            Đang tải thông tin nhân sự...
+          </div>
         ) : null}
 
         {!loading && error ? (
@@ -220,10 +270,22 @@ export default function NewPersonFaceRegistrationPage() {
                   {person.full_name.split(" ").slice(-1)[0]?.[0] ?? "?"}
                 </div>
                 <div className="space-y-3 text-sm">
-                  <div className="flex justify-between gap-3"><span className="text-slate-500">Mã nhân viên</span><span className="font-mono text-xs">{person.employee_code}</span></div>
-                  <div className="flex justify-between gap-3"><span className="text-slate-500">Họ tên</span><span className="font-medium">{person.full_name}</span></div>
-                  <div className="flex justify-between gap-3"><span className="text-slate-500">Phòng ban</span><span>{departmentName}</span></div>
-                  <div className="flex justify-between gap-3"><span className="text-slate-500">Chức danh</span><span>{person.title}</span></div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Mã nhân viên</span>
+                    <span className="font-mono text-xs">{person.employee_code}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Họ tên</span>
+                    <span className="font-medium">{person.full_name}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Phòng ban</span>
+                    <span>{departmentName}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-slate-500">Chức danh</span>
+                    <span>{person.title}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -248,28 +310,42 @@ export default function NewPersonFaceRegistrationPage() {
                     className="sr-only"
                     onChange={(event) => handleFileChange(event.target.files?.[0] ?? null)}
                   />
-                  <div>
-                    <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-white shadow-sm ring-1 ring-slate-200">
-                      <ImageUp className="h-7 w-7 text-slate-500" />
-                    </div>
-                    <div className="mt-4 text-base font-semibold">Chọn ảnh khuôn mặt</div>
-                    <div className="mt-1 text-sm text-slate-500">JPG/PNG, một người, rõ mặt, đủ sáng.</div>
+                  <div className="w-full">
+                    {selectedFilePreviewUrl ? (
+                      <div className="space-y-4">
+                        <div className="relative mx-auto aspect-[4/3] w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white">
+                          <Image
+                            src={selectedFilePreviewUrl}
+                            alt={selectedFile?.name ?? "Ảnh đăng ký khuôn mặt"}
+                            fill
+                            unoptimized
+                            className="object-contain"
+                          />
+                        </div>
+                        <div className="text-base font-semibold">{selectedFile?.name}</div>
+                        <div className="text-sm text-slate-500">
+                          {selectedFile?.type} · {selectedFile ? (selectedFile.size / 1024).toFixed(1) : "0.0"} KB
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-white shadow-sm ring-1 ring-slate-200">
+                          <ImageUp className="h-7 w-7 text-slate-500" />
+                        </div>
+                        <div className="mt-4 text-base font-semibold">Chọn ảnh khuôn mặt</div>
+                        <div className="mt-1 text-sm text-slate-500">JPG/PNG, một người, rõ mặt, đủ sáng.</div>
+                      </div>
+                    )}
                     <div className="mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-medium text-white">
                       <UploadCloud className="h-4 w-4" />
-                      Chọn ảnh
+                      {selectedFilePreviewUrl ? "Đổi ảnh" : "Chọn ảnh"}
                     </div>
-                    {selectedFile ? (
-                      <div className="mt-4 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-                        <div className="font-medium text-slate-900">{selectedFile.name}</div>
-                        <div>{selectedFile.type} · {(selectedFile.size / 1024).toFixed(1)} KB</div>
-                      </div>
-                    ) : null}
                   </div>
                 </label>
 
                 <label className="block space-y-2">
                   <span className="text-sm font-medium">Ghi chú</span>
-                  <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
+                  <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Nhập ghi chú nếu cần" />
                 </label>
 
                 <div className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
@@ -279,7 +355,7 @@ export default function NewPersonFaceRegistrationPage() {
                   </div>
                   <Button onClick={submitRegistration} disabled={submitting}>
                     <Fingerprint className="h-4 w-4" />
-                    {submitting ? "Đang đăng ký..." : "Gửi đăng ký"}
+                    {submitting ? (processingRegistration ? "Đang chờ xử lý..." : "Đang đăng ký...") : "Gửi đăng ký"}
                   </Button>
                 </div>
               </CardContent>
@@ -292,11 +368,19 @@ export default function NewPersonFaceRegistrationPage() {
         <div
           className={`fixed bottom-5 right-5 z-[90] w-[min(420px,calc(100vw-2.5rem))] rounded-lg border bg-white p-4 shadow-xl transition-all duration-300 ${
             toastVisible ? "translate-x-0 opacity-100" : "translate-x-6 opacity-0"
-          } ${toast.variant === "danger" ? "border-red-200" : "border-emerald-200"}`}
+          } ${toast.variant === "danger" ? "border-red-200" : toast.variant === "info" ? "border-sky-200" : "border-emerald-200"}`}
         >
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
-              <div className={toast.variant === "danger" ? "font-semibold text-red-800" : "font-semibold text-emerald-800"}>
+              <div
+                className={
+                  toast.variant === "danger"
+                    ? "font-semibold text-red-800"
+                    : toast.variant === "info"
+                      ? "font-semibold text-sky-800"
+                      : "font-semibold text-emerald-800"
+                }
+              >
                 {toast.title}
               </div>
               <div className="mt-1 text-sm text-slate-600">{toast.description}</div>
@@ -314,4 +398,27 @@ export default function NewPersonFaceRegistrationPage() {
       ) : null}
     </div>
   );
+}
+
+function translateFailureReason(message: string) {
+  const normalized = message.trim();
+  const lowered = normalized.toLowerCase();
+
+  if (lowered.includes("multiple faces detected")) return "Ảnh có nhiều khuôn mặt. Vui lòng chọn ảnh chỉ có một người.";
+  if (lowered.includes("no face detected")) return "Không phát hiện được khuôn mặt trong ảnh. Vui lòng chọn ảnh rõ mặt hơn.";
+  if (lowered.includes("face too small")) return "Khuôn mặt trong ảnh quá nhỏ. Vui lòng chọn ảnh gần hơn.";
+  if (lowered.includes("blur")) return "Ảnh bị mờ. Vui lòng chọn ảnh rõ nét hơn.";
+  if (lowered.includes("low light")) return "Ảnh quá tối. Vui lòng chọn ảnh đủ sáng hơn.";
+  if (lowered.includes("spoof")) return "Hệ thống nghi ngờ ảnh không phải khuôn mặt thật hợp lệ.";
+  if (lowered.includes("embedding failed")) return "Hệ thống không tạo được đặc trưng khuôn mặt từ ảnh đã tải lên.";
+  if (lowered.includes("image is empty")) return "Ảnh tải lên bị trống.";
+  if (lowered.includes("too large")) return "Ảnh tải lên quá lớn.";
+  if (lowered.includes("unsupported image type")) return "Định dạng ảnh không được hỗ trợ. Vui lòng chọn JPG hoặc PNG.";
+  if (lowered.includes("timeout")) return "Hệ thống xử lý quá thời gian chờ.";
+  if (lowered.includes("person not found")) return "Không tìm thấy nhân sự để đăng ký khuôn mặt.";
+  if (lowered.includes("registration not found")) return "Không tìm thấy bản đăng ký khuôn mặt.";
+  if (lowered.includes("bucket name is required")) return "Thiếu thông tin bucket lưu ảnh.";
+  if (lowered.includes("request failed")) return "Yêu cầu thất bại. Vui lòng thử lại.";
+
+  return normalized;
 }

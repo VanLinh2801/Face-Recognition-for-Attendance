@@ -91,7 +91,8 @@ class SqlAlchemyFaceRegistrationRepository(FaceRegistrationRepository):
         item.validation_notes = validation_notes
         item.embedding_model = embedding_model
         item.embedding_version = embedding_version
-        item.face_image_media_asset_id = face_image_media_asset_id
+        if face_image_media_asset_id is not None:
+            item.face_image_media_asset_id = face_image_media_asset_id
         item.indexed_at = datetime.now(timezone.utc) if status == RegistrationStatus.INDEXED else item.indexed_at
         item.updated_at = datetime.now(timezone.utc)
         self._session.flush()
@@ -110,6 +111,8 @@ class SqlAlchemyFaceRegistrationRepository(FaceRegistrationRepository):
             return None
         if rejected:
             item.registration_status = RegistrationStatus.FAILED
+        else:
+            item.registration_status = RegistrationStatus.VALIDATED
         item.validation_notes = validation_notes
         if face_image_media_asset_id is not None:
             item.face_image_media_asset_id = face_image_media_asset_id

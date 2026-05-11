@@ -47,7 +47,7 @@ class _FakeIngestUseCase:
 
 
 class _FakeRegistrationValidationUseCase:
-    def __init__(self, status: RegistrationStatus = RegistrationStatus.PENDING, notes: str | None = "accepted") -> None:
+    def __init__(self, status: RegistrationStatus = RegistrationStatus.VALIDATED, notes: str | None = "accepted") -> None:
         self._status = status
         self._notes = notes
 
@@ -216,6 +216,7 @@ async def test_registration_input_validated_handler_publishes_business_realtime_
     assert len(bus.published) == 1
     assert bus.published[0].event_type == "registration_input.validated"
     assert bus.published[0].channel == RealtimeChannel.EVENTS_BUSINESS
+    assert bus.published[0].payload["registration_status"] == "validated"
 
 
 @pytest.mark.asyncio

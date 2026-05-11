@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from "react";
 
 interface WebRTCPlayerProps {
   url: string;
@@ -9,7 +9,7 @@ interface WebRTCPlayerProps {
 
 export function WebRTCPlayer({ url, className }: WebRTCPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const pcRef = useRef<any>(null); // Dùng any để tránh lỗi SSR type check
+  const pcRef = useRef<RTCPeerConnection | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -18,17 +18,15 @@ export function WebRTCPlayer({ url, className }: WebRTCPlayerProps) {
 
     async function start() {
       try {
-        // Khởi tạo PeerConnection
         const pc = new window.RTCPeerConnection({
-          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
         });
         pcRef.current = pc;
 
-        // Cấu hình nhận stream
-        pc.addTransceiver('video', { direction: 'recvonly' });
-        pc.addTransceiver('audio', { direction: 'recvonly' });
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.addTransceiver("audio", { direction: "recvonly" });
 
-        pc.ontrack = (event: any) => {
+        pc.ontrack = (event: RTCTrackEvent) => {
           if (videoRef.current && event.streams[0]) {
             videoRef.current.srcObject = event.streams[0];
           }
@@ -37,24 +35,23 @@ export function WebRTCPlayer({ url, className }: WebRTCPlayerProps) {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        // Signaling với MediaMTX
         const response = await fetch(url, {
-          method: 'POST',
+          method: "POST",
           body: pc.localDescription?.sdp,
-          headers: { 'Content-Type': 'application/sdp' }
+          headers: { "Content-Type": "application/sdp" },
         });
 
-        if (!response.ok) throw new Error('WebRTC signaling failed');
+        if (!response.ok) throw new Error("WebRTC signaling failed");
 
         const answerSdp = await response.text();
         if (isMounted) {
           await pc.setRemoteDescription({
-            type: 'answer',
+            type: "answer",
             sdp: answerSdp,
-          } as any);
+          });
         }
       } catch (err) {
-        console.error('WebRTC Playback Error:', err);
+        console.error("WebRTC Playback Error:", err);
       }
     }
 
@@ -62,9 +59,7 @@ export function WebRTCPlayer({ url, className }: WebRTCPlayerProps) {
 
     return () => {
       isMounted = false;
-      if (pcRef.current) {
-        pcRef.current.close();
-      }
+      pcRef.current?.close();
     };
   }, [url]);
 

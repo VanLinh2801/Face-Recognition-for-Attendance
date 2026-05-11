@@ -16,7 +16,8 @@ minio==7.2.11
 
 # ── AI / ML ────────────────────────────────────────────────────────────────
 insightface==0.7.3
+ml-dtypes==0.5.1
 onnxruntime==1.20.1      # CPU-only; swap for onnxruntime-gpu if GPU available
-numpy==1.26.4
+numpy==2.1.3
 Pillow==11.0.0
 opencv-python-headless==4.10.0.84   # required by insightface (no GUI)

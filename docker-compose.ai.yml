@@ -1,0 +1,83 @@
+services:
+  minio-init:
+    image: minio/mc:latest
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-attendance}
+      PIPELINE_MINIO_BUCKET: ${PIPELINE_MINIO_BUCKET:-face-recognition}
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "until mc alias set local http://minio:9000 $${MINIO_ACCESS_KEY} $${MINIO_SECRET_KEY}; do sleep 1; done && mc mb --ignore-existing local/$${MINIO_BUCKET} && mc mb --ignore-existing local/$${PIPELINE_MINIO_BUCKET}",
+      ]
+    depends_on:
+      minio:
+        condition: service_started
+    restart: "no"
+
+  ai-service:
+    build:
+      context: ./apps/ai_service
+      dockerfile: Dockerfile
+    env_file:
+      - ./apps/ai_service/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      REDIS_STREAM_PIPELINE_AI: pipeline_ai
+      REDIS_STREAM_AI_BACKEND: ai_backend
+      QDRANT_URL: http://qdrant:6333
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_SECURE: "false"
+      INSIGHTFACE_MODEL_DIR: /app/models/insightface
+      INSIGHTFACE_CTX_ID: -1
+      ANTI_SPOOF_MODEL_PATH: /app/models/anti_spoof/minifasnet.onnx
+      ONNX_EXECUTION_PROVIDER: CPUExecutionProvider
+    ports:
+      - "${AI_SERVICE_HOST_PORT:-8001}:8000"
+    volumes:
+      - ./apps/ai_service/models:/app/models
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+
+  pipeline:
+    build:
+      context: ./apps/pipeline
+      dockerfile: Dockerfile
+    env_file:
+      - ./apps/pipeline/.env
+    environment:
+      AI_SERVICE_URL: http://ai-service:8000
+      BACKEND_URL: http://host.docker.internal:8000
+      REDIS_URL: redis://redis:6379/0
+      STREAM_REGISTRATION_REQ: pipeline_backend
+      STREAM_VISION_PROCESS: pipeline_ai
+      STREAM_PIPELINE_EVENTS: pipeline.backend.events
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_SECURE: "false"
+      MINIO_BUCKET_NAME: ${PIPELINE_MINIO_BUCKET:-face-recognition}
+      CAMERA_SOURCES: rtsp://mediamtx:8554/mystream
+      SCRFD_MODEL_PATH: /app/app/models/scrfd_2.5g_bnkps.onnx
+    ports:
+      - "${PIPELINE_HOST_PORT:-8002}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      mediamtx:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully

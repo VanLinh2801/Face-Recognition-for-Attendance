@@ -4,14 +4,18 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 from os import getenv
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from dotenv import load_dotenv
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 database_url = getenv("DATABASE_URL")
 if database_url:

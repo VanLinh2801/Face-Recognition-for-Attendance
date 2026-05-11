@@ -18,5 +18,16 @@ class ObjectStorageGateway(Protocol):
         content_type: str,
     ) -> None: ...
 
+    def download_bytes(self, *, bucket_name: str, object_key: str) -> bytes: ...
+
+    def upload_bytes(
+        self,
+        *,
+        bucket_name: str,
+        object_key: str,
+        content: bytes,
+        content_type: str,
+    ) -> None: ...
+
     def delete_object(self, *, bucket_name: str, object_key: str) -> None: ...
     def presigned_get_object_url(self, *, bucket_name: str, object_key: str, expires_in: timedelta) -> str: ...

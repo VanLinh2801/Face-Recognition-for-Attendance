@@ -23,6 +23,10 @@ class Settings(BaseSettings):
 
     backend_host: str = Field(default="0.0.0.0", alias="BACKEND_HOST")
     backend_port: int = Field(default=8000, alias="BACKEND_PORT")
+    cors_allow_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        alias="CORS_ALLOW_ORIGINS",
+    )
 
     postgres_host: str = Field(default="postgres", alias="POSTGRES_HOST")
     postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
@@ -58,6 +62,7 @@ class Settings(BaseSettings):
     media_cleanup_interval_days: int = Field(default=1, alias="MEDIA_CLEANUP_INTERVAL_DAYS")
     media_cleanup_batch_size: int = Field(default=500, alias="MEDIA_CLEANUP_BATCH_SIZE")
     media_upload_max_bytes: int = Field(default=10 * 1024 * 1024, alias="MEDIA_UPLOAD_MAX_BYTES")
+    registration_upload_max_bytes: int = Field(default=10 * 1024 * 1024, alias="REGISTRATION_UPLOAD_MAX_BYTES")
 
     minio_endpoint: str = Field(default="minio:9000", alias="MINIO_ENDPOINT")
     minio_access_key: str = Field(default="minioadmin", alias="MINIO_ACCESS_KEY")
@@ -87,6 +92,10 @@ class Settings(BaseSettings):
             f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
 
 
 @lru_cache(maxsize=1)

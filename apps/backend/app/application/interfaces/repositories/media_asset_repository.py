@@ -39,6 +39,8 @@ class MediaAssetRepository(Protocol):
 
     def get_media_asset(self, media_asset_id: UUID) -> MediaAsset | None: ...
 
+    def get_media_asset_by_location(self, *, bucket_name: str, object_key: str) -> MediaAsset | None: ...
+
     def list_expired_assets(
         self,
         *,

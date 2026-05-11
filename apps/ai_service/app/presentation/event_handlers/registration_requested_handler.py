@@ -1,5 +1,6 @@
 import logging
 import uuid
+from typing import Any
 
 from app.application.use_cases.register_face import RegisterFaceUseCase
 from app.core.config import settings
@@ -15,7 +16,7 @@ class RegistrationRequestedHandler:
     Handles `registration.requested` events consumed from the pipeline_ai Redis Stream.
 
     Flow:
-        1. Download face image from MinIO
+        1. Download prepared face crop from MinIO
         2. Run RegisterFaceUseCase (embed + upsert Qdrant)
         3. Publish `registration_processing.completed` to ai_backend stream
            - status="indexed" on success
@@ -36,21 +37,42 @@ class RegistrationRequestedHandler:
         payload = event.get("payload", {})
         correlation_id = event.get("correlation_id") or str(uuid.uuid4())
 
-        person_id = payload["person_id"]
-        registration_id = payload["registration_id"]
-        media_asset = payload["source_media_asset"]
-
-        logger.info(
-            "registration.requested person_id=%s registration_id=%s",
-            person_id,
-            registration_id,
-        )
+        person_id = payload.get("person_id")
+        registration_id = payload.get("registration_id")
+        media_asset = payload.get("face_media_asset")
+        source_media_asset_id = payload.get("source_media_asset_id")
 
         try:
-            image_bytes = await self._minio.download(
-                bucket_name=media_asset["bucket_name"],
-                object_key=media_asset["object_key"],
+            person_id = self._require_text(payload, "person_id")
+            registration_id = self._require_text(payload, "registration_id")
+            media_asset = self._validate_face_media_asset(media_asset)
+
+            logger.info(
+                "registration.requested person_id=%s registration_id=%s face_object=%s",
+                person_id,
+                registration_id,
+                media_asset["object_key"],
             )
+
+            try:
+                image_bytes = await self._minio.download(
+                    bucket_name=media_asset["bucket_name"],
+                    object_key=media_asset["object_key"],
+                )
+            except Exception as exc:
+                raise RegistrationProcessingError(
+                    "FACE_IMAGE_DOWNLOAD_FAILED",
+                    (
+                        "Could not download face_media_asset "
+                        f"{media_asset['bucket_name']}/{media_asset['object_key']}: {exc}"
+                    ),
+                ) from exc
+
+            if not image_bytes:
+                raise RegistrationProcessingError(
+                    "FACE_IMAGE_EMPTY",
+                    "Downloaded face_media_asset is empty",
+                )
 
             face_input = FaceInput(
                 track_id=registration_id,  # registration_id serves as track_id here
@@ -66,12 +88,30 @@ class RegistrationRequestedHandler:
                 status="indexed",
                 result=result,
                 media_asset=media_asset,
-                source_media_asset_id=payload.get("source_media_asset_id"),
+                source_media_asset_id=source_media_asset_id,
                 correlation_id=correlation_id,
                 failure_code=None,
                 failure_message=None,
             )
 
+        except RegistrationProcessingError as exc:
+            logger.error(
+                "Registration failed person_id=%s registration_id=%s code=%s message=%s",
+                person_id,
+                registration_id,
+                exc.failure_code,
+                exc,
+                exc_info=True,
+            )
+            await self._publish_failed_if_possible(
+                person_id=person_id,
+                registration_id=registration_id,
+                media_asset=media_asset,
+                source_media_asset_id=source_media_asset_id,
+                correlation_id=correlation_id,
+                failure_code=exc.failure_code,
+                failure_message=str(exc),
+            )
         except Exception as exc:
             logger.error(
                 "Registration failed person_id=%s registration_id=%s: %s",
@@ -80,13 +120,11 @@ class RegistrationRequestedHandler:
                 exc,
                 exc_info=True,
             )
-            await self._publish_completed(
+            await self._publish_failed_if_possible(
                 person_id=person_id,
                 registration_id=registration_id,
-                status="failed",
-                result={},
                 media_asset=media_asset,
-                source_media_asset_id=payload.get("source_media_asset_id"),
+                source_media_asset_id=source_media_asset_id,
                 correlation_id=correlation_id,
                 failure_code="PROCESSING_ERROR",
                 failure_message=str(exc),
@@ -128,3 +166,78 @@ class RegistrationRequestedHandler:
             registration_id,
             status,
         )
+
+    async def _publish_failed_if_possible(
+        self,
+        *,
+        person_id,
+        registration_id,
+        media_asset,
+        source_media_asset_id,
+        correlation_id: str,
+        failure_code: str,
+        failure_message: str,
+    ) -> None:
+        if not isinstance(person_id, str) or not person_id.strip():
+            logger.error(
+                "Cannot publish registration failure without person_id: code=%s message=%s",
+                failure_code,
+                failure_message,
+            )
+            return
+        if not isinstance(registration_id, str) or not registration_id.strip():
+            logger.error(
+                "Cannot publish registration failure without registration_id: code=%s message=%s",
+                failure_code,
+                failure_message,
+            )
+            return
+
+        await self._publish_completed(
+            person_id=person_id,
+            registration_id=registration_id,
+            status="failed",
+            result={},
+            media_asset=media_asset if isinstance(media_asset, dict) else None,
+            source_media_asset_id=source_media_asset_id,
+            correlation_id=correlation_id,
+            failure_code=failure_code,
+            failure_message=failure_message,
+        )
+
+    @staticmethod
+    def _require_text(payload: dict, key: str) -> str:
+        value = payload.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise RegistrationProcessingError(
+                "INVALID_REGISTRATION_REQUEST",
+                f"registration.requested payload must include {key}",
+            )
+        return value
+
+    @staticmethod
+    def _validate_face_media_asset(value: Any) -> dict:
+        if not isinstance(value, dict):
+            raise RegistrationProcessingError(
+                "MISSING_FACE_MEDIA_ASSET",
+                "registration.requested payload must include face_media_asset",
+            )
+
+        missing_fields = [
+            field
+            for field in ("bucket_name", "object_key")
+            if not isinstance(value.get(field), str) or not value.get(field).strip()
+        ]
+        if missing_fields:
+            raise RegistrationProcessingError(
+                "INVALID_FACE_MEDIA_ASSET",
+                f"face_media_asset missing required field(s): {', '.join(missing_fields)}",
+            )
+
+        return value
+
+
+class RegistrationProcessingError(Exception):
+    def __init__(self, failure_code: str, message: str) -> None:
+        super().__init__(message)
+        self.failure_code = failure_code
