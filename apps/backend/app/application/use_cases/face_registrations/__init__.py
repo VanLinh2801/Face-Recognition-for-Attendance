@@ -48,7 +48,7 @@ class RegistrationInputValidatedCommand:
     prepared_face_media_asset: dict | None = None
 
 
-class cCreateFaceRegistrationUseCase:
+class CreateFaceRegistrationUseCase:
     def __init__(
         self,
         person_repository: PersonRepository,

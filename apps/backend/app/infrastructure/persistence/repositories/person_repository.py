@@ -60,6 +60,11 @@ class SqlAlchemyPersonRepository(PersonRepository):
             return None
         return to_person(item)
 
+    def exists(self, person_id: UUID) -> bool:
+        stmt = select(PersonModel.id).where(PersonModel.id == person_id)
+        result = self._session.execute(stmt).scalar_one_or_none()
+        return result is not None
+
     def list_persons_by_department_ids(
         self,
         *,

@@ -27,3 +27,4 @@ class RecognitionResult:
     decision: RecognitionDecision
     spoof_score: Optional[float] = None   # real-face probability [0, 1]
     match: Optional[MatchDetail] = None   # populated when decision == KNOWN or best candidate for UNKNOWN
+    detection_confidence: Optional[float] = None   # det_score from InsightFace [0, 1]

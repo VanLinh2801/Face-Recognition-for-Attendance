@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "packages/contracts/common/bbox.schema.json",
+  "type": "object",
+  "required": ["x", "y", "width", "height"],
+  "properties": {
+    "x": {
+      "type": "number",
+      "minimum": 0
+    },
+    "y": {
+      "type": "number",
+      "minimum": 0
+    },
+    "width": {
+      "type": "number",
+      "minimum": 0
+    },
+    "height": {
+      "type": "number",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false
+}

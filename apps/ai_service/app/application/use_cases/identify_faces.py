@@ -58,7 +58,12 @@ class IdentifyFacesUseCase:
 
         # ── Step 2: Embedding extraction ──────────────────────────────────
         embedding = await self._embedder.extract(face)
-        logger.debug("Embedding extracted track_id=%s model=%s", face.track_id, embedding.embedding_model)
+        logger.debug(
+            "Embedding extracted track_id=%s model=%s det_score=%.4f",
+            face.track_id,
+            embedding.embedding_model,
+            embedding.detection_confidence,
+        )
 
         # ── Step 3: Vector search ─────────────────────────────────────────
         results = await self._vector_store.search(
@@ -88,6 +93,7 @@ class IdentifyFacesUseCase:
                 decision=RecognitionDecision.KNOWN,
                 spoof_score=spoof_score,
                 match=best,
+                detection_confidence=embedding.detection_confidence,
             )
 
         logger.info(
@@ -100,4 +106,5 @@ class IdentifyFacesUseCase:
             decision=RecognitionDecision.UNKNOWN,
             spoof_score=spoof_score,
             match=best,  # nearest candidate for debugging
+            detection_confidence=embedding.detection_confidence,
         )

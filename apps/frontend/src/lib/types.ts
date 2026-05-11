@@ -161,3 +161,116 @@ export type DailySummary = {
   total_entries: number;
   total_exits: number;
 };
+
+// Overlay types for realtime bounding box
+export type BoundingBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type TrackingState = "new" | "tracking" | "lost";
+export type AnalysisStatus = "detected" | "spoof" | "low_quality" | "ignored";
+
+export type OverlayTrack = {
+  track_id: string;
+  bbox: BoundingBox;
+  tracking_state: TrackingState;
+  analysis_status: AnalysisStatus;
+  display_label?: string;
+};
+
+export type FrameOverlayPayload = {
+  stream_id: string;
+  frame_id: string;
+  frame_sequence: number;
+  captured_at: string;
+  presentation_ts_ms: number;
+  frame_width: number;
+  frame_height: number;
+  tracks: OverlayTrack[];
+};
+
+export type FrameOverlayEvent = {
+  channel: "stream.overlay";
+  event_type: "frame_analysis.updated";
+  occurred_at: string;
+  correlation_id: string | null;
+  dedupe_key: string | null;
+  payload: FrameOverlayPayload;
+  metadata: Record<string, unknown>;
+};
+
+export type WebSocketConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
+
+export type OverlayRenderBox = {
+  track_id: string;
+  left: string;
+  top: string;
+  width: string;
+  height: string;
+  color: string;
+  label: string;
+  tracking_state: TrackingState;
+  analysis_status: AnalysisStatus;
+  expiresAt: number;
+};
+
+// Recognition event với bbox cho overlay
+export type RealtimeRecognitionPayload = {
+  stream_id: string;
+  frame_id: string;
+  frame_sequence: number;
+  track_id: string;
+  person_id: string;
+  face_registration_id: string;
+  recognized_at: string;
+  event_direction: "entry" | "exit" | "unknown";
+  match_score: number;
+  spoof_score: number;
+  event_source: string;
+  dedupe_key: string;
+  snapshot_media_asset: Record<string, unknown> | null;
+  bbox: BoundingBox | null;
+  // Enriched by backend before WS push
+  full_name: string | null;
+  employee_code: string | null;
+};
+
+export type RealtimeUnknownPayload = {
+  stream_id: string;
+  frame_id: string;
+  frame_sequence: number;
+  track_id: string;
+  detected_at: string;
+  event_direction: "entry" | "exit" | "unknown";
+  match_score: number | null;
+  spoof_score: number;
+  event_source: string;
+  dedupe_key: string;
+  review_status: ReviewStatus;
+  notes: string | null;
+  snapshot_media_asset: Record<string, unknown> | null;
+  bbox: BoundingBox | null;
+};
+
+export type RecognitionOverlayEvent = {
+  channel: "events.business";
+  event_type: "recognition_event.detected";
+  occurred_at: string;
+  correlation_id: string;
+  dedupe_key: string | null;
+  payload: RealtimeRecognitionPayload;
+  metadata: Record<string, unknown>;
+};
+
+export type UnknownOverlayEvent = {
+  channel: "events.business";
+  event_type: "unknown_event.detected";
+  occurred_at: string;
+  correlation_id: string;
+  dedupe_key: string | null;
+  payload: RealtimeUnknownPayload;
+  metadata: Record<string, unknown>;
+};

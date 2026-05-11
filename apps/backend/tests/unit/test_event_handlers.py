@@ -14,7 +14,12 @@ from app.domain.shared.enums import RegistrationStatus
 from app.infrastructure.integrations.event_handlers import BackendEventHandlers
 
 
+# ─── Fake classes ────────────────────────────────────────────────────────────
+
 class _FakeSession:
+    def __init__(self, person_exists: bool = True) -> None:
+        self.person_exists = person_exists
+
     def __enter__(self):
         return self
 
@@ -24,10 +29,16 @@ class _FakeSession:
     def commit(self):
         return None
 
+    def get(self, _model, _id):
+        return None
+
 
 class _FakeSessionFactory:
+    def __init__(self, person_exists: bool = True) -> None:
+        self._person_exists = person_exists
+
     def __call__(self):
-        return _FakeSession()
+        return _FakeSession(person_exists=self._person_exists)
 
 
 class _FakeBus:
@@ -36,6 +47,18 @@ class _FakeBus:
 
     async def publish(self, envelope):
         self.published.append(envelope)
+
+
+class _FakePersonRepository:
+    def __init__(self, exists_result: bool = True, get_result=None) -> None:
+        self._exists_result = exists_result
+        self._get_result = get_result
+
+    def exists(self, _person_id) -> bool:
+        return self._exists_result
+
+    def get_person(self, _person_id):
+        return self._get_result
 
 
 class _FakeIngestUseCase:
@@ -88,67 +111,239 @@ class _FakeRegistrationCompletedUseCase:
         )
 
 
-def _build_ingest_container(use_case_builder_name: str, status: IngestStatus):
+# ─── Test fixtures ─────────────────────────────────────────────────────────────
+
+def _make_container(
+    *,
+    person_exists: bool = True,
+    recognition_status: IngestStatus = IngestStatus.PROCESSED,
+    unknown_status: IngestStatus = IngestStatus.PROCESSED,
+):
     bus = _FakeBus()
-    container = SimpleNamespace(
-        session_factory=_FakeSessionFactory(),
+    person_repo = _FakePersonRepository(
+        exists_result=person_exists,
+        get_result=None,
+    )
+
+    def create_person_repository(_session):
+        return person_repo
+
+    return SimpleNamespace(
+        session_factory=_FakeSessionFactory(person_exists=person_exists),
         create_uow=lambda _session: object(),
         realtime_event_bus=bus,
-        **{use_case_builder_name: lambda _session, _uow: _FakeIngestUseCase(status)},
-    )
-    return container, bus
+        create_person_repository=create_person_repository,
+        build_ingest_recognition_event_use_case=lambda _session, _uow: _FakeIngestUseCase(recognition_status),
+        build_ingest_unknown_event_use_case=lambda _session, _uow: _FakeIngestUseCase(unknown_status),
+        build_ingest_spoof_alert_event_use_case=lambda _session, _uow: _FakeIngestUseCase(IngestStatus.PROCESSED),
+    ), bus, person_repo
 
+
+def _make_minimal_container():
+    bus = _FakeBus()
+    return SimpleNamespace(
+        session_factory=_FakeSessionFactory(),
+        realtime_event_bus=bus,
+    ), bus
+
+
+# ─── Tests: recognition_event handler with person validation ─────────────────
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("builder_name", "handler_name", "event_type"),
-    [
-        ("build_ingest_recognition_event_use_case", "handle_recognition_event", "recognition_event.detected"),
-        ("build_ingest_unknown_event_use_case", "handle_unknown_event", "unknown_event.detected"),
-        ("build_ingest_spoof_alert_event_use_case", "handle_spoof_alert", "spoof_alert.detected"),
-    ],
-)
-@pytest.mark.parametrize("status", [IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED])
-async def test_business_event_handlers_publish_only_when_processed(
-    builder_name: str,
-    handler_name: str,
-    event_type: str,
-    status: IngestStatus,
-) -> None:
-    container, bus = _build_ingest_container(builder_name, status)
-    handler = getattr(BackendEventHandlers(container), handler_name)
+async def test_recognition_event_persisted_when_person_exists():
+    container, bus, _ = _make_container(person_exists=True, recognition_status=IngestStatus.PROCESSED)
+    handler = BackendEventHandlers(container)
 
-    should_ack = await handler(
+    result = await handler.handle_recognition_event(
         {
-            "event_name": event_type,
+            "event_name": "recognition_event.detected",
             "message_id": "m-1",
             "correlation_id": "c-1",
-            "producer": "ai_service" if event_type != "spoof_alert.detected" else "pipeline",
+            "producer": "ai_service",
             "occurred_at": "2026-05-06T00:00:00Z",
-            "payload": {"dedupe_key": "d-1"},
+            "payload": {
+                "person_id": str(uuid4()),
+                "dedupe_key": "d-1",
+                "recognized_at": "2026-05-06T00:00:00Z",
+                "face_registration_id": str(uuid4()),
+                "event_direction": "entry",
+                "event_source": "ai_service",
+            },
         },
         {},
     )
 
-    assert should_ack is True
-    assert len(bus.published) == (1 if status == IngestStatus.PROCESSED else 0)
+    assert result is True
+    assert len(bus.published) == 1
+    assert bus.published[0].event_type == "recognition_event.detected"
 
 
 @pytest.mark.asyncio
-async def test_frame_analysis_handler_relays_overlay_channel() -> None:
-    bus = _FakeBus()
-    handler = BackendEventHandlers(
-        SimpleNamespace(
-            session_factory=_FakeSessionFactory(),
-            realtime_event_bus=bus,
-        )
+async def test_recognition_event_converted_to_unknown_when_person_not_found():
+    container, bus, _ = _make_container(person_exists=False, unknown_status=IngestStatus.PROCESSED)
+    handler = BackendEventHandlers(container)
+
+    result = await handler.handle_recognition_event(
+        {
+            "event_name": "recognition_event.detected",
+            "message_id": "m-2",
+            "correlation_id": "c-2",
+            "producer": "ai_service",
+            "occurred_at": "2026-05-06T00:00:00Z",
+            "payload": {
+                "person_id": str(uuid4()),
+                "dedupe_key": "d-2",
+                "detected_at": "2026-05-06T00:00:00Z",
+                "event_direction": "unknown",
+                "event_source": "ai_service",
+                "review_status": "new",
+            },
+        },
+        {},
     )
+
+    assert result is True
+    assert len(bus.published) == 1
+    assert bus.published[0].event_type == "unknown_event.detected"
+
+
+@pytest.mark.asyncio
+async def test_recognition_event_converted_to_unknown_when_person_id_invalid():
+    container, bus, _ = _make_container(person_exists=False, unknown_status=IngestStatus.PROCESSED)
+    handler = BackendEventHandlers(container)
+
+    result = await handler.handle_recognition_event(
+        {
+            "event_name": "recognition_event.detected",
+            "message_id": "m-3",
+            "correlation_id": "c-3",
+            "producer": "ai_service",
+            "occurred_at": "2026-05-06T00:00:00Z",
+            "payload": {
+                "person_id": "not-a-uuid",
+                "dedupe_key": "d-3",
+                "detected_at": "2026-05-06T00:00:00Z",
+                "event_direction": "unknown",
+                "event_source": "ai_service",
+                "review_status": "new",
+            },
+        },
+        {},
+    )
+
+    assert result is True
+    assert len(bus.published) == 1
+    assert bus.published[0].event_type == "unknown_event.detected"
+
+
+@pytest.mark.asyncio
+async def test_recognition_event_no_publish_when_duplicated():
+    container, bus, _ = _make_container(person_exists=True, recognition_status=IngestStatus.DUPLICATE)
+    handler = BackendEventHandlers(container)
+
+    result = await handler.handle_recognition_event(
+        {
+            "event_name": "recognition_event.detected",
+            "message_id": "m-4",
+            "correlation_id": "c-4",
+            "producer": "ai_service",
+            "occurred_at": "2026-05-06T00:00:00Z",
+            "payload": {
+                "person_id": str(uuid4()),
+                "dedupe_key": "d-4",
+                "recognized_at": "2026-05-06T00:00:00Z",
+                "face_registration_id": str(uuid4()),
+                "event_direction": "entry",
+                "event_source": "ai_service",
+            },
+        },
+        {},
+    )
+
+    assert result is True
+    assert len(bus.published) == 0
+
+
+# ─── Tests: other event handlers ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_unknown_event_handler_publishes_when_processed():
+    container, bus = _make_minimal_container()
+    container.build_ingest_unknown_event_use_case = lambda _s, _u: _FakeIngestUseCase(IngestStatus.PROCESSED)
+    handler = BackendEventHandlers(container)
+
+    result = await handler.handle_unknown_event(
+        {
+            "event_name": "unknown_event.detected",
+            "message_id": "m-u1",
+            "correlation_id": "c-u1",
+            "producer": "ai_service",
+            "occurred_at": "2026-05-06T00:00:00Z",
+            "payload": {"dedupe_key": "d-u1", "detected_at": "2026-05-06T00:00:00Z", "event_direction": "unknown", "event_source": "ai_service", "review_status": "new"},
+        },
+        {},
+    )
+
+    assert result is True
+    assert len(bus.published) == 1
+    assert bus.published[0].event_type == "unknown_event.detected"
+
+
+@pytest.mark.asyncio
+async def test_unknown_event_handler_no_publish_when_duplicated():
+    container, bus = _make_minimal_container()
+    container.build_ingest_unknown_event_use_case = lambda _s, _u: _FakeIngestUseCase(IngestStatus.DUPLICATE)
+    handler = BackendEventHandlers(container)
+
+    result = await handler.handle_unknown_event(
+        {
+            "event_name": "unknown_event.detected",
+            "message_id": "m-u2",
+            "correlation_id": "c-u2",
+            "producer": "ai_service",
+            "occurred_at": "2026-05-06T00:00:00Z",
+            "payload": {"dedupe_key": "d-u2", "detected_at": "2026-05-06T00:00:00Z", "event_direction": "unknown", "event_source": "ai_service", "review_status": "new"},
+        },
+        {},
+    )
+
+    assert result is True
+    assert len(bus.published) == 0
+
+
+@pytest.mark.asyncio
+async def test_spoof_alert_handler_publishes_when_processed():
+    container, bus = _make_minimal_container()
+    container.build_ingest_spoof_alert_event_use_case = lambda _s, _u: _FakeIngestUseCase(IngestStatus.PROCESSED)
+    handler = BackendEventHandlers(container)
+
+    result = await handler.handle_spoof_alert(
+        {
+            "event_name": "spoof_alert.detected",
+            "message_id": "m-s1",
+            "correlation_id": "c-s1",
+            "producer": "pipeline",
+            "occurred_at": "2026-05-06T00:00:00Z",
+            "payload": {"dedupe_key": "d-s1", "detected_at": "2026-05-06T00:00:00Z", "event_source": "pipeline", "severity": "high", "review_status": "new"},
+        },
+        {},
+    )
+
+    assert result is True
+    assert len(bus.published) == 1
+    assert bus.published[0].event_type == "spoof_alert.detected"
+
+
+@pytest.mark.asyncio
+async def test_frame_analysis_handler_relays_overlay_channel():
+    container, bus = _make_minimal_container()
+    handler = BackendEventHandlers(container)
 
     await handler.handle_frame_analysis_updated(
         {
             "event_name": "frame_analysis.updated",
-            "message_id": "m-2",
-            "correlation_id": "c-2",
+            "message_id": "m-1",
+            "correlation_id": "c-1",
             "producer": "pipeline",
             "occurred_at": "2026-05-06T00:00:00Z",
             "payload": {"stream_id": "default", "tracks": []},
@@ -162,20 +357,15 @@ async def test_frame_analysis_handler_relays_overlay_channel() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stream_health_handler_relays_health_channel() -> None:
-    bus = _FakeBus()
-    handler = BackendEventHandlers(
-        SimpleNamespace(
-            session_factory=_FakeSessionFactory(),
-            realtime_event_bus=bus,
-        )
-    )
+async def test_stream_health_handler_relays_health_channel():
+    container, bus = _make_minimal_container()
+    handler = BackendEventHandlers(container)
 
     await handler.handle_stream_health_updated(
         {
             "event_name": "stream.health.updated",
-            "message_id": "m-3",
-            "correlation_id": "c-3",
+            "message_id": "m-2",
+            "correlation_id": "c-2",
             "producer": "pipeline",
             "occurred_at": "2026-05-06T00:00:00Z",
             "payload": {"status": "ok"},
@@ -189,13 +379,9 @@ async def test_stream_health_handler_relays_health_channel() -> None:
 
 
 @pytest.mark.asyncio
-async def test_registration_input_validated_handler_publishes_business_realtime_event() -> None:
-    bus = _FakeBus()
-    container = SimpleNamespace(
-        session_factory=_FakeSessionFactory(),
-        realtime_event_bus=bus,
-        build_apply_registration_input_validation_use_case=lambda _session: _FakeRegistrationValidationUseCase(),
-    )
+async def test_registration_input_validated_handler_publishes_business_realtime_event():
+    container, bus = _make_minimal_container()
+    container.build_apply_registration_input_validation_use_case = lambda _s: _FakeRegistrationValidationUseCase()
     handler = BackendEventHandlers(container)
 
     await handler.handle_registration_input_validated(
@@ -220,13 +406,9 @@ async def test_registration_input_validated_handler_publishes_business_realtime_
 
 
 @pytest.mark.asyncio
-async def test_registration_processing_completed_handler_publishes_business_realtime_event() -> None:
-    bus = _FakeBus()
-    container = SimpleNamespace(
-        session_factory=_FakeSessionFactory(),
-        realtime_event_bus=bus,
-        build_complete_face_registration_use_case=lambda _session: _FakeRegistrationCompletedUseCase(),
-    )
+async def test_registration_processing_completed_handler_publishes_business_realtime_event():
+    container, bus = _make_minimal_container()
+    container.build_complete_face_registration_use_case = lambda _s: _FakeRegistrationCompletedUseCase()
     handler = BackendEventHandlers(container)
 
     await handler.handle_registration_processing_completed(
@@ -249,14 +431,10 @@ async def test_registration_processing_completed_handler_publishes_business_real
 
 
 @pytest.mark.asyncio
-async def test_registration_input_validated_handler_rejects_missing_required_fields() -> None:
-    handler = BackendEventHandlers(
-        SimpleNamespace(
-            session_factory=_FakeSessionFactory(),
-            realtime_event_bus=_FakeBus(),
-            build_apply_registration_input_validation_use_case=lambda _session: _FakeRegistrationValidationUseCase(),
-        )
-    )
+async def test_registration_input_validated_handler_rejects_missing_required_fields():
+    container, bus = _make_minimal_container()
+    container.build_apply_registration_input_validation_use_case = lambda _s: _FakeRegistrationValidationUseCase()
+    handler = BackendEventHandlers(container)
 
     with pytest.raises(ValidationError):
         await handler.handle_registration_input_validated(
@@ -272,14 +450,10 @@ async def test_registration_input_validated_handler_rejects_missing_required_fie
 
 
 @pytest.mark.asyncio
-async def test_registration_processing_completed_handler_rejects_missing_required_fields() -> None:
-    handler = BackendEventHandlers(
-        SimpleNamespace(
-            session_factory=_FakeSessionFactory(),
-            realtime_event_bus=_FakeBus(),
-            build_complete_face_registration_use_case=lambda _session: _FakeRegistrationCompletedUseCase(),
-        )
-    )
+async def test_registration_processing_completed_handler_rejects_missing_required_fields():
+    container, bus = _make_minimal_container()
+    container.build_complete_face_registration_use_case = lambda _s: _FakeRegistrationCompletedUseCase()
+    handler = BackendEventHandlers(container)
 
     with pytest.raises(ValidationError):
         await handler.handle_registration_processing_completed(

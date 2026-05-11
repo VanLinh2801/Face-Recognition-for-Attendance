@@ -42,6 +42,8 @@ class RecognitionRequestedHandler:
         frame_id = payload.get("frame_id", "unknown")
         frame_sequence = payload.get("frame_sequence", 0)
         captured_at = payload.get("captured_at")
+        frame_width = payload.get("frame_width")
+        frame_height = payload.get("frame_height")
         faces = payload.get("faces", [])
 
         logger.info(
@@ -89,6 +91,16 @@ class RecognitionRequestedHandler:
                 else:
                     bbox = None
 
+                # Store bbox for publishing in event
+                bbox_for_event = None
+                if bbox:
+                    bbox_for_event = {
+                        "x": bbox.x,
+                        "y": bbox.y,
+                        "width": bbox.width,
+                        "height": bbox.height
+                    }
+
                 face_input = FaceInput(
                     track_id=track_id,
                     image_data=image_bytes,
@@ -121,6 +133,9 @@ class RecognitionRequestedHandler:
                         dedupe_key=dedupe_key,
                         correlation_id=correlation_id,
                         snapshot_media_asset=media_asset,
+                        bbox=bbox_for_event,
+                        frame_width=frame_width,
+                        frame_height=frame_height,
                     )
                 else:  # UNKNOWN
                     await self._publish_unknown(
@@ -133,6 +148,9 @@ class RecognitionRequestedHandler:
                         dedupe_key=dedupe_key,
                         correlation_id=correlation_id,
                         snapshot_media_asset=media_asset,
+                        bbox=bbox_for_event,
+                        frame_width=frame_width,
+                        frame_height=frame_height,
                     )
 
             except Exception as exc:
@@ -142,7 +160,8 @@ class RecognitionRequestedHandler:
 
     async def _publish_recognition(
         self, stream_id, frame_id, frame_sequence, track_id,
-        result, dedupe_key, correlation_id, snapshot_media_asset,
+        result, dedupe_key, correlation_id, snapshot_media_asset, bbox,
+        frame_width, frame_height,
     ) -> None:
         envelope = self._publisher.build_envelope(
             event_name="recognition_event.detected",
@@ -151,6 +170,8 @@ class RecognitionRequestedHandler:
                 "stream_id": stream_id,
                 "frame_id": frame_id,
                 "frame_sequence": frame_sequence,
+                "frame_width": frame_width,
+                "frame_height": frame_height,
                 "track_id": track_id,
                 "person_id": result.match.person_id,
                 "face_registration_id": result.match.face_registration_id,
@@ -158,23 +179,27 @@ class RecognitionRequestedHandler:
                 "event_direction": "unknown",  # direction is determined by pipeline context
                 "match_score": result.match.match_score,
                 "spoof_score": result.spoof_score,
+                "detection_confidence": result.detection_confidence,
                 "event_source": "ai_service",
                 "dedupe_key": dedupe_key,
                 "snapshot_media_asset": snapshot_media_asset,
                 "raw_payload": None,
+                "bbox": bbox,
             },
         )
         await self._publisher.publish(settings.REDIS_STREAM_AI_BACKEND, envelope)
         logger.info(
-            "Published recognition_event.detected person_id=%s track_id=%s score=%.4f",
+            "Published recognition_event.detected person_id=%s track_id=%s score=%.4f det_conf=%.4f",
             result.match.person_id,
             track_id,
             result.match.match_score,
+            result.detection_confidence,
         )
 
     async def _publish_unknown(
         self, stream_id, frame_id, frame_sequence, track_id,
-        detected_at, result, dedupe_key, correlation_id, snapshot_media_asset,
+        detected_at, result, dedupe_key, correlation_id, snapshot_media_asset, bbox,
+        frame_width, frame_height,
     ) -> None:
         nearest_score = result.match.match_score if result.match else None
         envelope = self._publisher.build_envelope(
@@ -184,17 +209,21 @@ class RecognitionRequestedHandler:
                 "stream_id": stream_id,
                 "frame_id": frame_id,
                 "frame_sequence": frame_sequence,
+                "frame_width": frame_width,
+                "frame_height": frame_height,
                 "track_id": track_id,
                 "detected_at": detected_at,
                 "event_direction": "unknown",
                 "match_score": nearest_score,
                 "spoof_score": result.spoof_score,
+                "detection_confidence": result.detection_confidence,
                 "event_source": "ai_service",
                 "dedupe_key": dedupe_key,
                 "review_status": "new",
                 "notes": None,
                 "snapshot_media_asset": snapshot_media_asset,
                 "raw_payload": None,
+                "bbox": bbox,
             },
         )
         await self._publisher.publish(settings.REDIS_STREAM_AI_BACKEND, envelope)
