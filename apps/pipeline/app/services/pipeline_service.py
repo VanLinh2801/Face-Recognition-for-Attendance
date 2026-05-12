@@ -291,6 +291,7 @@ class PipelineService:
                         "track_id": face['track_id'],
                         "face_media_asset": context.get('full_frame_ref'),
                         "bbox": bbox,
+                        "kpss": face.get('kpss'),
                         "detection_confidence": float(face['score']),
                         "cropped_face_b64": face['image_b64'],
                         "full_frame_b64": base64.b64encode(cv2.imencode('.jpg', context['frame'])[1]).decode('utf-8') if settings.DEBUG else None,

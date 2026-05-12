@@ -49,6 +49,29 @@ class InsightFaceEmbedder(IFaceEmbedder):
         def _infer() -> np.ndarray:
             img = Image.open(io.BytesIO(face.image_data)).convert("RGB")
             img_array = np.array(img)[:, :, ::-1]  # RGB → BGR cho InsightFace
+            
+            # Sử dụng kpss từ pipeline nếu có để bỏ qua bước nhận diện lần 2
+            if face.kpss is not None and len(face.kpss) == 5:
+                from insightface.utils import face_align
+                kpss_np = np.array(face.kpss, dtype=np.float32)
+                # Tự crop thẳng mặt ra 112x112 cho ArcFace
+                aimg = face_align.norm_crop(img_array, kpss_np)
+                
+                # Trích xuất vector đặc trưng luôn
+                feat = self._app.models['recognition'].get_feat(aimg)
+                # feat có thể là danh sách nếu đưa vào list ảnh, nhưng ở đây đưa 1 ảnh
+                vector = feat[0] if isinstance(feat, list) else feat
+                vector = np.array(vector).flatten()
+                
+                det_score = face.detection_confidence or 1.0
+                logger.debug(
+                    "InsightFace fast alignment track_id=%s det_score=%.4f",
+                    face.track_id,
+                    det_score
+                )
+                return vector, det_score
+
+            # Chạy Fallback (Nếu kpss không có hoặc bị thiếu)
             faces = self._app.get(img_array)
             if not faces:
                 raise ValueError(

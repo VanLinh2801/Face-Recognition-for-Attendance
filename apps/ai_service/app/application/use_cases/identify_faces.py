@@ -48,13 +48,14 @@ class IdentifyFacesUseCase:
 
         if spoof_score < settings.SPOOF_THRESHOLD:
             logger.warning(
-                "Spoof detected track_id=%s spoof_score=%.4f", face.track_id, spoof_score
+                "Spoof detected track_id=%s spoof_score=%.4f (BYPASSED)", face.track_id, spoof_score
             )
-            return RecognitionResult(
-                track_id=face.track_id,
-                decision=RecognitionDecision.SPOOFED,
-                spoof_score=spoof_score,
-            )
+            # Tạm thời comment theo yêu cầu để bỏ qua Anti-Spoofing
+            # return RecognitionResult(
+            #     track_id=face.track_id,
+            #     decision=RecognitionDecision.SPOOFED,
+            #     spoof_score=spoof_score,
+            # )
 
         # ── Step 2: Embedding extraction ──────────────────────────────────
         embedding = await self._embedder.extract(face)
