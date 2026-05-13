@@ -177,6 +177,13 @@ def _get_snapshot_info(payload: dict) -> dict | None:
     }
 
 
+def _extract_snapshot_media_asset_id(payload: dict) -> UUID | None:
+    asset_id_str = payload.get("snapshot_media_asset_id")
+    if asset_id_str:
+        return _as_uuid(asset_id_str, "snapshot_media_asset_id")
+    return None
+
+
 class IngestRecognitionEventUseCase:
     def __init__(
         self,
@@ -251,7 +258,10 @@ class IngestRecognitionEventUseCase:
             recognition = self._recognition_repository.create_recognition_event(
                 person_id=person_id,
                 face_registration_id=_as_uuid(_required_str(payload, "face_registration_id"), "face_registration_id"),
-                snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload),
+                snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload) or self._snapshot_asset_resolver.resolve(
+                    payload=payload,
+                    asset_type=MediaAssetType.RECOGNITION_SNAPSHOT,
+                ),
                 recognized_at=recognized_at,
                 event_direction=EventDirection(_required_str(payload, "event_direction")),
                 match_score=payload.get("match_score"),
@@ -324,8 +334,14 @@ class IngestUnknownEventUseCase:
                 self._uow.commit()
                 return IngestResult(status=IngestStatus.DUPLICATE, reason="dedupe_key")
 
-            self._unknown_repository.create_unknown_event(
-                snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload),
+            snapshot_info = _get_snapshot_info(payload)
+            snapshot_media_asset_id = _extract_snapshot_media_asset_id(payload)
+
+            unknown_event = self._unknown_repository.create_unknown_event(
+                snapshot_media_asset_id=snapshot_media_asset_id or self._snapshot_asset_resolver.resolve(
+                    payload=payload,
+                    asset_type=MediaAssetType.UNKNOWN_SNAPSHOT,
+                ),
                 detected_at=_as_datetime(_required_str(payload, "detected_at"), "detected_at"),
                 event_direction=EventDirection(_required_str(payload, "event_direction")),
                 match_score=payload.get("match_score"),
@@ -435,7 +451,10 @@ class IngestSpoofAlertEventUseCase:
 
             spoof_event = self._spoof_repository.create_spoof_alert_event(
                 person_id=person_id,
-                snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload),
+                snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload) or self._snapshot_asset_resolver.resolve(
+                    payload=payload,
+                    asset_type=MediaAssetType.SPOOF_SNAPSHOT,
+                ),
                 detected_at=detected_at,
                 spoof_score=float(payload["spoof_score"]),
                 event_source=_required_str(payload, "event_source"),
