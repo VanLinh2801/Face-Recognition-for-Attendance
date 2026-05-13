@@ -127,7 +127,6 @@ export default function EventsPage() {
         onFromTimeChange={handleFromTimeChange}
         onToTimeChange={handleToTimeChange}
         onPageChange={setCurrentPage}
-        onRefresh={loadEvents}
       />
     </div>
   );

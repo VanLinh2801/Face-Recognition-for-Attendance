@@ -284,6 +284,8 @@ class Container:
         return IngestRecognitionEventUseCase(
             uow=uow,
             recognition_repository=SqlAlchemyRecognitionEventRepository(session),
+            media_asset_repository=SqlAlchemyMediaAssetRepository(session),
+            storage_gateway=self.build_object_storage_gateway(),
             inbox_repository=SqlAlchemyEventInboxRepository(session),
             throttle_window_seconds=self.settings.throttle_business_seconds,
         )
@@ -296,6 +298,8 @@ class Container:
         return IngestUnknownEventUseCase(
             uow=uow,
             unknown_repository=SqlAlchemyUnknownEventRepository(session),
+            media_asset_repository=SqlAlchemyMediaAssetRepository(session),
+            storage_gateway=self.build_object_storage_gateway(),
             inbox_repository=SqlAlchemyEventInboxRepository(session),
         )
 
@@ -307,6 +311,8 @@ class Container:
         return IngestSpoofAlertEventUseCase(
             uow=uow,
             spoof_repository=SqlAlchemySpoofAlertEventRepository(session),
+            media_asset_repository=SqlAlchemyMediaAssetRepository(session),
+            storage_gateway=self.build_object_storage_gateway(),
             inbox_repository=SqlAlchemyEventInboxRepository(session),
             throttle_window_seconds=self.settings.throttle_business_seconds,
         )

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Building2, CalendarSearch, ChevronLeft, ChevronRight, Clock, Eye, ImageIcon, Loader2, Printer, Search, Users, UserX, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { AttendanceEvent, Department, PageResult, Person } from "@/lib/types";
 import { ApiError, apiFetch } from "@/lib/api-client";
+import { getAccessToken } from "@/lib/auth-client";
 import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { useOutsideClick } from "@/lib/use-outside-click";
 import { formatTime } from "@/lib/utils";
@@ -563,7 +564,47 @@ function SnapshotPanel({
   title: string;
   event: AttendanceEvent | null;
 }) {
-  const imageUrl = event?.snapshot_media_asset_id ? `/api/v1/media-assets/${event.snapshot_media_asset_id}/content` : null;
+  const assetId = event?.snapshot_media_asset_id ?? null;
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(Boolean(assetId));
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!previewUrl) return;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  useEffect(() => {
+    if (!assetId) return;
+    const token = getAccessToken();
+    if (!token) return;
+
+    const controller = new AbortController();
+
+    async function load() {
+      try {
+        const response = await fetch(`/api/v1/media-assets/${assetId}/content`, {
+          headers: { authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        if (controller.signal.aborted) return;
+        setPreviewUrl((current) => {
+          if (current) URL.revokeObjectURL(current);
+          return URL.createObjectURL(blob);
+        });
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setError(err instanceof Error ? err.message : "Không tải được ảnh.");
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => controller.abort();
+  }, [assetId]);
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
@@ -575,11 +616,18 @@ function SnapshotPanel({
         <span className="font-mono text-xs text-slate-500">{event ? formatTime(event.recognized_at) : "N/A"}</span>
       </div>
 
-      {imageUrl ? (
+      {loading ? (
+        <div className="grid aspect-video place-items-center p-6 text-center text-sm text-slate-500">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Đang tải ảnh...
+          </div>
+        </div>
+      ) : previewUrl ? (
         <div>
           <div className="relative aspect-video bg-slate-100">
             <img
-              src={imageUrl}
+              src={previewUrl}
               alt={title}
               className="h-full w-full object-cover"
             />
@@ -587,7 +635,7 @@ function SnapshotPanel({
         </div>
       ) : (
         <div className="grid aspect-video place-items-center p-6 text-center text-sm text-slate-500">
-          Chưa có snapshot cho lần xuất hiện này.
+          {error ?? (assetId ? "Không tải được ảnh." : "Chưa có snapshot cho lần xuất hiện này.")}
         </div>
       )}
     </div>
