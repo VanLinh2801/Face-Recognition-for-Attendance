@@ -6,9 +6,9 @@ import {
   CalendarSearch,
   ChevronLeft,
   ChevronRight,
-  Copy,
+  ChevronsLeft,
+  ChevronsRight,
   Eye,
-  FileJson,
   ImageIcon,
   Loader2,
   Radio,
@@ -17,14 +17,14 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DirectionBadge, ReviewStatusBadge, SeverityBadge } from "@/components/data/status-badge";
+import { DirectionBadge } from "@/components/data/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input, Select, Textarea } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { getAccessToken } from "@/lib/auth-client";
-import type { EventFeedItem, EventFeedType, MediaAsset, ReviewStatus, UpdateEventReviewRequest } from "@/lib/types";
+import type { EventFeedItem, EventFeedType, MediaAsset } from "@/lib/types";
 import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { useOutsideClick } from "@/lib/use-outside-click";
 import { formatDateTime, percent } from "@/lib/utils";
@@ -40,6 +40,9 @@ const typeMeta = {
 
 export function EventsReviewCenter({
   rows,
+  total,
+  currentPage,
+  pageSize,
   loading,
   error,
   activeType,
@@ -50,9 +53,12 @@ export function EventsReviewCenter({
   onQueryChange,
   onFromTimeChange,
   onToTimeChange,
-  onRefresh,
+  onPageChange,
 }: {
   rows: EventFeedItem[];
+  total: number;
+  currentPage: number;
+  pageSize: number;
   loading: boolean;
   error: string;
   activeType: EventType;
@@ -63,7 +69,7 @@ export function EventsReviewCenter({
   onQueryChange: (value: string) => void;
   onFromTimeChange: (value: string) => void;
   onToTimeChange: (value: string) => void;
-  onRefresh: (signal?: AbortSignal) => Promise<void>;
+  onPageChange: (value: number) => void;
 }) {
   const [selectedEventKey, setSelectedEventKey] = useState<EventKey | null>(null);
 
@@ -74,6 +80,12 @@ export function EventsReviewCenter({
 
   const eventDialog = useDialogTransition(selectedEvent);
   const visibleEvent = eventDialog.value;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * pageSize;
+  const pageRangeStart = total === 0 ? 0 : pageStartIndex + 1;
+  const pageRangeEnd = Math.min(pageStartIndex + rows.length, total);
+  const paginationPages = getVisiblePageNumbers(safeCurrentPage, totalPages);
 
   const counts = {
     recognition: rows.filter((row) => row.type === "recognition").length,
@@ -174,7 +186,7 @@ export function EventsReviewCenter({
                   const meta = typeMeta[row.type];
                   return (
                     <tr key={toEventKey(row)} className="border-b border-slate-100">
-                      <td className="py-3 font-mono text-xs text-slate-500">{index + 1}</td>
+                      <td className="py-3 font-mono text-xs text-slate-500">{pageStartIndex + index + 1}</td>
                       <td>
                         <Badge variant={meta.badge}>{meta.label}</Badge>
                       </td>
@@ -207,17 +219,73 @@ export function EventsReviewCenter({
               No events match the current filters.
             </div>
           ) : null}
-          <div className="mt-4 text-sm text-slate-500">{rows.length} events</div>
+          <div className="mt-4 flex flex-col gap-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+            <span>Hiển thị {pageRangeStart}-{pageRangeEnd}/{total} sự kiện</span>
+            <div className="flex flex-wrap items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safeCurrentPage <= 1}
+                onClick={() => onPageChange(1)}
+                aria-label="Về trang đầu"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safeCurrentPage <= 1}
+                onClick={() => onPageChange(Math.max(1, safeCurrentPage - 1))}
+                aria-label="Lùi một trang"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {paginationPages.map((page) => (
+                <Button
+                  key={page}
+                  variant={page === safeCurrentPage ? "default" : "outline"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => onPageChange(page)}
+                  aria-label={`Đi tới trang ${page}`}
+                  aria-current={page === safeCurrentPage ? "page" : undefined}
+                >
+                  {page}
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safeCurrentPage >= totalPages}
+                onClick={() => onPageChange(Math.min(totalPages, safeCurrentPage + 1))}
+                aria-label="Tiến một trang"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safeCurrentPage >= totalPages}
+                onClick={() => onPageChange(totalPages)}
+                aria-label="Tới trang cuối"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       {visibleEvent ? (
         <EventDetailDrawer
-          key={getEventRevisionKey(visibleEvent)}
+          key={toEventKey(visibleEvent)}
           event={visibleEvent}
           visible={eventDialog.visible}
           onClose={() => setSelectedEventKey(null)}
-          onRefresh={onRefresh}
         />
       ) : null}
     </div>
@@ -335,25 +403,17 @@ function EventDetailDrawer({
   event,
   visible,
   onClose,
-  onRefresh,
 }: {
   event: EventFeedItem;
   visible: boolean;
   onClose: () => void;
-  onRefresh: (signal?: AbortSignal) => Promise<void>;
 }) {
   const meta = typeMeta[event.type];
   const Icon = meta.icon;
-  const initialNotes = getEventNotes(event);
   const [mediaAsset, setMediaAsset] = useState<MediaAsset | null>(null);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
   const [mediaLoading, setMediaLoading] = useState(Boolean(event.snapshot_media_asset_id));
   const [mediaError, setMediaError] = useState<string | null>(null);
-  const [reviewStatus, setReviewStatus] = useState<ReviewStatus>(event.review_status ?? "new");
-  const [reviewNotes, setReviewNotes] = useState(initialNotes);
-  const [reviewSaving, setReviewSaving] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
-  const [reviewSuccess, setReviewSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!mediaPreviewUrl) return;
@@ -409,69 +469,6 @@ function EventDetailDrawer({
 
     return () => controller.abort();
   }, [event.snapshot_media_asset_id]);
-
-  const detailJson = JSON.stringify(
-    {
-      id: event.id,
-      type: event.type,
-      occurred_at: event.occurred_at,
-      person_id: event.person_id,
-      direction: event.direction,
-      score: event.score,
-      spoof_score: event.spoof_score,
-      source: event.source,
-      status: event.status,
-      severity: event.severity,
-      review_status: event.review_status,
-      metadata: event.metadata,
-      raw_payload: event.raw_payload,
-    },
-    null,
-    2,
-  );
-
-  async function handleReviewSubmit() {
-    if (event.type === "recognition") return;
-
-    setReviewSaving(true);
-    setReviewError(null);
-    setReviewSuccess(null);
-
-    const payload: UpdateEventReviewRequest = {
-      review_status: reviewStatus,
-      notes: reviewNotes.trim() ? reviewNotes.trim() : null,
-    };
-
-    try {
-      if (event.type === "unknown") {
-        await apiFetch(`/unknown-events/${event.id}`, {
-          method: "PATCH",
-          withAuth: true,
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await apiFetch(`/spoof-alert-events/${event.id}`, {
-          method: "PATCH",
-          withAuth: true,
-          body: JSON.stringify(payload),
-        });
-      }
-      await onRefresh();
-      setReviewSuccess("Review updated.");
-    } catch (err) {
-      setReviewError(err instanceof ApiError ? err.message : "Failed to update review.");
-    } finally {
-      setReviewSaving(false);
-    }
-  }
-
-  async function handleCopyJson() {
-    try {
-      await navigator.clipboard.writeText(detailJson);
-    } catch {
-      setReviewError("Failed to copy raw payload.");
-    }
-  }
 
   return (
     <div className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
@@ -546,54 +543,6 @@ function EventDetailDrawer({
                 <DetailItem label="Score" value={percent(event.score)} />
                 <DetailItem label="Spoof score" value={percent(event.spoof_score)} />
               </section>
-
-              {event.type !== "recognition" ? (
-                <section className="rounded-lg border border-slate-200 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div className="font-medium">Review</div>
-                    <div className="flex items-center gap-2">
-                      <ReviewStatusBadge status={reviewStatus} />
-                      {event.severity ? <SeverityBadge severity={event.severity} /> : null}
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="space-y-1">
-                      <span className="text-xs font-medium text-slate-500">Review status</span>
-                      <Select value={reviewStatus} onChange={(changeEvent) => setReviewStatus(changeEvent.target.value as ReviewStatus)} disabled={reviewSaving}>
-                        <option value="new">new</option>
-                        <option value="reviewed">reviewed</option>
-                        <option value="ignored">ignored</option>
-                      </Select>
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-xs font-medium text-slate-500">Notes</span>
-                      <Textarea value={reviewNotes} onChange={(changeEvent) => setReviewNotes(changeEvent.target.value)} disabled={reviewSaving} />
-                    </label>
-                    {reviewError ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{reviewError}</div> : null}
-                    {reviewSuccess ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{reviewSuccess}</div> : null}
-                    <div className="flex justify-end">
-                      <Button onClick={() => void handleReviewSubmit()} disabled={reviewSaving}>
-                        {reviewSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                        Save review
-                      </Button>
-                    </div>
-                  </div>
-                </section>
-              ) : null}
-
-              <section className="rounded-lg border border-slate-200 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 font-medium">
-                    <FileJson className="h-4 w-4 text-slate-500" />
-                    Raw payload
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => void handleCopyJson()}>
-                    <Copy className="h-4 w-4" />
-                    Copy
-                  </Button>
-                </div>
-                <pre className="max-h-80 overflow-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">{detailJson}</pre>
-              </section>
             </div>
           </div>
         </div>
@@ -625,14 +574,6 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 
 function toEventKey(event: Pick<EventFeedItem, "type" | "id">): EventKey {
   return `${event.type}:${event.id}`;
-}
-
-function getEventRevisionKey(event: EventFeedItem) {
-  return `${toEventKey(event)}:${event.review_status ?? ""}:${getEventNotes(event)}`;
-}
-
-function getEventNotes(event: EventFeedItem) {
-  return typeof event.metadata.notes === "string" ? event.metadata.notes : "";
 }
 
 function datePart(value: string) {
@@ -680,4 +621,25 @@ function formatDateTimeInputLabel(value: string) {
     year: "numeric",
     timeZone: "UTC",
   })} ${timePart(value)}`;
+}
+
+function getVisiblePageNumbers(currentPage: number, totalPages: number) {
+  const maxVisiblePages = 5;
+  if (totalPages <= maxVisiblePages) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const halfWindow = Math.floor(maxVisiblePages / 2);
+  let startPage = currentPage - halfWindow;
+  let endPage = currentPage + halfWindow;
+
+  if (startPage < 1) {
+    startPage = 1;
+    endPage = maxVisiblePages;
+  } else if (endPage > totalPages) {
+    endPage = totalPages;
+    startPage = totalPages - maxVisiblePages + 1;
+  }
+
+  return Array.from({ length: endPage - startPage + 1 }, (_, index) => startPage + index);
 }

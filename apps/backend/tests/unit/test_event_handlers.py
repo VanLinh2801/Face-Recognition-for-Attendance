@@ -64,8 +64,10 @@ class _FakePersonRepository:
 class _FakeIngestUseCase:
     def __init__(self, status: IngestStatus) -> None:
         self._status = status
+        self.last_envelope = None
 
     def execute(self, _envelope):
+        self.last_envelope = _envelope
         return IngestResult(status=self._status)
 
 
@@ -124,6 +126,8 @@ def _make_container(
         exists_result=person_exists,
         get_result=None,
     )
+    recognition_use_case = _FakeIngestUseCase(recognition_status)
+    unknown_use_case = _FakeIngestUseCase(unknown_status)
 
     def create_person_repository(_session):
         return person_repo
@@ -133,16 +137,17 @@ def _make_container(
         create_uow=lambda _session: object(),
         realtime_event_bus=bus,
         create_person_repository=create_person_repository,
-        build_ingest_recognition_event_use_case=lambda _session, _uow: _FakeIngestUseCase(recognition_status),
-        build_ingest_unknown_event_use_case=lambda _session, _uow: _FakeIngestUseCase(unknown_status),
+        build_ingest_recognition_event_use_case=lambda _session, _uow: recognition_use_case,
+        build_ingest_unknown_event_use_case=lambda _session, _uow: unknown_use_case,
         build_ingest_spoof_alert_event_use_case=lambda _session, _uow: _FakeIngestUseCase(IngestStatus.PROCESSED),
-    ), bus, person_repo
+    ), bus, person_repo, recognition_use_case, unknown_use_case
 
 
 def _make_minimal_container():
     bus = _FakeBus()
     return SimpleNamespace(
         session_factory=_FakeSessionFactory(),
+        create_uow=lambda _session: object(),
         realtime_event_bus=bus,
     ), bus
 
@@ -151,7 +156,7 @@ def _make_minimal_container():
 
 @pytest.mark.asyncio
 async def test_recognition_event_persisted_when_person_exists():
-    container, bus, _ = _make_container(person_exists=True, recognition_status=IngestStatus.PROCESSED)
+    container, bus, _, _, _ = _make_container(person_exists=True, recognition_status=IngestStatus.PROCESSED)
     handler = BackendEventHandlers(container)
 
     result = await handler.handle_recognition_event(
@@ -180,7 +185,10 @@ async def test_recognition_event_persisted_when_person_exists():
 
 @pytest.mark.asyncio
 async def test_recognition_event_converted_to_unknown_when_person_not_found():
-    container, bus, _ = _make_container(person_exists=False, unknown_status=IngestStatus.PROCESSED)
+    container, bus, _, _, unknown_use_case = _make_container(
+        person_exists=False,
+        unknown_status=IngestStatus.PROCESSED,
+    )
     handler = BackendEventHandlers(container)
 
     result = await handler.handle_recognition_event(
@@ -193,10 +201,14 @@ async def test_recognition_event_converted_to_unknown_when_person_not_found():
             "payload": {
                 "person_id": str(uuid4()),
                 "dedupe_key": "d-2",
-                "detected_at": "2026-05-06T00:00:00Z",
+                "recognized_at": "2026-05-06T00:00:00Z",
+                "stream_id": "default",
+                "frame_id": "frame-1",
+                "frame_sequence": 1,
+                "track_id": "track-1",
                 "event_direction": "unknown",
                 "event_source": "ai_service",
-                "review_status": "new",
+                "face_registration_id": str(uuid4()),
             },
         },
         {},
@@ -205,11 +217,17 @@ async def test_recognition_event_converted_to_unknown_when_person_not_found():
     assert result is True
     assert len(bus.published) == 1
     assert bus.published[0].event_type == "unknown_event.detected"
+    assert unknown_use_case.last_envelope["event_name"] == "unknown_event.detected"
+    assert unknown_use_case.last_envelope["payload"]["detected_at"] == "2026-05-06T00:00:00Z"
+    assert unknown_use_case.last_envelope["payload"]["review_status"] == "new"
 
 
 @pytest.mark.asyncio
 async def test_recognition_event_converted_to_unknown_when_person_id_invalid():
-    container, bus, _ = _make_container(person_exists=False, unknown_status=IngestStatus.PROCESSED)
+    container, bus, _, _, unknown_use_case = _make_container(
+        person_exists=False,
+        unknown_status=IngestStatus.PROCESSED,
+    )
     handler = BackendEventHandlers(container)
 
     result = await handler.handle_recognition_event(
@@ -222,10 +240,14 @@ async def test_recognition_event_converted_to_unknown_when_person_id_invalid():
             "payload": {
                 "person_id": "not-a-uuid",
                 "dedupe_key": "d-3",
-                "detected_at": "2026-05-06T00:00:00Z",
+                "recognized_at": "2026-05-06T00:00:00Z",
+                "stream_id": "default",
+                "frame_id": "frame-2",
+                "frame_sequence": 2,
+                "track_id": "track-2",
                 "event_direction": "unknown",
                 "event_source": "ai_service",
-                "review_status": "new",
+                "face_registration_id": str(uuid4()),
             },
         },
         {},
@@ -234,11 +256,13 @@ async def test_recognition_event_converted_to_unknown_when_person_id_invalid():
     assert result is True
     assert len(bus.published) == 1
     assert bus.published[0].event_type == "unknown_event.detected"
+    assert unknown_use_case.last_envelope["event_name"] == "unknown_event.detected"
+    assert unknown_use_case.last_envelope["payload"]["track_id"] == "track-2"
 
 
 @pytest.mark.asyncio
 async def test_recognition_event_no_publish_when_duplicated():
-    container, bus, _ = _make_container(person_exists=True, recognition_status=IngestStatus.DUPLICATE)
+    container, bus, _, _, _ = _make_container(person_exists=True, recognition_status=IngestStatus.DUPLICATE)
     handler = BackendEventHandlers(container)
 
     result = await handler.handle_recognition_event(

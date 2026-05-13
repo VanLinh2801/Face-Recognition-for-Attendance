@@ -8,11 +8,13 @@ import { ApiError, apiFetch } from "@/lib/api-client";
 import { getAccessToken } from "@/lib/auth-client";
 import type { EventFeedItem, EventFeedListResponse, EventFeedType } from "@/lib/types";
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 10;
 
 export default function EventsPage() {
   const router = useRouter();
   const [rows, setRows] = useState<EventFeedItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeType, setActiveType] = useState<"all" | EventFeedType>("all");
@@ -23,7 +25,7 @@ export default function EventsPage() {
 
   const requestPath = useMemo(() => {
     const params = new URLSearchParams({
-      page: "1",
+      page: String(currentPage),
       page_size: String(PAGE_SIZE),
       type: activeType,
     });
@@ -37,7 +39,7 @@ export default function EventsPage() {
     }
 
     return `/events?${params.toString()}`;
-  }, [activeType, deferredQuery, fromTime, toTime]);
+  }, [activeType, currentPage, deferredQuery, fromTime, toTime]);
 
   const loadEvents = useCallback(
     async (signal?: AbortSignal) => {
@@ -55,9 +57,11 @@ export default function EventsPage() {
         });
         if (signal?.aborted) return;
         setRows(response.items);
+        setTotal(response.total);
       } catch (err) {
         if (signal?.aborted) return;
         setRows([]);
+        setTotal(0);
         setError(err instanceof ApiError ? err.message : "Failed to load events.");
       } finally {
         if (!signal?.aborted) {
@@ -67,6 +71,26 @@ export default function EventsPage() {
     },
     [requestPath],
   );
+
+  function handleTypeChange(value: "all" | EventFeedType) {
+    setActiveType(value);
+    setCurrentPage(1);
+  }
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    setCurrentPage(1);
+  }
+
+  function handleFromTimeChange(value: string) {
+    setFromTime(value);
+    setCurrentPage(1);
+  }
+
+  function handleToTimeChange(value: string) {
+    setToTime(value);
+    setCurrentPage(1);
+  }
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -89,16 +113,20 @@ export default function EventsPage() {
       <PageHeader title="Sự kiện" description="Review recognition, unknown, and spoof alerts from one backend-driven feed." />
       <EventsReviewCenter
         rows={rows}
+        total={total}
+        currentPage={currentPage}
+        pageSize={PAGE_SIZE}
         loading={loading}
         error={error}
         activeType={activeType}
         query={query}
         fromTime={fromTime}
         toTime={toTime}
-        onTypeChange={setActiveType}
-        onQueryChange={setQuery}
-        onFromTimeChange={setFromTime}
-        onToTimeChange={setToTime}
+        onTypeChange={handleTypeChange}
+        onQueryChange={handleQueryChange}
+        onFromTimeChange={handleFromTimeChange}
+        onToTimeChange={handleToTimeChange}
+        onPageChange={setCurrentPage}
         onRefresh={loadEvents}
       />
     </div>

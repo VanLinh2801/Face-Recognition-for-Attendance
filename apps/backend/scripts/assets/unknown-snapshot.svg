@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#111827" />
+  <rect x="48" y="48" width="544" height="264" rx="24" fill="#f8fafc" />
+  <circle cx="230" cy="156" r="50" fill="#334155" />
+  <path d="M174 252c14-39 48-62 104-62 55 0 89 23 104 62" fill="#334155" />
+  <rect x="374" y="108" width="154" height="32" rx="8" fill="#f59e0b" />
+  <rect x="374" y="158" width="170" height="18" rx="8" fill="#cbd5e1" />
+  <rect x="374" y="190" width="128" height="18" rx="8" fill="#cbd5e1" />
+  <text x="70" y="92" fill="#0f172a" font-family="Arial, sans-serif" font-size="28" font-weight="700">Unknown Snapshot</text>
+  <text x="392" y="130" fill="#78350f" font-family="Arial, sans-serif" font-size="16" font-weight="700">REVIEW NEEDED</text>
+</svg>

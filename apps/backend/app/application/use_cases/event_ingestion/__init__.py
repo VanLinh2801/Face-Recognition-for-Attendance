@@ -5,15 +5,30 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+import logging
+from mimetypes import guess_type
+from pathlib import PurePosixPath
+import time
 from uuid import UUID
 
 from app.application.interfaces.repositories.event_inbox_repository import EventInboxRepository
+from app.application.interfaces.repositories.media_asset_repository import MediaAssetRepository
 from app.application.interfaces.repositories.recognition_event_repository import RecognitionEventRepository
 from app.application.interfaces.repositories.spoof_alert_event_repository import SpoofAlertEventRepository
 from app.application.interfaces.repositories.unknown_event_repository import UnknownEventRepository
+from app.application.interfaces.storage_gateway import ObjectStorageGateway
 from app.application.interfaces.unit_of_work import UnitOfWork
 from app.core.exceptions import ValidationError
-from app.domain.shared.enums import EventDirection, SpoofReviewStatus, SpoofSeverity, UnknownEventReviewStatus
+from app.domain.shared.enums import (
+    EventDirection,
+    MediaAssetType,
+    SpoofReviewStatus,
+    SpoofSeverity,
+    StorageProvider,
+    UnknownEventReviewStatus,
+)
+
+LOGGER = logging.getLogger(__name__)
 
 
 class IngestStatus(StrEnum):
@@ -26,6 +41,87 @@ class IngestStatus(StrEnum):
 class IngestResult:
     status: IngestStatus
     reason: str | None = None
+
+
+@dataclass(slots=True)
+class _SnapshotLocation:
+    bucket_name: str
+    object_key: str
+
+
+class _EventSnapshotAssetResolver:
+    def __init__(
+        self,
+        *,
+        media_asset_repository: MediaAssetRepository,
+        storage_gateway: ObjectStorageGateway,
+        max_attempts: int = 5,
+        retry_delay_seconds: float = 0.2,
+    ) -> None:
+        self._media_asset_repository = media_asset_repository
+        self._storage_gateway = storage_gateway
+        self._max_attempts = max_attempts
+        self._retry_delay_seconds = retry_delay_seconds
+
+    def resolve(self, *, payload: dict, asset_type: MediaAssetType) -> UUID | None:
+        location = _extract_snapshot_media_asset_location(payload)
+        if location is None:
+            return None
+
+        existing = self._media_asset_repository.get_media_asset_by_location(
+            bucket_name=location.bucket_name,
+            object_key=location.object_key,
+        )
+        if existing is not None:
+            return existing.id
+
+        last_error: Exception | None = None
+        for attempt in range(self._max_attempts):
+            try:
+                stat = self._storage_gateway.stat_object(
+                    bucket_name=location.bucket_name,
+                    object_key=location.object_key,
+                )
+            except Exception as exc:  # pragma: no cover - concrete errors vary by storage driver
+                last_error = exc
+                if attempt + 1 < self._max_attempts:
+                    time.sleep(self._retry_delay_seconds)
+                    continue
+                LOGGER.warning(
+                    "Snapshot media asset unavailable during event ingestion bucket=%s key=%s error=%s",
+                    location.bucket_name,
+                    location.object_key,
+                    exc,
+                )
+                return None
+
+            existing = self._media_asset_repository.get_media_asset_by_location(
+                bucket_name=location.bucket_name,
+                object_key=location.object_key,
+            )
+            if existing is not None:
+                return existing.id
+
+            created = self._media_asset_repository.create_media_asset(
+                storage_provider=StorageProvider.MINIO.value,
+                bucket_name=location.bucket_name,
+                object_key=location.object_key,
+                original_filename=PurePosixPath(location.object_key).name or "snapshot",
+                mime_type=stat.content_type or _guess_content_type(location.object_key),
+                file_size=stat.size,
+                checksum=None,
+                asset_type=asset_type.value,
+                uploaded_by_person_id=None,
+            )
+            return created.id
+
+        if last_error is not None:
+            LOGGER.warning(
+                "Snapshot media asset resolution exhausted without persistence bucket=%s key=%s",
+                location.bucket_name,
+                location.object_key,
+            )
+        return None
 
 
 def _required_str(payload: dict, key: str) -> str:
@@ -49,17 +145,22 @@ def _as_datetime(value: str, key: str) -> datetime:
         raise ValidationError(f"Invalid datetime field: {key}") from exc
 
 
-def _extract_snapshot_media_asset_id(payload: dict) -> UUID | None:
+def _extract_snapshot_media_asset_location(payload: dict) -> _SnapshotLocation | None:
     media_asset = payload.get("snapshot_media_asset")
     if not isinstance(media_asset, dict):
         return None
-    media_asset_id = media_asset.get("media_asset_id")
-    if not isinstance(media_asset_id, str) or not media_asset_id:
+    bucket_name = media_asset.get("bucket_name")
+    object_key = media_asset.get("object_key")
+    if not isinstance(bucket_name, str) or not bucket_name.strip():
         return None
-    try:
-        return UUID(media_asset_id)
-    except ValueError:
+    if not isinstance(object_key, str) or not object_key.strip():
         return None
+    return _SnapshotLocation(bucket_name=bucket_name, object_key=object_key)
+
+
+def _guess_content_type(object_key: str) -> str:
+    guessed, _encoding = guess_type(object_key)
+    return guessed or "application/octet-stream"
 
 
 class IngestRecognitionEventUseCase:
@@ -68,6 +169,8 @@ class IngestRecognitionEventUseCase:
         *,
         uow: UnitOfWork,
         recognition_repository: RecognitionEventRepository,
+        media_asset_repository: MediaAssetRepository,
+        storage_gateway: ObjectStorageGateway,
         inbox_repository: EventInboxRepository,
         throttle_window_seconds: int = 30,
     ) -> None:
@@ -75,6 +178,10 @@ class IngestRecognitionEventUseCase:
         self._recognition_repository = recognition_repository
         self._inbox_repository = inbox_repository
         self._throttle_window_seconds = throttle_window_seconds
+        self._snapshot_asset_resolver = _EventSnapshotAssetResolver(
+            media_asset_repository=media_asset_repository,
+            storage_gateway=storage_gateway,
+        )
 
     def execute(self, envelope: dict) -> IngestResult:
         message_id = _as_uuid(_required_str(envelope, "message_id"), "message_id")
@@ -127,7 +234,10 @@ class IngestRecognitionEventUseCase:
             self._recognition_repository.create_recognition_event(
                 person_id=person_id,
                 face_registration_id=_as_uuid(_required_str(payload, "face_registration_id"), "face_registration_id"),
-                snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload),
+                snapshot_media_asset_id=self._snapshot_asset_resolver.resolve(
+                    payload=payload,
+                    asset_type=MediaAssetType.RECOGNITION_SNAPSHOT,
+                ),
                 recognized_at=recognized_at,
                 event_direction=EventDirection(_required_str(payload, "event_direction")),
                 match_score=payload.get("match_score"),
@@ -154,11 +264,17 @@ class IngestUnknownEventUseCase:
         *,
         uow: UnitOfWork,
         unknown_repository: UnknownEventRepository,
+        media_asset_repository: MediaAssetRepository,
+        storage_gateway: ObjectStorageGateway,
         inbox_repository: EventInboxRepository,
     ) -> None:
         self._uow = uow
         self._unknown_repository = unknown_repository
         self._inbox_repository = inbox_repository
+        self._snapshot_asset_resolver = _EventSnapshotAssetResolver(
+            media_asset_repository=media_asset_repository,
+            storage_gateway=storage_gateway,
+        )
 
     def execute(self, envelope: dict) -> IngestResult:
         message_id = _as_uuid(_required_str(envelope, "message_id"), "message_id")
@@ -182,7 +298,10 @@ class IngestUnknownEventUseCase:
                 return IngestResult(status=IngestStatus.DUPLICATE, reason="dedupe_key")
 
             self._unknown_repository.create_unknown_event(
-                snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload),
+                snapshot_media_asset_id=self._snapshot_asset_resolver.resolve(
+                    payload=payload,
+                    asset_type=MediaAssetType.UNKNOWN_SNAPSHOT,
+                ),
                 detected_at=_as_datetime(_required_str(payload, "detected_at"), "detected_at"),
                 event_direction=EventDirection(_required_str(payload, "event_direction")),
                 match_score=payload.get("match_score"),
@@ -211,6 +330,8 @@ class IngestSpoofAlertEventUseCase:
         *,
         uow: UnitOfWork,
         spoof_repository: SpoofAlertEventRepository,
+        media_asset_repository: MediaAssetRepository,
+        storage_gateway: ObjectStorageGateway,
         inbox_repository: EventInboxRepository,
         throttle_window_seconds: int = 30,
     ) -> None:
@@ -218,6 +339,10 @@ class IngestSpoofAlertEventUseCase:
         self._spoof_repository = spoof_repository
         self._inbox_repository = inbox_repository
         self._throttle_window_seconds = throttle_window_seconds
+        self._snapshot_asset_resolver = _EventSnapshotAssetResolver(
+            media_asset_repository=media_asset_repository,
+            storage_gateway=storage_gateway,
+        )
 
     def execute(self, envelope: dict) -> IngestResult:
         message_id = _as_uuid(_required_str(envelope, "message_id"), "message_id")
@@ -271,7 +396,10 @@ class IngestSpoofAlertEventUseCase:
 
             self._spoof_repository.create_spoof_alert_event(
                 person_id=person_id,
-                snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload),
+                snapshot_media_asset_id=self._snapshot_asset_resolver.resolve(
+                    payload=payload,
+                    asset_type=MediaAssetType.SPOOF_SNAPSHOT,
+                ),
                 detected_at=detected_at,
                 spoof_score=float(payload["spoof_score"]),
                 event_source=_required_str(payload, "event_source"),

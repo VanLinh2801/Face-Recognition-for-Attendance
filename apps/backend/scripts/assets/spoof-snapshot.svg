@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#1f2937" />
+  <rect x="48" y="48" width="544" height="264" rx="24" fill="#fff1f2" />
+  <circle cx="226" cy="154" r="50" fill="#4b5563" />
+  <path d="M170 248c16-40 50-62 106-62 56 0 90 22 106 62" fill="#4b5563" />
+  <rect x="372" y="104" width="154" height="34" rx="8" fill="#ef4444" />
+  <rect x="372" y="156" width="182" height="18" rx="8" fill="#fda4af" />
+  <rect x="372" y="188" width="144" height="18" rx="8" fill="#fda4af" />
+  <text x="70" y="92" fill="#4c0519" font-family="Arial, sans-serif" font-size="28" font-weight="700">Spoof Snapshot</text>
+  <text x="402" y="126" fill="#7f1d1d" font-family="Arial, sans-serif" font-size="16" font-weight="700">HIGH RISK</text>
+</svg>

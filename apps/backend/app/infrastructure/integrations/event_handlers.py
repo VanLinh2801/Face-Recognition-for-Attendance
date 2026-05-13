@@ -53,13 +53,22 @@ class BackendEventHandlers:
                         )
                         # Convert to unknown event by calling handle_unknown_event logic inline
                         unknown_use_case = self._container.build_ingest_unknown_event_use_case(session, uow)
-                        unknown_result = unknown_use_case.execute(envelope)
+                        unknown_envelope = self._build_unknown_fallback_envelope(envelope)
+                        unknown_result = unknown_use_case.execute(unknown_envelope)
                         logger.info(
                             "ingest unknown (fallback) result=%s message_id=%s dedupe_key=%s",
                             unknown_result.status,
                             envelope.get("message_id"),
                             raw_payload.get("dedupe_key"),
                         )
+                        if unknown_result.status == IngestStatus.PROCESSED:
+                            await self._container.realtime_event_bus.publish(
+                                self._to_realtime_envelope(
+                                    channel=RealtimeChannel.EVENTS_BUSINESS,
+                                    event_type="unknown_event.detected",
+                                    envelope=unknown_envelope,
+                                )
+                            )
                         return unknown_result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
                 except (ValueError, Exception) as exc:
                     logger.error(
@@ -68,13 +77,22 @@ class BackendEventHandlers:
                         exc,
                     )
                     unknown_use_case = self._container.build_ingest_unknown_event_use_case(session, uow)
-                    unknown_result = unknown_use_case.execute(envelope)
+                    unknown_envelope = self._build_unknown_fallback_envelope(envelope)
+                    unknown_result = unknown_use_case.execute(unknown_envelope)
                     logger.info(
                         "ingest unknown (fallback) result=%s message_id=%s dedupe_key=%s",
                         unknown_result.status,
                         envelope.get("message_id"),
                         raw_payload.get("dedupe_key"),
                     )
+                    if unknown_result.status == IngestStatus.PROCESSED:
+                        await self._container.realtime_event_bus.publish(
+                            self._to_realtime_envelope(
+                                channel=RealtimeChannel.EVENTS_BUSINESS,
+                                event_type="unknown_event.detected",
+                                envelope=unknown_envelope,
+                            )
+                        )
                     return unknown_result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
 
             result = use_case.execute(envelope)
@@ -323,6 +341,40 @@ class BackendEventHandlers:
         pieces = [payload.get("validation_notes"), payload.get("failure_code"), payload.get("failure_message")]
         text_parts = [str(item).strip() for item in pieces if isinstance(item, str) and item.strip()]
         return " | ".join(text_parts) if text_parts else None
+
+    @staticmethod
+    def _build_unknown_fallback_envelope(envelope: dict[str, Any]) -> dict[str, Any]:
+        payload = envelope.get("payload") if isinstance(envelope.get("payload"), dict) else {}
+        recognized_at = payload.get("recognized_at")
+        occurred_at = envelope.get("occurred_at")
+        detected_at = recognized_at if isinstance(recognized_at, str) and recognized_at.strip() else occurred_at
+
+        unknown_payload: dict[str, Any] = {
+            "stream_id": payload.get("stream_id"),
+            "frame_id": payload.get("frame_id"),
+            "frame_sequence": payload.get("frame_sequence"),
+            "track_id": payload.get("track_id"),
+            "detected_at": detected_at,
+            "event_direction": payload.get("event_direction", "unknown"),
+            "match_score": payload.get("match_score"),
+            "spoof_score": payload.get("spoof_score"),
+            "detection_confidence": payload.get("detection_confidence"),
+            "event_source": payload.get("event_source", "ai_service"),
+            "dedupe_key": payload.get("dedupe_key"),
+            "review_status": payload.get("review_status", "new"),
+            "notes": payload.get("notes"),
+            "snapshot_media_asset": payload.get("snapshot_media_asset"),
+            "raw_payload": payload.get("raw_payload"),
+            "bbox": payload.get("bbox"),
+            "frame_width": payload.get("frame_width"),
+            "frame_height": payload.get("frame_height"),
+        }
+
+        return {
+            **envelope,
+            "event_name": "unknown_event.detected",
+            "payload": unknown_payload,
+        }
 
     @staticmethod
     def _serialize_registration(registration: PersonFaceRegistration) -> dict[str, Any]:

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#0f172a" />
+  <rect x="48" y="48" width="544" height="264" rx="24" fill="#e2e8f0" />
+  <circle cx="240" cy="164" r="54" fill="#1e293b" />
+  <path d="M182 258c20-44 58-68 114-68 54 0 92 24 112 68" fill="#1e293b" />
+  <rect x="388" y="114" width="126" height="30" rx="8" fill="#22c55e" />
+  <rect x="388" y="160" width="168" height="18" rx="8" fill="#94a3b8" />
+  <rect x="388" y="192" width="118" height="18" rx="8" fill="#94a3b8" />
+  <text x="70" y="92" fill="#0f172a" font-family="Arial, sans-serif" font-size="28" font-weight="700">Recognition Snapshot</text>
+  <text x="388" y="135" fill="#052e16" font-family="Arial, sans-serif" font-size="16" font-weight="700">MATCH 98%</text>
+</svg>
