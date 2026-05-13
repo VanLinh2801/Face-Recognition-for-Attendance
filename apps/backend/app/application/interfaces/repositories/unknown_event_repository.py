@@ -30,6 +30,8 @@ class UnknownEventRepository(Protocol):
         limit: int,
     ) -> list[UnknownEvent]: ...
 
+    def get_by_id(self, event_id: UUID) -> UnknownEvent | None: ...
+
     def get_by_dedupe_key(self, dedupe_key: str) -> UnknownEvent | None: ...
 
     def create_unknown_event(
@@ -46,3 +48,13 @@ class UnknownEventRepository(Protocol):
         notes: str | None,
         raw_payload: dict | None,
     ) -> UnknownEvent: ...
+
+    def update_review(
+        self,
+        event_id: UUID,
+        *,
+        review_status: UnknownEventReviewStatus | None = None,
+        review_status_provided: bool = False,
+        notes: str | None = None,
+        notes_provided: bool = False,
+    ) -> UnknownEvent | None: ...

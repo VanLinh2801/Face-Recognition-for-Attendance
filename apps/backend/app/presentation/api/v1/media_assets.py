@@ -13,6 +13,7 @@ from app.application.interfaces.storage_gateway import ObjectStorageGateway
 from app.application.use_cases.media_assets import (
     CleanupMediaAssetsCommand,
     CleanupMediaAssetsUseCase,
+    GetMediaAssetUseCase,
     GetMediaAssetPresignedUrlQuery,
     GetMediaAssetPresignedUrlUseCase,
     ListMediaAssetsQuery,
@@ -24,6 +25,7 @@ from app.core.dependencies import (
     get_admin_user,
     get_cleanup_media_assets_use_case,
     get_db_session,
+    get_get_media_asset_use_case,
     get_list_media_assets_use_case,
     get_media_asset_presigned_url_use_case,
     get_object_storage_gateway,
@@ -107,6 +109,14 @@ async def upload_media_asset(
     )
     uow.commit()
     return MediaAssetItemResponse.model_validate(media_asset, from_attributes=True)
+
+
+@router.get("/{asset_id}", response_model=MediaAssetItemResponse)
+def get_media_asset(
+    asset_id: UUID,
+    use_case: GetMediaAssetUseCase = Depends(get_get_media_asset_use_case),
+) -> MediaAssetItemResponse:
+    return MediaAssetItemResponse.model_validate(use_case.execute(asset_id), from_attributes=True)
 
 
 @router.get("/{media_asset_id}/content")

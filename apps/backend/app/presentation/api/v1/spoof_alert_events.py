@@ -5,15 +5,27 @@ from datetime import datetime
 from fastapi import APIRouter
 from fastapi import Depends, Query
 
+from uuid import UUID
+
 from app.application.use_cases.spoof_alert_events import (
     ListSpoofAlertEventsQuery,
     ListSpoofAlertEventsUseCase,
+    UpdateSpoofAlertEventReviewCommand,
+    UpdateSpoofAlertEventReviewUseCase,
 )
-from app.core.dependencies import get_admin_user, get_list_spoof_alert_events_use_case
+from app.core.exceptions import ValidationError
+from app.core.dependencies import (
+    get_admin_user,
+    get_list_spoof_alert_events_use_case,
+    get_unit_of_work,
+    get_update_spoof_alert_event_review_use_case,
+)
 from app.domain.shared.enums import SpoofReviewStatus
+from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from app.presentation.schemas.spoof_alert_events import (
     SpoofAlertEventItemResponse,
     SpoofAlertEventListResponse,
+    UpdateSpoofAlertEventReviewRequest,
 )
 
 router = APIRouter(prefix="/spoof-alert-events", tags=["spoof-alert-events"], dependencies=[Depends(get_admin_user)])
@@ -43,3 +55,25 @@ def list_spoof_alert_events(
         page=result.page,
         page_size=result.page_size,
     )
+
+
+@router.patch("/{event_id}", response_model=SpoofAlertEventItemResponse)
+def update_spoof_alert_event_review(
+    event_id: UUID,
+    request: UpdateSpoofAlertEventReviewRequest,
+    use_case: UpdateSpoofAlertEventReviewUseCase = Depends(get_update_spoof_alert_event_review_use_case),
+    uow: SqlAlchemyUnitOfWork = Depends(get_unit_of_work),
+) -> SpoofAlertEventItemResponse:
+    if not request.model_fields_set:
+        raise ValidationError("At least one field must be provided")
+    item = use_case.execute(
+        UpdateSpoofAlertEventReviewCommand(
+            event_id=event_id,
+            review_status=request.review_status,
+            review_status_provided="review_status" in request.model_fields_set,
+            notes=request.notes,
+            notes_provided="notes" in request.model_fields_set,
+        )
+    )
+    uow.commit()
+    return SpoofAlertEventItemResponse.model_validate(item, from_attributes=True)

@@ -29,10 +29,12 @@ from app.application.use_cases.attendance_exceptions import (
 )
 from app.application.use_cases.media_assets import (
     CleanupMediaAssetsUseCase,
+    GetMediaAssetUseCase,
     GetMediaAssetPresignedUrlUseCase,
     ListMediaAssetsUseCase,
     UploadMediaAssetUseCase,
 )
+from app.application.use_cases.events import ListEventFeedUseCase
 from app.application.use_cases.event_ingestion import (
     IngestRecognitionEventUseCase,
     IngestSpoofAlertEventUseCase,
@@ -64,13 +66,22 @@ from app.application.use_cases.persons import (
 )
 from app.application.use_cases.recognition_events import ListRecognitionEventsUseCase
 from app.application.use_cases.realtime import GetRealtimeCatchupUseCase
-from app.application.use_cases.spoof_alert_events import ListSpoofAlertEventsUseCase
-from app.application.use_cases.unknown_events import ListUnknownEventsUseCase
+from app.application.use_cases.spoof_alert_events import (
+    GetSpoofAlertEventUseCase,
+    ListSpoofAlertEventsUseCase,
+    UpdateSpoofAlertEventReviewUseCase,
+)
+from app.application.use_cases.unknown_events import (
+    GetUnknownEventUseCase,
+    ListUnknownEventsUseCase,
+    UpdateUnknownEventReviewUseCase,
+)
 from app.core.config import Settings, get_settings
 from app.core.db import create_db_engine, create_session_factory
 from app.infrastructure.persistence.repositories import (
     SqlAlchemyAttendanceExceptionRepository,
     SqlAlchemyAttendanceRepository,
+    SqlAlchemyEventFeedRepository,
     SqlAlchemyEventInboxRepository,
     SqlAlchemyFaceRegistrationRepository,
     SqlAlchemyMediaAssetRepository,
@@ -148,14 +159,32 @@ class Container:
     def build_list_recognition_events_use_case(self, session: Session) -> ListRecognitionEventsUseCase:
         return ListRecognitionEventsUseCase(SqlAlchemyRecognitionEventRepository(session))
 
+    def build_list_event_feed_use_case(self, session: Session) -> ListEventFeedUseCase:
+        return ListEventFeedUseCase(SqlAlchemyEventFeedRepository(session))
+
     def build_list_unknown_events_use_case(self, session: Session) -> ListUnknownEventsUseCase:
         return ListUnknownEventsUseCase(SqlAlchemyUnknownEventRepository(session))
+
+    def build_get_unknown_event_use_case(self, session: Session) -> GetUnknownEventUseCase:
+        return GetUnknownEventUseCase(SqlAlchemyUnknownEventRepository(session))
+
+    def build_update_unknown_event_review_use_case(self, session: Session) -> UpdateUnknownEventReviewUseCase:
+        return UpdateUnknownEventReviewUseCase(SqlAlchemyUnknownEventRepository(session))
 
     def build_list_spoof_alert_events_use_case(self, session: Session) -> ListSpoofAlertEventsUseCase:
         return ListSpoofAlertEventsUseCase(SqlAlchemySpoofAlertEventRepository(session))
 
+    def build_get_spoof_alert_event_use_case(self, session: Session) -> GetSpoofAlertEventUseCase:
+        return GetSpoofAlertEventUseCase(SqlAlchemySpoofAlertEventRepository(session))
+
+    def build_update_spoof_alert_event_review_use_case(self, session: Session) -> UpdateSpoofAlertEventReviewUseCase:
+        return UpdateSpoofAlertEventReviewUseCase(SqlAlchemySpoofAlertEventRepository(session))
+
     def build_list_media_assets_use_case(self, session: Session) -> ListMediaAssetsUseCase:
         return ListMediaAssetsUseCase(SqlAlchemyMediaAssetRepository(session))
+
+    def build_get_media_asset_use_case(self, session: Session) -> GetMediaAssetUseCase:
+        return GetMediaAssetUseCase(SqlAlchemyMediaAssetRepository(session))
 
     def build_cleanup_media_assets_use_case(self, session: Session) -> CleanupMediaAssetsUseCase:
         return CleanupMediaAssetsUseCase(

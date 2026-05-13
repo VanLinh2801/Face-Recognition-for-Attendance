@@ -29,10 +29,12 @@ from app.application.use_cases.attendance_exceptions import (
 )
 from app.application.use_cases.media_assets import (
     CleanupMediaAssetsUseCase,
+    GetMediaAssetUseCase,
     GetMediaAssetPresignedUrlUseCase,
     ListMediaAssetsUseCase,
     UploadMediaAssetUseCase,
 )
+from app.application.use_cases.events import ListEventFeedUseCase
 from app.application.use_cases.face_registrations import (
     ApplyRegistrationInputValidationUseCase,
     CompleteFaceRegistrationUseCase,
@@ -59,8 +61,16 @@ from app.application.use_cases.persons import (
 )
 from app.application.use_cases.recognition_events import ListRecognitionEventsUseCase
 from app.application.use_cases.realtime import GetRealtimeCatchupUseCase
-from app.application.use_cases.spoof_alert_events import ListSpoofAlertEventsUseCase
-from app.application.use_cases.unknown_events import ListUnknownEventsUseCase
+from app.application.use_cases.spoof_alert_events import (
+    GetSpoofAlertEventUseCase,
+    ListSpoofAlertEventsUseCase,
+    UpdateSpoofAlertEventReviewUseCase,
+)
+from app.application.use_cases.unknown_events import (
+    GetUnknownEventUseCase,
+    ListUnknownEventsUseCase,
+    UpdateUnknownEventReviewUseCase,
+)
 from app.bootstrap.container import Container
 from app.core.security import AuthenticatedPrincipal, extract_bearer_token, verify_jwt_token
 from app.core.exceptions import ValidationError
@@ -182,11 +192,32 @@ def get_list_recognition_events_use_case(
     return container.build_list_recognition_events_use_case(session)
 
 
+def get_list_event_feed_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ListEventFeedUseCase:
+    return container.build_list_event_feed_use_case(session)
+
+
 def get_list_unknown_events_use_case(
     session: Session = Depends(get_db_session),
     container: Container = Depends(get_container),
 ) -> ListUnknownEventsUseCase:
     return container.build_list_unknown_events_use_case(session)
+
+
+def get_get_unknown_event_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetUnknownEventUseCase:
+    return container.build_get_unknown_event_use_case(session)
+
+
+def get_update_unknown_event_review_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> UpdateUnknownEventReviewUseCase:
+    return container.build_update_unknown_event_review_use_case(session)
 
 
 def get_list_spoof_alert_events_use_case(
@@ -196,11 +227,32 @@ def get_list_spoof_alert_events_use_case(
     return container.build_list_spoof_alert_events_use_case(session)
 
 
+def get_get_spoof_alert_event_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetSpoofAlertEventUseCase:
+    return container.build_get_spoof_alert_event_use_case(session)
+
+
+def get_update_spoof_alert_event_review_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> UpdateSpoofAlertEventReviewUseCase:
+    return container.build_update_spoof_alert_event_review_use_case(session)
+
+
 def get_list_media_assets_use_case(
     session: Session = Depends(get_db_session),
     container: Container = Depends(get_container),
 ) -> ListMediaAssetsUseCase:
     return container.build_list_media_assets_use_case(session)
+
+
+def get_get_media_asset_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetMediaAssetUseCase:
+    return container.build_get_media_asset_use_case(session)
 
 
 def get_cleanup_media_assets_use_case(

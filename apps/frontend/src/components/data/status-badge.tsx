@@ -21,6 +21,7 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
   return <Badge variant={variant}>{severity}</Badge>;
 }
 
-export function DirectionBadge({ direction }: { direction: "entry" | "exit" }) {
-  return <Badge variant={direction === "entry" ? "success" : "info"}>{direction}</Badge>;
+export function DirectionBadge({ direction }: { direction: "entry" | "exit" | "unknown" }) {
+  const variant = direction === "entry" ? "success" : direction === "exit" ? "info" : "warning";
+  return <Badge variant={variant}>{direction}</Badge>;
 }

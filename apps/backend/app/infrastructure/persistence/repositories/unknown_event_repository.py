@@ -120,6 +120,26 @@ class SqlAlchemyUnknownEventRepository(UnknownEventRepository):
             for item in items
         ]
 
+    def get_by_id(self, event_id: UUID) -> UnknownEvent | None:
+        item = self._session.get(UnknownEventModel, event_id)
+        if item is None:
+            return None
+        return UnknownEvent(
+            id=item.id,
+            snapshot_media_asset_id=item.snapshot_media_asset_id,
+            detected_at=item.detected_at,
+            event_direction=item.event_direction,
+            match_score=to_float(item.match_score),
+            spoof_score=to_float(item.spoof_score),
+            event_source=item.event_source,
+            dedupe_key=item.dedupe_key,
+            raw_payload=item.raw_payload,
+            review_status=item.review_status,
+            notes=item.notes,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+        )
+
     def create_unknown_event(
         self,
         *,
@@ -167,3 +187,23 @@ class SqlAlchemyUnknownEventRepository(UnknownEventRepository):
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
+
+    def update_review(
+        self,
+        event_id: UUID,
+        *,
+        review_status: UnknownEventReviewStatus | None = None,
+        review_status_provided: bool = False,
+        notes: str | None = None,
+        notes_provided: bool = False,
+    ) -> UnknownEvent | None:
+        item = self._session.get(UnknownEventModel, event_id)
+        if item is None:
+            return None
+        if review_status_provided:
+            item.review_status = review_status or item.review_status
+        if notes_provided:
+            item.notes = notes
+        item.updated_at = datetime.now(timezone.utc)
+        self._session.flush()
+        return self.get_by_id(event_id)

@@ -1,39 +1,36 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
-import { AlertTriangle, CalendarSearch, ChevronLeft, ChevronRight, Copy, Eye, FileJson, ImageIcon, Radio, ShieldAlert, X } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarSearch,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Eye,
+  FileJson,
+  ImageIcon,
+  Loader2,
+  Radio,
+  ShieldAlert,
+  X,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
-import { DirectionBadge } from "@/components/data/status-badge";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { DirectionBadge, ReviewStatusBadge, SeverityBadge } from "@/components/data/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import type { EventDirection, MediaAsset, ReviewStatus, Severity } from "@/lib/types";
+import { Input, Select, Textarea } from "@/components/ui/input";
+import { ApiError, apiFetch } from "@/lib/api-client";
+import { getAccessToken } from "@/lib/auth-client";
+import type { EventFeedItem, EventFeedType, MediaAsset, ReviewStatus, UpdateEventReviewRequest } from "@/lib/types";
 import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { useOutsideClick } from "@/lib/use-outside-click";
 import { formatDateTime, percent } from "@/lib/utils";
 
-type EventType = "all" | "recognition" | "unknown" | "spoof";
-
-type EventRow = {
-  id: string;
-  type: Exclude<EventType, "all">;
-  label: string;
-  occurred_at: string;
-  person_name: string;
-  person_id: string | null;
-  direction: EventDirection | null;
-  score: number | null;
-  spoof_score: number | null;
-  source: string;
-  status: string;
-  severity: Severity | null;
-  review_status: ReviewStatus | null;
-  media: MediaAsset[];
-  raw_payload: Record<string, unknown>;
-  metadata: Record<string, unknown>;
-};
+type EventType = "all" | EventFeedType;
+type EventKey = `${EventFeedType}:${string}`;
 
 const typeMeta = {
   recognition: { icon: Radio, badge: "success" as const, label: "Recognition" },
@@ -41,33 +38,42 @@ const typeMeta = {
   spoof: { icon: ShieldAlert, badge: "danger" as const, label: "Spoof" },
 };
 
-export function EventsReviewCenter({ rows }: { rows: EventRow[] }) {
-  const [activeType, setActiveType] = useState<EventType>("all");
-  const [query, setQuery] = useState("");
-  const [fromTime, setFromTime] = useState("2026-05-06T00:00");
-  const [toTime, setToTime] = useState("2026-05-06T23:59");
-  const [selectedEvent, setSelectedEvent] = useState<EventRow | null>(null);
+export function EventsReviewCenter({
+  rows,
+  loading,
+  error,
+  activeType,
+  query,
+  fromTime,
+  toTime,
+  onTypeChange,
+  onQueryChange,
+  onFromTimeChange,
+  onToTimeChange,
+  onRefresh,
+}: {
+  rows: EventFeedItem[];
+  loading: boolean;
+  error: string;
+  activeType: EventType;
+  query: string;
+  fromTime: string;
+  toTime: string;
+  onTypeChange: (value: EventType) => void;
+  onQueryChange: (value: string) => void;
+  onFromTimeChange: (value: string) => void;
+  onToTimeChange: (value: string) => void;
+  onRefresh: (signal?: AbortSignal) => Promise<void>;
+}) {
+  const [selectedEventKey, setSelectedEventKey] = useState<EventKey | null>(null);
+
+  const selectedEvent = useMemo(() => {
+    if (!selectedEventKey) return null;
+    return rows.find((row) => toEventKey(row) === selectedEventKey) ?? null;
+  }, [rows, selectedEventKey]);
+
   const eventDialog = useDialogTransition(selectedEvent);
   const visibleEvent = eventDialog.value;
-
-  const filteredRows = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const fromTimestamp = fromTime ? new Date(fromTime).getTime() : null;
-    const toTimestamp = toTime ? new Date(toTime).getTime() : null;
-
-    return rows.filter((row) => {
-      const eventTimestamp = new Date(row.occurred_at).getTime();
-      const typeMatches = activeType === "all" || row.type === activeType;
-      const fromMatches = fromTimestamp == null || eventTimestamp >= fromTimestamp;
-      const toMatches = toTimestamp == null || eventTimestamp <= toTimestamp;
-      const queryMatches =
-        normalizedQuery.length === 0 ||
-        row.id.toLowerCase().includes(normalizedQuery) ||
-        row.person_name.toLowerCase().includes(normalizedQuery) ||
-        row.source.toLowerCase().includes(normalizedQuery);
-      return typeMatches && fromMatches && toMatches && queryMatches;
-    });
-  }, [activeType, fromTime, query, rows, toTime]);
 
   const counts = {
     recognition: rows.filter((row) => row.type === "recognition").length,
@@ -113,7 +119,7 @@ export function EventsReviewCenter({ rows }: { rows: EventRow[] }) {
               <button
                 key={value}
                 type="button"
-                onClick={() => setActiveType(value as EventType)}
+                onClick={() => onTypeChange(value as EventType)}
                 className={
                   activeType === value
                     ? "h-9 rounded-md bg-slate-950 px-3 text-sm font-medium text-white"
@@ -128,15 +134,15 @@ export function EventsReviewCenter({ rows }: { rows: EventRow[] }) {
           <div className="grid items-end gap-3 md:grid-cols-[minmax(320px,0.8fr)_260px_260px]">
             <label className="space-y-1">
               <span className="text-xs font-medium text-transparent">Search</span>
-              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search event id, person, source" />
+              <Input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search event id, person, source" />
             </label>
             <label className="space-y-1">
-              <span className="text-xs font-medium text-slate-500">Từ thời gian</span>
-              <DateTimePicker value={fromTime} onChange={setFromTime} />
+              <span className="text-xs font-medium text-slate-500">From</span>
+              <DateTimePicker value={fromTime} onChange={onFromTimeChange} />
             </label>
             <label className="space-y-1">
-              <span className="text-xs font-medium text-slate-500">Đến thời gian</span>
-              <DateTimePicker value={toTime} onChange={setToTime} />
+              <span className="text-xs font-medium text-slate-500">To</span>
+              <DateTimePicker value={toTime} onChange={onToTimeChange} />
             </label>
           </div>
         </CardContent>
@@ -144,42 +150,50 @@ export function EventsReviewCenter({ rows }: { rows: EventRow[] }) {
 
       <Card>
         <CardContent>
+          {loading ? (
+            <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Loading events...</div>
+          ) : null}
+          {error ? (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+          ) : null}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] table-fixed text-left text-sm">
               <thead className="text-xs uppercase text-slate-500">
                 <tr className="border-b border-slate-200">
-                  <th className="w-14 py-3">STT</th>
-                  <th className="w-36">Loại</th>
-                  <th className="w-40">Thời gian</th>
-                  <th>Người</th>
-                  <th className="w-24">Hướng</th>
+                  <th className="w-14 py-3">No.</th>
+                  <th className="w-36">Type</th>
+                  <th className="w-40">Occurred at</th>
+                  <th>Person</th>
+                  <th className="w-24">Direction</th>
                   <th className="w-24">Score</th>
                   <th className="w-24 text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.map((row, index) => {
+                {rows.map((row, index) => {
                   const meta = typeMeta[row.type];
                   return (
-                    <tr key={`${row.type}-${row.id}`} className="border-b border-slate-100">
+                    <tr key={toEventKey(row)} className="border-b border-slate-100">
                       <td className="py-3 font-mono text-xs text-slate-500">{index + 1}</td>
-                      <td><Badge variant={meta.badge}>{meta.label}</Badge></td>
+                      <td>
+                        <Badge variant={meta.badge}>{meta.label}</Badge>
+                      </td>
                       <td className="font-mono text-xs text-slate-500">{formatDateTime(row.occurred_at)}</td>
                       <td className="truncate pr-4">
                         {row.person_id ? (
                           <Link href={`/persons/${row.person_id}`} className="font-medium text-slate-900 hover:underline">
-                            {row.person_name}
+                            {row.person_name ?? "Unknown"}
                           </Link>
                         ) : (
-                          <span className="font-medium">{row.person_name}</span>
+                          <span className="font-medium">{row.person_name ?? "Unknown"}</span>
                         )}
                       </td>
                       <td>{row.direction ? <DirectionBadge direction={row.direction} /> : <span className="text-slate-400">N/A</span>}</td>
                       <td>{percent(row.score)}</td>
                       <td className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => setSelectedEvent(row)}>
+                        <Button variant="outline" size="sm" onClick={() => setSelectedEventKey(toEventKey(row))}>
                           <Eye className="h-4 w-4" />
-                          Xem
+                          View
                         </Button>
                       </td>
                     </tr>
@@ -188,15 +202,22 @@ export function EventsReviewCenter({ rows }: { rows: EventRow[] }) {
               </tbody>
             </table>
           </div>
-          <div className="mt-4 text-sm text-slate-500">{filteredRows.length}/{rows.length} events</div>
+          {!loading && !error && rows.length === 0 ? (
+            <div className="mt-4 rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+              No events match the current filters.
+            </div>
+          ) : null}
+          <div className="mt-4 text-sm text-slate-500">{rows.length} events</div>
         </CardContent>
       </Card>
 
       {visibleEvent ? (
         <EventDetailDrawer
+          key={getEventRevisionKey(visibleEvent)}
           event={visibleEvent}
           visible={eventDialog.visible}
-          onClose={() => setSelectedEvent(null)}
+          onClose={() => setSelectedEventKey(null)}
+          onRefresh={onRefresh}
         />
       ) : null}
     </div>
@@ -253,7 +274,7 @@ function DateTimePicker({
               type="button"
               onClick={() => shiftMonth(-1)}
               className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              aria-label="Tháng trước"
+              aria-label="Previous month"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -262,7 +283,7 @@ function DateTimePicker({
               type="button"
               onClick={() => shiftMonth(1)}
               className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              aria-label="Tháng sau"
+              aria-label="Next month"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -300,7 +321,7 @@ function DateTimePicker({
             </div>
 
             <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-              <span className="text-xs font-medium text-slate-500">Giờ</span>
+              <span className="text-xs font-medium text-slate-500">Time</span>
               <Input className="w-32" type="time" value={timePart(value)} onChange={(event) => updateTime(event.target.value)} />
             </div>
           </div>
@@ -308,6 +329,310 @@ function DateTimePicker({
       ) : null}
     </div>
   );
+}
+
+function EventDetailDrawer({
+  event,
+  visible,
+  onClose,
+  onRefresh,
+}: {
+  event: EventFeedItem;
+  visible: boolean;
+  onClose: () => void;
+  onRefresh: (signal?: AbortSignal) => Promise<void>;
+}) {
+  const meta = typeMeta[event.type];
+  const Icon = meta.icon;
+  const initialNotes = getEventNotes(event);
+  const [mediaAsset, setMediaAsset] = useState<MediaAsset | null>(null);
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(Boolean(event.snapshot_media_asset_id));
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<ReviewStatus>(event.review_status ?? "new");
+  const [reviewNotes, setReviewNotes] = useState(initialNotes);
+  const [reviewSaving, setReviewSaving] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSuccess, setReviewSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!mediaPreviewUrl) return;
+    return () => URL.revokeObjectURL(mediaPreviewUrl);
+  }, [mediaPreviewUrl]);
+
+  useEffect(() => {
+    const assetId = event.snapshot_media_asset_id;
+    const token = getAccessToken();
+
+    if (!assetId || !token) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function loadMedia() {
+      try {
+        await Promise.resolve();
+        if (controller.signal.aborted) return;
+
+        const asset = await apiFetch<MediaAsset>(`/media-assets/${assetId}`, {
+          withAuth: true,
+          signal: controller.signal,
+        });
+        const response = await fetch(`/api/v1/media-assets/${assetId}/content`, {
+          headers: { authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error("Failed to load media content.");
+        }
+        const blob = await response.blob();
+        if (controller.signal.aborted) return;
+        const previewUrl = URL.createObjectURL(blob);
+        setMediaAsset(asset);
+        setMediaPreviewUrl((current) => {
+          if (current) URL.revokeObjectURL(current);
+          return previewUrl;
+        });
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setMediaAsset(null);
+        setMediaError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed to load media.");
+      } finally {
+        if (!controller.signal.aborted) {
+          setMediaLoading(false);
+        }
+      }
+    }
+
+    void loadMedia();
+
+    return () => controller.abort();
+  }, [event.snapshot_media_asset_id]);
+
+  const detailJson = JSON.stringify(
+    {
+      id: event.id,
+      type: event.type,
+      occurred_at: event.occurred_at,
+      person_id: event.person_id,
+      direction: event.direction,
+      score: event.score,
+      spoof_score: event.spoof_score,
+      source: event.source,
+      status: event.status,
+      severity: event.severity,
+      review_status: event.review_status,
+      metadata: event.metadata,
+      raw_payload: event.raw_payload,
+    },
+    null,
+    2,
+  );
+
+  async function handleReviewSubmit() {
+    if (event.type === "recognition") return;
+
+    setReviewSaving(true);
+    setReviewError(null);
+    setReviewSuccess(null);
+
+    const payload: UpdateEventReviewRequest = {
+      review_status: reviewStatus,
+      notes: reviewNotes.trim() ? reviewNotes.trim() : null,
+    };
+
+    try {
+      if (event.type === "unknown") {
+        await apiFetch(`/unknown-events/${event.id}`, {
+          method: "PATCH",
+          withAuth: true,
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await apiFetch(`/spoof-alert-events/${event.id}`, {
+          method: "PATCH",
+          withAuth: true,
+          body: JSON.stringify(payload),
+        });
+      }
+      await onRefresh();
+      setReviewSuccess("Review updated.");
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.message : "Failed to update review.");
+    } finally {
+      setReviewSaving(false);
+    }
+  }
+
+  async function handleCopyJson() {
+    try {
+      await navigator.clipboard.writeText(detailJson);
+    } catch {
+      setReviewError("Failed to copy raw payload.");
+    }
+  }
+
+  return (
+    <div className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
+      <div
+        className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(visible)}`}
+        onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b border-slate-200 p-5">
+          <div className="flex items-start gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-md bg-slate-100">
+              <Icon className="h-5 w-5 text-slate-700" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold">Event details</h2>
+                <Badge variant={meta.badge}>{meta.label}</Badge>
+              </div>
+              <p className="mt-1 font-mono text-xs text-slate-500">{event.id}</p>
+            </div>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close event details">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="thin-scrollbar flex-1 overflow-y-auto p-5">
+          <div className="grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
+            <section className="rounded-lg border border-slate-200 p-4">
+              <div className="mb-3 flex items-center gap-2 font-medium">
+                <ImageIcon className="h-4 w-4 text-slate-500" />
+                Media snapshot
+              </div>
+              {mediaLoading ? (
+                <div className="grid aspect-video min-h-[360px] place-items-center rounded-md border border-slate-200 bg-slate-50 text-sm text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading media...
+                  </div>
+                </div>
+              ) : mediaAsset ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="grid aspect-video min-h-[360px] place-items-center overflow-hidden rounded-md bg-slate-200 text-sm text-slate-500">
+                    {mediaPreviewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={mediaPreviewUrl} alt={mediaAsset.original_filename} className="h-full w-full object-contain" />
+                    ) : (
+                      "Snapshot preview"
+                    )}
+                  </div>
+                  <div className="mt-3 space-y-1 text-xs">
+                    <div className="font-medium text-slate-900">{mediaAsset.original_filename}</div>
+                    <div className="font-mono text-slate-500">bucket: {mediaAsset.bucket_name}</div>
+                    <div className="font-mono text-slate-500">object: {mediaAsset.object_key}</div>
+                    <div className="text-slate-500">
+                      {mediaAsset.mime_type} · {Math.round(mediaAsset.file_size / 1024)} KB
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid aspect-video min-h-[360px] place-items-center rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                  {mediaError ?? (event.snapshot_media_asset_id ? "No media preview is available for this event." : "This event does not have a linked snapshot.")}
+                </div>
+              )}
+            </section>
+
+            <div className="space-y-5">
+              <section className="grid gap-3">
+                <DetailItem label="Occurred at" value={formatDateTime(event.occurred_at)} />
+                <DetailItem label="Source" value={event.source} />
+                <DetailItem label="Person" value={event.person_name ?? "Unknown"} />
+                <DetailItem label="Direction" value={event.direction ?? "N/A"} />
+                <DetailItem label="Score" value={percent(event.score)} />
+                <DetailItem label="Spoof score" value={percent(event.spoof_score)} />
+              </section>
+
+              {event.type !== "recognition" ? (
+                <section className="rounded-lg border border-slate-200 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="font-medium">Review</div>
+                    <div className="flex items-center gap-2">
+                      <ReviewStatusBadge status={reviewStatus} />
+                      {event.severity ? <SeverityBadge severity={event.severity} /> : null}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="space-y-1">
+                      <span className="text-xs font-medium text-slate-500">Review status</span>
+                      <Select value={reviewStatus} onChange={(changeEvent) => setReviewStatus(changeEvent.target.value as ReviewStatus)} disabled={reviewSaving}>
+                        <option value="new">new</option>
+                        <option value="reviewed">reviewed</option>
+                        <option value="ignored">ignored</option>
+                      </Select>
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-xs font-medium text-slate-500">Notes</span>
+                      <Textarea value={reviewNotes} onChange={(changeEvent) => setReviewNotes(changeEvent.target.value)} disabled={reviewSaving} />
+                    </label>
+                    {reviewError ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{reviewError}</div> : null}
+                    {reviewSuccess ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{reviewSuccess}</div> : null}
+                    <div className="flex justify-end">
+                      <Button onClick={() => void handleReviewSubmit()} disabled={reviewSaving}>
+                        {reviewSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        Save review
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
+              <section className="rounded-lg border border-slate-200 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 font-medium">
+                    <FileJson className="h-4 w-4 text-slate-500" />
+                    Raw payload
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => void handleCopyJson()}>
+                    <Copy className="h-4 w-4" />
+                    Copy
+                  </Button>
+                </div>
+                <pre className="max-h-80 overflow-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">{detailJson}</pre>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-slate-200 p-5">
+          {event.person_id ? (
+            <Link
+              href={`/persons/${event.person_id}`}
+              className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50"
+            >
+              Open person profile
+            </Link>
+          ) : null}
+          <Button onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 p-3">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="mt-1 truncate text-sm font-medium">{value}</div>
+    </div>
+  );
+}
+
+function toEventKey(event: Pick<EventFeedItem, "type" | "id">): EventKey {
+  return `${event.type}:${event.id}`;
+}
+
+function getEventRevisionKey(event: EventFeedItem) {
+  return `${toEventKey(event)}:${event.review_status ?? ""}:${getEventNotes(event)}`;
+}
+
+function getEventNotes(event: EventFeedItem) {
+  return typeof event.metadata.notes === "string" ? event.metadata.notes : "";
 }
 
 function datePart(value: string) {
@@ -355,136 +680,4 @@ function formatDateTimeInputLabel(value: string) {
     year: "numeric",
     timeZone: "UTC",
   })} ${timePart(value)}`;
-}
-
-function EventDetailDrawer({ event, visible, onClose }: { event: EventRow; visible: boolean; onClose: () => void }) {
-  const meta = typeMeta[event.type];
-  const Icon = meta.icon;
-  const detailJson = JSON.stringify(
-    {
-      id: event.id,
-      type: event.type,
-      occurred_at: event.occurred_at,
-      person_id: event.person_id,
-      direction: event.direction,
-      score: event.score,
-      spoof_score: event.spoof_score,
-      source: event.source,
-      status: event.status,
-      severity: event.severity,
-      review_status: event.review_status,
-      metadata: event.metadata,
-      raw_payload: event.raw_payload,
-    },
-    null,
-    2,
-  );
-
-  return (
-    <div
-      className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`}
-      onMouseDown={onClose}
-    >
-      <div
-        className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(visible)}`}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between border-b border-slate-200 p-5">
-          <div className="flex items-start gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-md bg-slate-100">
-              <Icon className="h-5 w-5 text-slate-700" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold">Chi tiết sự kiện</h2>
-                <Badge variant={meta.badge}>{event.label}</Badge>
-              </div>
-              <p className="mt-1 font-mono text-xs text-slate-500">{event.id}</p>
-            </div>
-          </div>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Đóng chi tiết sự kiện">
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="thin-scrollbar flex-1 overflow-y-auto p-5">
-          <div className="grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
-            <section className="rounded-lg border border-slate-200 p-4">
-              <div className="mb-3 flex items-center gap-2 font-medium">
-                <ImageIcon className="h-4 w-4 text-slate-500" />
-                Media liên quan trong MinIO
-              </div>
-            {event.media.length > 0 ? (
-              <div className="space-y-3">
-                {event.media.map((asset) => (
-                  <div key={asset.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <div className="grid aspect-video min-h-[360px] place-items-center rounded-md bg-slate-200 text-sm text-slate-500">
-                      Snapshot preview
-                    </div>
-                    <div className="mt-3 space-y-1 text-xs">
-                      <div className="font-medium text-slate-900">{asset.original_filename}</div>
-                      <div className="font-mono text-slate-500">bucket: {asset.bucket_name}</div>
-                      <div className="font-mono text-slate-500">object: {asset.object_key}</div>
-                      <div className="text-slate-500">{asset.mime_type} · {Math.round(asset.file_size / 1024)} KB</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid aspect-video min-h-[360px] place-items-center rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                Chưa có media asset liên quan trong mock data. Khi nối backend, phần này nên dùng signed URL hoặc backend proxy media.
-              </div>
-            )}
-            </section>
-
-            <div className="space-y-5">
-              <section className="grid gap-3">
-                <DetailItem label="Thời gian" value={formatDateTime(event.occurred_at)} />
-                <DetailItem label="Nguồn" value={event.source} />
-                <DetailItem label="Người" value={event.person_name} />
-                <DetailItem label="Hướng" value={event.direction ?? "N/A"} />
-                <DetailItem label="Score" value={percent(event.score)} />
-                <DetailItem label="Spoof score" value={percent(event.spoof_score)} />
-              </section>
-
-              <section className="rounded-lg border border-slate-200 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 font-medium">
-                    <FileJson className="h-4 w-4 text-slate-500" />
-                    Raw payload
-                  </div>
-                  <Button variant="outline" size="sm">
-                    <Copy className="h-4 w-4" />
-                    Copy
-                  </Button>
-                </div>
-                <pre className="max-h-80 overflow-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">{detailJson}</pre>
-              </section>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 border-t border-slate-200 p-5">
-          {event.person_id ? (
-            <Link
-              href={`/persons/${event.person_id}`}
-              className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50"
-            >
-              Mở hồ sơ nhân sự
-            </Link>
-          ) : null}
-          <Button onClick={onClose}>Đóng</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DetailItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-slate-200 p-3">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 truncate text-sm font-medium">{value}</div>
-    </div>
-  );
 }

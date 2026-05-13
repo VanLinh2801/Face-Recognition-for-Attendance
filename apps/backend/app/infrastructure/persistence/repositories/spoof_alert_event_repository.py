@@ -120,6 +120,26 @@ class SqlAlchemySpoofAlertEventRepository(SpoofAlertEventRepository):
             for item in items
         ]
 
+    def get_by_id(self, event_id: UUID) -> SpoofAlertEvent | None:
+        item = self._session.get(SpoofAlertEventModel, event_id)
+        if item is None:
+            return None
+        return SpoofAlertEvent(
+            id=item.id,
+            person_id=item.person_id,
+            snapshot_media_asset_id=item.snapshot_media_asset_id,
+            detected_at=item.detected_at,
+            spoof_score=to_float(item.spoof_score) or 0.0,
+            event_source=item.event_source,
+            dedupe_key=item.dedupe_key,
+            raw_payload=item.raw_payload,
+            severity=item.severity,
+            review_status=item.review_status,
+            notes=item.notes,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+        )
+
     def get_latest_spoof_time(self, *, person_id: UUID) -> datetime | None:
         stmt = (
             select(SpoofAlertEventModel.detected_at)
@@ -176,3 +196,23 @@ class SqlAlchemySpoofAlertEventRepository(SpoofAlertEventRepository):
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
+
+    def update_review(
+        self,
+        event_id: UUID,
+        *,
+        review_status: SpoofReviewStatus | None = None,
+        review_status_provided: bool = False,
+        notes: str | None = None,
+        notes_provided: bool = False,
+    ) -> SpoofAlertEvent | None:
+        item = self._session.get(SpoofAlertEventModel, event_id)
+        if item is None:
+            return None
+        if review_status_provided:
+            item.review_status = review_status or item.review_status
+        if notes_provided:
+            item.notes = notes
+        item.updated_at = datetime.now(timezone.utc)
+        self._session.flush()
+        return self.get_by_id(event_id)

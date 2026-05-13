@@ -1,8 +1,9 @@
 export type Status = "active" | "inactive" | "resigned";
-export type EventDirection = "entry" | "exit";
+export type EventDirection = "entry" | "exit" | "unknown";
 export type ReviewStatus = "new" | "reviewed" | "ignored";
 export type RegistrationStatus = "pending" | "validated" | "indexed" | "failed";
 export type Severity = "low" | "medium" | "high";
+export type EventFeedType = "recognition" | "unknown" | "spoof";
 
 export type PageResult<T> = {
   items: T[];
@@ -135,6 +136,31 @@ export type MediaAsset = {
     | "face_crop";
   uploaded_by_person_id: string | null;
   created_at: string;
+};
+
+export type EventFeedItem = {
+  id: string;
+  type: EventFeedType;
+  occurred_at: string;
+  person_id: string | null;
+  person_name: string | null;
+  direction: EventDirection | null;
+  score: number | null;
+  spoof_score: number | null;
+  source: string;
+  status: string;
+  severity: Severity | null;
+  review_status: ReviewStatus | null;
+  snapshot_media_asset_id: string | null;
+  raw_payload: Record<string, unknown> | null;
+  metadata: Record<string, unknown>;
+};
+
+export type EventFeedListResponse = PageResult<EventFeedItem>;
+
+export type UpdateEventReviewRequest = {
+  review_status?: ReviewStatus | null;
+  notes?: string | null;
 };
 
 export type RealtimeEvent = {
