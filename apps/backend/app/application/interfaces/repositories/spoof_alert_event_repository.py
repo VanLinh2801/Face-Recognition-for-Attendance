@@ -48,3 +48,16 @@ class SpoofAlertEventRepository(Protocol):
         notes: str | None,
         raw_payload: dict | None,
     ) -> SpoofAlertEvent: ...
+
+    def create_media_asset_and_link_snapshot(
+        self,
+        *,
+        spoof_event_id: UUID,
+        storage_provider: str,
+        bucket_name: str,
+        object_key: str,
+        original_filename: str,
+        mime_type: str,
+        file_size: int,
+        checksum: str | None,
+    ) -> UUID: ...

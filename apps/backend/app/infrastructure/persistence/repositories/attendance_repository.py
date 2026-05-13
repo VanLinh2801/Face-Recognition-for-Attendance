@@ -20,6 +20,7 @@ class AttendanceEventView:
     id: UUID
     person_id: UUID
     person_full_name: str
+    snapshot_media_asset_id: UUID | None
     recognized_at: datetime
     event_direction: EventDirection
     match_score: float | None
@@ -55,6 +56,7 @@ class SqlAlchemyAttendanceRepository(AttendanceRepository):
                 RecognitionEventModel.id,
                 RecognitionEventModel.person_id,
                 PersonModel.full_name,
+                RecognitionEventModel.snapshot_media_asset_id,
                 RecognitionEventModel.recognized_at,
                 RecognitionEventModel.event_direction,
                 RecognitionEventModel.match_score,
@@ -83,6 +85,7 @@ class SqlAlchemyAttendanceRepository(AttendanceRepository):
                 id=row.id,
                 person_id=row.person_id,
                 person_full_name=row.full_name,
+                snapshot_media_asset_id=row.snapshot_media_asset_id,
                 recognized_at=row.recognized_at,
                 event_direction=row.event_direction,
                 match_score=float(row.match_score) if row.match_score is not None else None,
@@ -100,6 +103,7 @@ class SqlAlchemyAttendanceRepository(AttendanceRepository):
                 RecognitionEventModel.id,
                 RecognitionEventModel.person_id,
                 PersonModel.full_name,
+                RecognitionEventModel.snapshot_media_asset_id,
                 RecognitionEventModel.recognized_at,
                 RecognitionEventModel.event_direction,
                 RecognitionEventModel.match_score,
@@ -117,6 +121,7 @@ class SqlAlchemyAttendanceRepository(AttendanceRepository):
             id=row.id,
             person_id=row.person_id,
             person_full_name=row.full_name,
+            snapshot_media_asset_id=row.snapshot_media_asset_id,
             recognized_at=row.recognized_at,
             event_direction=row.event_direction,
             match_score=float(row.match_score) if row.match_score is not None else None,

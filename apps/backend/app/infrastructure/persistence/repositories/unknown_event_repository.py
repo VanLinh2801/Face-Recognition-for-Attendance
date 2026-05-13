@@ -9,9 +9,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.application.interfaces.repositories.unknown_event_repository import UnknownEventRepository
-from app.domain.shared.enums import EventDirection, UnknownEventReviewStatus
+from app.domain.shared.enums import EventDirection, MediaAssetType, StorageProvider, UnknownEventReviewStatus
 from app.domain.unknown_events.entities import UnknownEvent
 from app.infrastructure.persistence.models.unknown_event_model import UnknownEventModel
+from app.infrastructure.persistence.models.media_asset_model import MediaAssetModel
 from app.infrastructure.persistence.repositories.mappers import to_float
 
 
@@ -167,3 +168,41 @@ class SqlAlchemyUnknownEventRepository(UnknownEventRepository):
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
+
+    def create_media_asset_and_link_snapshot(
+        self,
+        *,
+        unknown_event_id: UUID,
+        storage_provider: str,
+        bucket_name: str,
+        object_key: str,
+        original_filename: str,
+        mime_type: str,
+        file_size: int,
+        checksum: str | None,
+    ) -> UUID:
+        media_asset_id = uuid4()
+        media_asset = MediaAssetModel(
+            id=media_asset_id,
+            storage_provider=StorageProvider(storage_provider),
+            bucket_name=bucket_name,
+            object_key=object_key,
+            original_filename=original_filename,
+            mime_type=mime_type,
+            file_size=file_size,
+            checksum=checksum,
+            asset_type=MediaAssetType.UNKNOWN_SNAPSHOT,
+            created_at=datetime.now(timezone.utc),
+        )
+        self._session.add(media_asset)
+
+        stmt = (
+            select(UnknownEventModel)
+            .where(UnknownEventModel.id == unknown_event_id)
+            .with_for_update()
+        )
+        event = self._session.execute(stmt).scalar_one_or_none()
+        if event is not None:
+            event.snapshot_media_asset_id = media_asset_id
+            self._session.flush()
+        return media_asset_id

@@ -62,6 +62,20 @@ def _extract_snapshot_media_asset_id(payload: dict) -> UUID | None:
         return None
 
 
+def _get_snapshot_info(payload: dict) -> dict | None:
+    """Return snapshot media info dict from payload, or None if not present/valid."""
+    media_asset = payload.get("snapshot_media_asset")
+    if not isinstance(media_asset, dict):
+        return None
+    object_key = media_asset.get("object_key")
+    if not isinstance(object_key, str) or not object_key:
+        return None
+    return {
+        "bucket_name": media_asset.get("bucket_name") or "attendance",
+        "object_key": object_key,
+    }
+
+
 class IngestRecognitionEventUseCase:
     def __init__(
         self,
@@ -97,9 +111,9 @@ class IngestRecognitionEventUseCase:
                 self._uow.commit()
                 return IngestResult(status=IngestStatus.DUPLICATE, reason="dedupe_key")
 
-            # Throttle repeated recognition for the same person before persisting.
             person_id = _as_uuid(_required_str(payload, "person_id"), "person_id")
             recognized_at = _as_datetime(_required_str(payload, "recognized_at"), "recognized_at")
+
             if self._throttle_window_seconds > 0:
                 latest_time = self._recognition_repository.get_latest_recognition_time(person_id=person_id)
                 if latest_time is not None:
@@ -124,10 +138,13 @@ class IngestRecognitionEventUseCase:
                         self._uow.commit()
                         return IngestResult(status=IngestStatus.IGNORED, reason="throttled")
 
-            self._recognition_repository.create_recognition_event(
+            snapshot_info = _get_snapshot_info(payload)
+            snapshot_media_asset_id = _extract_snapshot_media_asset_id(payload)
+
+            recognition = self._recognition_repository.create_recognition_event(
                 person_id=person_id,
                 face_registration_id=_as_uuid(_required_str(payload, "face_registration_id"), "face_registration_id"),
-                snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload),
+                snapshot_media_asset_id=snapshot_media_asset_id,
                 recognized_at=recognized_at,
                 event_direction=EventDirection(_required_str(payload, "event_direction")),
                 match_score=payload.get("match_score"),
@@ -136,6 +153,19 @@ class IngestRecognitionEventUseCase:
                 dedupe_key=dedupe_key,
                 raw_payload=payload.get("raw_payload"),
             )
+
+            if snapshot_info is not None and snapshot_media_asset_id is None:
+                self._recognition_repository.create_media_asset_and_link_snapshot(
+                    recognition_id=recognition.id,
+                    storage_provider="minio",
+                    bucket_name=snapshot_info["bucket_name"],
+                    object_key=snapshot_info["object_key"],
+                    original_filename="snapshot.jpg",
+                    mime_type="image/jpeg",
+                    file_size=0,
+                    checksum=None,
+                )
+
             self._inbox_repository.add_processed_message(
                 message_id=message_id,
                 event_name=_required_str(envelope, "event_name"),
@@ -181,8 +211,11 @@ class IngestUnknownEventUseCase:
                 self._uow.commit()
                 return IngestResult(status=IngestStatus.DUPLICATE, reason="dedupe_key")
 
-            self._unknown_repository.create_unknown_event(
-                snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload),
+            snapshot_info = _get_snapshot_info(payload)
+            snapshot_media_asset_id = _extract_snapshot_media_asset_id(payload)
+
+            unknown_event = self._unknown_repository.create_unknown_event(
+                snapshot_media_asset_id=snapshot_media_asset_id,
                 detected_at=_as_datetime(_required_str(payload, "detected_at"), "detected_at"),
                 event_direction=EventDirection(_required_str(payload, "event_direction")),
                 match_score=payload.get("match_score"),
@@ -193,6 +226,19 @@ class IngestUnknownEventUseCase:
                 notes=payload.get("notes"),
                 raw_payload=payload.get("raw_payload"),
             )
+
+            if snapshot_info is not None and snapshot_media_asset_id is None:
+                self._unknown_repository.create_media_asset_and_link_snapshot(
+                    unknown_event_id=unknown_event.id,
+                    storage_provider="minio",
+                    bucket_name=snapshot_info["bucket_name"],
+                    object_key=snapshot_info["object_key"],
+                    original_filename="snapshot.jpg",
+                    mime_type="image/jpeg",
+                    file_size=0,
+                    checksum=None,
+                )
+
             self._inbox_repository.add_processed_message(
                 message_id=message_id,
                 event_name=_required_str(envelope, "event_name"),
@@ -244,7 +290,6 @@ class IngestSpoofAlertEventUseCase:
             person_id = _as_uuid(person_id_raw, "person_id") if isinstance(person_id_raw, str) else None
             detected_at = _as_datetime(_required_str(payload, "detected_at"), "detected_at")
 
-            # Throttle repeated spoof alerts for the same person before persisting.
             if self._throttle_window_seconds > 0 and person_id is not None:
                 latest_time = self._spoof_repository.get_latest_spoof_time(person_id=person_id)
                 if latest_time is not None:
@@ -269,9 +314,12 @@ class IngestSpoofAlertEventUseCase:
                         self._uow.commit()
                         return IngestResult(status=IngestStatus.IGNORED, reason="throttled")
 
-            self._spoof_repository.create_spoof_alert_event(
+            snapshot_info = _get_snapshot_info(payload)
+            snapshot_media_asset_id = _extract_snapshot_media_asset_id(payload)
+
+            spoof_event = self._spoof_repository.create_spoof_alert_event(
                 person_id=person_id,
-                snapshot_media_asset_id=_extract_snapshot_media_asset_id(payload),
+                snapshot_media_asset_id=snapshot_media_asset_id,
                 detected_at=detected_at,
                 spoof_score=float(payload["spoof_score"]),
                 event_source=_required_str(payload, "event_source"),
@@ -281,6 +329,19 @@ class IngestSpoofAlertEventUseCase:
                 notes=payload.get("notes"),
                 raw_payload=payload.get("raw_payload"),
             )
+
+            if snapshot_info is not None and snapshot_media_asset_id is None:
+                self._spoof_repository.create_media_asset_and_link_snapshot(
+                    spoof_event_id=spoof_event.id,
+                    storage_provider="minio",
+                    bucket_name=snapshot_info["bucket_name"],
+                    object_key=snapshot_info["object_key"],
+                    original_filename="snapshot.jpg",
+                    mime_type="image/jpeg",
+                    file_size=0,
+                    checksum=None,
+                )
+
             self._inbox_repository.add_processed_message(
                 message_id=message_id,
                 event_name=_required_str(envelope, "event_name"),

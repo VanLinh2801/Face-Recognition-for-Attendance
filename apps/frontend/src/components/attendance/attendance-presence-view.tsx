@@ -1,19 +1,20 @@
 ﻿"use client";
 
-import Image from "next/image";
 import { Building2, CalendarSearch, ChevronLeft, ChevronRight, Clock, Eye, ImageIcon, Loader2, Printer, Search, Users, UserX, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { AttendanceEvent, Department, MediaAsset, Person } from "@/lib/types";
+import type { AttendanceEvent, Department, PageResult, Person } from "@/lib/types";
+import { ApiError, apiFetch } from "@/lib/api-client";
 import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { useOutsideClick } from "@/lib/use-outside-click";
 import { formatTime } from "@/lib/utils";
 
-const WORK_DATE = "2026-05-06";
+const getDefaultWorkDate = () => new Date().toISOString().slice(0, 10);
+const WORK_DATE = getDefaultWorkDate();
 const LATE_AFTER_HOUR = 8;
 const LATE_AFTER_MINUTE = 15;
 
@@ -38,20 +39,19 @@ type PresenceRow = {
 };
 
 export function AttendancePresenceView({
-  events,
   persons,
   departments,
-  mediaAssets,
 }: {
-  events: AttendanceEvent[];
   persons: PersonWithDepartment[];
   departments: Department[];
-  mediaAssets: MediaAsset[];
 }) {
   const [departmentId, setDepartmentId] = useState("all");
   const [statusFilter, setStatusFilter] = useState<PresenceStatusFilter>("all");
   const [personSearch, setPersonSearch] = useState("");
   const [workDate, setWorkDate] = useState(WORK_DATE);
+  const [events, setEvents] = useState<AttendanceEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState("");
   const [page, setPage] = useState(1);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportFromDate, setReportFromDate] = useState("2026-05-01");
@@ -64,6 +64,33 @@ export function AttendancePresenceView({
   const presenceDialog = useDialogTransition(selectedPresenceRow);
   const visiblePresenceRow = presenceDialog.value;
   const pageSize = 5;
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadEvents() {
+      setEventsLoading(true);
+      setEventsError("");
+      try {
+        const startOfDay = `${workDate}T00:00:00`;
+        const endOfDay = `${workDate}T23:59:59`;
+        const response = await apiFetch<PageResult<AttendanceEvent>>(
+          `/attendance/events?page=1&page_size=100&from_at=${encodeURIComponent(startOfDay)}&to_at=${encodeURIComponent(endOfDay)}`,
+          { withAuth: true },
+        );
+        if (!mounted) return;
+        setEvents(response.items.filter((event) => event.is_valid));
+      } catch (err) {
+        if (!mounted) return;
+        setEventsError(err instanceof ApiError ? err.message : "Failed to load events");
+      } finally {
+        if (mounted) setEventsLoading(false);
+      }
+    }
+    loadEvents();
+    return () => {
+      mounted = false;
+    };
+  }, [workDate]);
 
   const departmentScopeIds = useMemo(() => getDepartmentScopeIds(departmentId, departments), [departmentId, departments]);
   const reportDepartmentScopeIds = useMemo(() => getDepartmentScopeIds(reportDepartmentId, departments), [reportDepartmentId, departments]);
@@ -123,10 +150,21 @@ export function AttendancePresenceView({
     setReportLoading(true);
     setReportRows(null);
 
-    window.setTimeout(() => {
-      setReportRows(buildPresenceReport(reportScopedPersons, events, reportFromDate, reportToDate));
-      setReportLoading(false);
-    }, 450);
+    (async () => {
+      try {
+        const startOfDay = `${reportFromDate}T00:00:00`;
+        const endOfDay = `${reportToDate}T23:59:59`;
+        const response = await apiFetch<PageResult<AttendanceEvent>>(
+          `/attendance/events?page=1&page_size=100&from_at=${encodeURIComponent(startOfDay)}&to_at=${encodeURIComponent(endOfDay)}`,
+          { withAuth: true },
+        );
+        setReportRows(buildPresenceReport(reportScopedPersons, response.items, reportFromDate, reportToDate));
+      } catch {
+        setReportRows(buildPresenceReport(reportScopedPersons, [], reportFromDate, reportToDate));
+      } finally {
+        setReportLoading(false);
+      }
+    })();
   }
 
   function handlePrintReport() {
@@ -435,7 +473,6 @@ export function AttendancePresenceView({
         <PresenceDetailDialog
           row={visiblePresenceRow}
           workDate={workDate}
-          mediaAssets={mediaAssets}
           visible={presenceDialog.visible}
           onClose={() => setSelectedPresenceRow(null)}
         />
@@ -448,19 +485,15 @@ export function AttendancePresenceView({
 function PresenceDetailDialog({
   row,
   workDate,
-  mediaAssets,
   visible,
   onClose,
 }: {
   row: PresenceRow;
   workDate: string;
-  mediaAssets: MediaAsset[];
   visible: boolean;
   onClose: () => void;
 }) {
   const person = row.person;
-  const firstAsset = getEventSnapshotAsset(row.first_event, mediaAssets);
-  const lastAsset = getEventSnapshotAsset(row.last_event, mediaAssets);
 
   return (
     <div
@@ -486,8 +519,8 @@ function PresenceDetailDialog({
 
         <div className="thin-scrollbar flex-1 space-y-5 overflow-y-auto p-5">
           <section className="grid gap-4 md:grid-cols-2">
-            <SnapshotPanel title="Ảnh lần đầu xuất hiện" event={row.first_event} asset={firstAsset} />
-            <SnapshotPanel title="Ảnh lần cuối xuất hiện" event={row.last_event} asset={lastAsset} />
+            <SnapshotPanel title="Ảnh lần đầu xuất hiện" event={row.first_event} />
+            <SnapshotPanel title="Ảnh lần cuối xuất hiện" event={row.last_event} />
           </section>
 
           <div className="space-y-4">
@@ -526,12 +559,12 @@ function PresenceDetailDialog({
 function SnapshotPanel({
   title,
   event,
-  asset,
 }: {
   title: string;
   event: AttendanceEvent | null;
-  asset: MediaAsset | null;
 }) {
+  const imageUrl = event?.snapshot_media_asset_id ? `/api/v1/media-assets/${event.snapshot_media_asset_id}/content` : null;
+
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
@@ -542,43 +575,23 @@ function SnapshotPanel({
         <span className="font-mono text-xs text-slate-500">{event ? formatTime(event.recognized_at) : "N/A"}</span>
       </div>
 
-      {asset ? (
+      {imageUrl ? (
         <div>
           <div className="relative aspect-video bg-slate-100">
-            {asset.preview_url ? (
-              <Image
-                src={asset.preview_url}
-                alt={`${title} - ${asset.original_filename}`}
-                fill
-                sizes="(min-width: 768px) 480px, 100vw"
-                className="object-cover"
-                unoptimized
-              />
-            ) : (
-              <div className="grid h-full place-items-center p-6 text-center text-sm text-slate-500">
-                Chưa có URL ảnh từ backend cho media asset này.
-              </div>
-            )}
-          </div>
-          <div className="space-y-1 border-t border-slate-200 p-3 text-xs">
-            <div className="font-medium text-slate-900">{asset.original_filename}</div>
-            <div className="font-mono text-slate-500">bucket: {asset.bucket_name}</div>
-            <div className="truncate font-mono text-slate-500">object: {asset.object_key}</div>
-            <div className="text-slate-500">{asset.mime_type} · {Math.round(asset.file_size / 1024)} KB</div>
+            <img
+              src={imageUrl}
+              alt={title}
+              className="h-full w-full object-cover"
+            />
           </div>
         </div>
       ) : (
         <div className="grid aspect-video place-items-center p-6 text-center text-sm text-slate-500">
-          Chưa có snapshot media asset cho lần xuất hiện này.
+          Chưa có snapshot cho lần xuất hiện này.
         </div>
       )}
     </div>
   );
-}
-
-function getEventSnapshotAsset(event: AttendanceEvent | null, mediaAssets: MediaAsset[]) {
-  if (!event?.snapshot_media_asset_id) return null;
-  return mediaAssets.find((asset) => asset.id === event.snapshot_media_asset_id) ?? null;
 }
 
 function PresenceStatusBadge({ status }: { status: string }) {
