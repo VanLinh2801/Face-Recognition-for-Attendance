@@ -9,9 +9,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.application.interfaces.repositories.spoof_alert_event_repository import SpoofAlertEventRepository
-from app.domain.shared.enums import SpoofReviewStatus, SpoofSeverity
+from app.domain.shared.enums import MediaAssetType, SpoofReviewStatus, SpoofSeverity, StorageProvider
 from app.domain.spoof_alert_events.entities import SpoofAlertEvent
 from app.infrastructure.persistence.models.spoof_alert_event_model import SpoofAlertEventModel
+from app.infrastructure.persistence.models.media_asset_model import MediaAssetModel
 from app.infrastructure.persistence.repositories.mappers import to_float
 
 
@@ -196,6 +197,44 @@ class SqlAlchemySpoofAlertEventRepository(SpoofAlertEventRepository):
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
+
+    def create_media_asset_and_link_snapshot(
+        self,
+        *,
+        spoof_event_id: UUID,
+        storage_provider: str,
+        bucket_name: str,
+        object_key: str,
+        original_filename: str,
+        mime_type: str,
+        file_size: int,
+        checksum: str | None,
+    ) -> UUID:
+        media_asset_id = uuid4()
+        media_asset = MediaAssetModel(
+            id=media_asset_id,
+            storage_provider=StorageProvider(storage_provider),
+            bucket_name=bucket_name,
+            object_key=object_key,
+            original_filename=original_filename,
+            mime_type=mime_type,
+            file_size=file_size,
+            checksum=checksum,
+            asset_type=MediaAssetType.SPOOF_SNAPSHOT,
+            created_at=datetime.now(timezone.utc),
+        )
+        self._session.add(media_asset)
+
+        stmt = (
+            select(SpoofAlertEventModel)
+            .where(SpoofAlertEventModel.id == spoof_event_id)
+            .with_for_update()
+        )
+        event = self._session.execute(stmt).scalar_one_or_none()
+        if event is not None:
+            event.snapshot_media_asset_id = media_asset_id
+            self._session.flush()
+        return media_asset_id
 
     def update_review(
         self,

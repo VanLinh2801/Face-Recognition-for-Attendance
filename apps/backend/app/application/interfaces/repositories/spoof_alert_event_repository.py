@@ -50,13 +50,3 @@ class SpoofAlertEventRepository(Protocol):
         notes: str | None,
         raw_payload: dict | None,
     ) -> SpoofAlertEvent: ...
-
-    def update_review(
-        self,
-        event_id: UUID,
-        *,
-        review_status: SpoofReviewStatus | None = None,
-        review_status_provided: bool = False,
-        notes: str | None = None,
-        notes_provided: bool = False,
-    ) -> SpoofAlertEvent | None: ...

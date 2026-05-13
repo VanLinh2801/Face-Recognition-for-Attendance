@@ -16,6 +16,7 @@ class AttendanceEventView(Protocol):
     id: UUID
     person_id: UUID
     person_full_name: str
+    snapshot_media_asset_id: UUID | None
     recognized_at: datetime
     event_direction: str
     match_score: float | None

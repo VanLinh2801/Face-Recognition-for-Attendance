@@ -33,8 +33,27 @@ class IdentifyFacesUseCase:
         self._vector_store = vector_store
 
     async def execute(self, face: FaceInput) -> RecognitionResult:
+        # ── Step 1: Anti-spoofing ─────────────────────────────────────────
+        spoof_score = await self._anti_spoofer.predict(face)
+        logger.debug(
+            "Anti-spoof result track_id=%s spoof_score=%.4f threshold=%.2f",
+            face.track_id,
+            spoof_score,
+            settings.SPOOF_THRESHOLD,
+        )
 
-        # ── Step 1: Embedding extraction ──────────────────────────────────
+        if spoof_score < settings.SPOOF_THRESHOLD:
+            logger.warning(
+                "Spoof detected track_id=%s spoof_score=%.4f (BYPASSED)", face.track_id, spoof_score
+            )
+            # Tạm thời comment theo yêu cầu để bỏ qua Anti-Spoofing
+            # return RecognitionResult(
+            #     track_id=face.track_id,
+            #     decision=RecognitionDecision.SPOOFED,
+            #     spoof_score=spoof_score,
+            # )
+
+        # ── Step 2: Embedding extraction ──────────────────────────────────
         embedding = await self._embedder.extract(face)
         logger.debug(
             "Embedding extracted track_id=%s model=%s det_score=%.4f",

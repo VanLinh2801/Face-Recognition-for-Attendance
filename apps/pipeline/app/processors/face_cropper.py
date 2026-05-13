@@ -6,7 +6,8 @@ from app.processors.base import BaseProcessor
 class FaceCropper(BaseProcessor):
     def __init__(self, output_size=(160, 160), scale=2.7):
         self.output_size = output_size
-        self.scale = scale
+        # Tạm thời bỏ scale=2.7 của Anti-spoofing, dùng scale=1.2 để lấy vừa khuôn mặt
+        self.scale = 1.2 # scale
 
     def process(self, context: dict):
         frame = context.get('frame')
@@ -54,9 +55,20 @@ class FaceCropper(BaseProcessor):
             if dx1 > 0 or dy1 > 0 or dx2 > 0 or dy2 > 0:
                 crop = cv2.copyMakeBorder(crop, dy1, dy2, dx1, dx2, cv2.BORDER_CONSTANT, value=[0, 0, 0])
 
-            # 5. Resize về kích thước chuẩn (160x160) - Dùng INTER_AREA để giữ trung thực khi thu nhỏ
-            if crop.shape[0] != self.output_size[0] or crop.shape[1] != self.output_size[1]:
-                crop = cv2.resize(crop, self.output_size, interpolation=cv2.INTER_AREA)
+            # 5. Resize về kích thước chuẩn (160x160) - TẠM THỜI BỎ QUA
+            # if crop.shape[0] != self.output_size[0] or crop.shape[1] != self.output_size[1]:
+            #     crop = cv2.resize(crop, self.output_size, interpolation=cv2.INTER_AREA)
+
+            # Dịch tọa độ 5 điểm kpss theo ảnh crop mới
+            kpss = face.get('kpss')
+            if kpss is not None:
+                new_kpss = []
+                for pt in kpss:
+                    # Trừ đi phần offset x1, y1 (trường hợp bị tràn viền nx1 < 0 thì dx1 sẽ > 0)
+                    new_x = pt[0] - nx1 + dx1
+                    new_y = pt[1] - ny1 + dy1
+                    new_kpss.append([new_x, new_y])
+                face['kpss'] = new_kpss
 
             # Encode sang Base64
             _, buffer = cv2.imencode('.jpg', crop)

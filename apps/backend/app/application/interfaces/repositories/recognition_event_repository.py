@@ -47,3 +47,16 @@ class RecognitionEventRepository(Protocol):
         dedupe_key: str,
         raw_payload: dict | None,
     ) -> RecognitionEvent: ...
+
+    def create_media_asset_and_link_snapshot(
+        self,
+        *,
+        recognition_id: UUID,
+        storage_provider: str,
+        bucket_name: str,
+        object_key: str,
+        original_filename: str,
+        mime_type: str,
+        file_size: int,
+        checksum: str | None,
+    ) -> UUID: ...

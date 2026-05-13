@@ -104,6 +104,7 @@ class RecognitionRequestedHandler:
                     track_id=track_id,
                     image_data=image_bytes,
                     bbox=bbox,
+                    kpss=face_data.get("kpss"),
                     detection_confidence=face_data.get("detection_confidence"),
                     quality_status=face_data.get("quality_status"),
                 )

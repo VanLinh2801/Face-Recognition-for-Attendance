@@ -20,6 +20,7 @@ class FaceInput:
     track_id: str
     image_data: bytes
     bbox: Optional[BoundingBox] = None
+    kpss: Optional[list] = None
     detection_confidence: Optional[float] = None
     quality_status: Optional[str] = None  # "passed" | "marginal" | "failed"
 

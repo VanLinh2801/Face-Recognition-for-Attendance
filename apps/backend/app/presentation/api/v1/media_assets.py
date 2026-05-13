@@ -51,6 +51,9 @@ internal_router = APIRouter(
     dependencies=[Depends(get_admin_user)],
 )
 
+# Public content endpoint — no auth required (used by <img> tags in browser)
+public_content_router = APIRouter(prefix="/media-assets", tags=["media-assets"])
+
 
 @router.get("", response_model=MediaAssetListResponse)
 def list_media_assets(
