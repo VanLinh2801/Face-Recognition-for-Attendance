@@ -8,7 +8,6 @@ All objects are singletons within the container instance.
 from app.application.use_cases.identify_faces import IdentifyFacesUseCase
 from app.application.use_cases.register_face import RegisterFaceUseCase
 from app.infrastructure.ai_models.insightface_embedder import InsightFaceEmbedder
-from app.infrastructure.ai_models.onnx_anti_spoofer import OnnxAntiSpoofer
 from app.infrastructure.integration.minio_client import MinioImageClient
 from app.infrastructure.integration.redis_consumer import RedisStreamConsumer
 from app.infrastructure.integration.redis_publisher import RedisStreamPublisher
@@ -30,7 +29,6 @@ class Container:
     def __init__(self) -> None:
         # ── Infrastructure adapters ────────────────────────────────────────
         self.embedder = InsightFaceEmbedder()
-        self.anti_spoofer = OnnxAntiSpoofer()
         self.vector_store = QdrantVectorStore()
         self.minio_client = MinioImageClient()
         self.publisher = RedisStreamPublisher()
@@ -38,7 +36,6 @@ class Container:
         # ── Use cases ─────────────────────────────────────────────────────
         self.identify_faces_use_case = IdentifyFacesUseCase(
             embedder=self.embedder,
-            anti_spoofer=self.anti_spoofer,
             vector_store=self.vector_store,
         )
         self.register_face_use_case = RegisterFaceUseCase(

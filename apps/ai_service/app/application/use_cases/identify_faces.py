@@ -8,7 +8,6 @@ from app.domain.entities.recognition_result import (
     RecognitionDecision,
     RecognitionResult,
 )
-from app.domain.interfaces.anti_spoofer import IAntiSpoofer
 from app.domain.interfaces.embedder import IFaceEmbedder
 from app.domain.interfaces.vector_store import IVectorStore
 
@@ -20,43 +19,22 @@ class IdentifyFacesUseCase:
     Core recognition use case.
 
     Pipeline:
-        1. Anti-spoof check   → SPOOFED if fails (no event emitted)
-        2. Embedding extract  → 512-d vector
-        3. Qdrant search      → top-1 cosine match
-        4. Threshold decide   → KNOWN | UNKNOWN
+        1. Embedding extract  → 512-d vector
+        2. Qdrant search      → top-1 cosine match
+        3. Threshold decide   → KNOWN | UNKNOWN
     """
 
     def __init__(
         self,
         embedder: IFaceEmbedder,
-        anti_spoofer: IAntiSpoofer,
         vector_store: IVectorStore,
     ) -> None:
         self._embedder = embedder
-        self._anti_spoofer = anti_spoofer
         self._vector_store = vector_store
 
     async def execute(self, face: FaceInput) -> RecognitionResult:
-        # ── Step 1: Anti-spoofing ─────────────────────────────────────────
-        spoof_score = await self._anti_spoofer.predict(face)
-        logger.debug(
-            "Anti-spoof result track_id=%s spoof_score=%.4f threshold=%.2f",
-            face.track_id,
-            spoof_score,
-            settings.SPOOF_THRESHOLD,
-        )
 
-        if spoof_score < settings.SPOOF_THRESHOLD:
-            logger.warning(
-                "Spoof detected track_id=%s spoof_score=%.4f", face.track_id, spoof_score
-            )
-            return RecognitionResult(
-                track_id=face.track_id,
-                decision=RecognitionDecision.SPOOFED,
-                spoof_score=spoof_score,
-            )
-
-        # ── Step 2: Embedding extraction ──────────────────────────────────
+        # ── Step 1: Embedding extraction ──────────────────────────────────
         embedding = await self._embedder.extract(face)
         logger.debug(
             "Embedding extracted track_id=%s model=%s det_score=%.4f",
@@ -65,7 +43,7 @@ class IdentifyFacesUseCase:
             embedding.detection_confidence,
         )
 
-        # ── Step 3: Vector search ─────────────────────────────────────────
+        # ── Step 2: Vector search ─────────────────────────────────────────
         results = await self._vector_store.search(
             embedding.vector,
             top_k=settings.QDRANT_TOP_K,
@@ -80,7 +58,7 @@ class IdentifyFacesUseCase:
                 match_score=top.score,
             )
 
-        # ── Step 4: Decision ──────────────────────────────────────────────
+        # ── Step 3: Decision ──────────────────────────────────────────────
         if best and best.match_score >= settings.RECOGNITION_THRESHOLD:
             logger.info(
                 "KNOWN track_id=%s person_id=%s score=%.4f",
@@ -91,7 +69,7 @@ class IdentifyFacesUseCase:
             return RecognitionResult(
                 track_id=face.track_id,
                 decision=RecognitionDecision.KNOWN,
-                spoof_score=spoof_score,
+                spoof_score=None,
                 match=best,
                 detection_confidence=embedding.detection_confidence,
             )
@@ -104,7 +82,7 @@ class IdentifyFacesUseCase:
         return RecognitionResult(
             track_id=face.track_id,
             decision=RecognitionDecision.UNKNOWN,
-            spoof_score=spoof_score,
+            spoof_score=None,
             match=best,  # nearest candidate for debugging
             detection_confidence=embedding.detection_confidence,
         )

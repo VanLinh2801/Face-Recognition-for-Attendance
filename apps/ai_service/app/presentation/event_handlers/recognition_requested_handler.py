@@ -19,9 +19,8 @@ class RecognitionRequestedHandler:
 
     For each face in the batch:
         - Downloads face crop from MinIO
-        - Runs IdentifyFacesUseCase (spoof → embed → search → decide)
+        - Runs IdentifyFacesUseCase (embed → search → decide)
         - Publishes `recognition_event.detected` OR `unknown_event.detected` to ai_backend stream
-        - SPOOFED faces produce no event (silent reject)
     """
 
     def __init__(
@@ -110,14 +109,6 @@ class RecognitionRequestedHandler:
                 )
 
                 result = await self._use_case.execute(face_input)
-
-                if result.decision == RecognitionDecision.SPOOFED:
-                    logger.warning(
-                        "Spoof rejected track_id=%s spoof_score=%.4f — no event emitted",
-                        track_id,
-                        result.spoof_score,
-                    )
-                    continue
 
                 dedupe_key = hashlib.sha256(
                     f"{frame_id}:{track_id}".encode()
