@@ -28,3 +28,8 @@ class SpoofAlertEventItemResponse(BaseModel):
 
 class SpoofAlertEventListResponse(PaginatedResponse):
     items: list[SpoofAlertEventItemResponse]
+
+
+class UpdateSpoofAlertEventReviewRequest(BaseModel):
+    review_status: SpoofReviewStatus | None = None
+    notes: str | None = None

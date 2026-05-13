@@ -28,3 +28,8 @@ class UnknownEventItemResponse(BaseModel):
 
 class UnknownEventListResponse(PaginatedResponse):
     items: list[UnknownEventItemResponse]
+
+
+class UpdateUnknownEventReviewRequest(BaseModel):
+    review_status: UnknownEventReviewStatus | None = None
+    notes: str | None = None

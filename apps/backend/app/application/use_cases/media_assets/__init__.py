@@ -43,6 +43,17 @@ class ListMediaAssetsUseCase:
         return PageResult(items=items, total=total, page=page_query.page, page_size=page_query.page_size)
 
 
+class GetMediaAssetUseCase:
+    def __init__(self, repository: MediaAssetRepository) -> None:
+        self._repository = repository
+
+    def execute(self, asset_id: UUID) -> MediaAsset:
+        media_asset = self._repository.get_media_asset(asset_id)
+        if media_asset is None:
+            raise NotFoundError("Media asset not found")
+        return media_asset
+
+
 @dataclass(slots=True, kw_only=True)
 class UploadMediaAssetCommand:
     file_data: BinaryIO
