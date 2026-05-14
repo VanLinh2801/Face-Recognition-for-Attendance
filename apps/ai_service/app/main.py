@@ -56,6 +56,7 @@ async def lifespan(app: FastAPI):
     logger.info("AI Service starting up …")
 
     await container.publisher.connect()
+    await container.recognition_result_buffer.connect()
     await container.pipeline_ai_consumer.connect()
     await container.vector_store.ensure_collection()
 
@@ -72,6 +73,7 @@ async def lifespan(app: FastAPI):
         await consumer_task
     except asyncio.CancelledError:
         pass
+    await container.recognition_result_buffer.close()
     await container.publisher.close()
     logger.info("AI Service shutdown complete")
 

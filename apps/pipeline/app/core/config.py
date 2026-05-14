@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     MAX_INITIAL_SNAPSHOTS: int = 3   # Số ảnh tối đa trong 2 giây đầu
 
     # Face Quality Filter — hard filter: face fail thì không gửi lên ai_service
-    MIN_FACE_SIZE_PX: int = 48       # Cạnh nhỏ nhất của SCRFD bbox trong ảnh gốc (px)
+    MIN_FACE_SIZE_PX: int = 80       # Cạnh nhỏ nhất của SCRFD bbox trong ảnh gốc (px)
     REQUIRE_FULL_KPS: bool = True    # Yêu cầu đủ 5 keypoints
     MIN_KPS_DIST_PX: float = 2.0      # Khoảng cách tối thiểu giữa 2 keypoints (tránh trùng)
     FACE_OVERLAP_IOU_THRESHOLD: float = 0.5  # IoU > 0.5 → reject face nhỏ hơn

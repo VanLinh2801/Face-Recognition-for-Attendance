@@ -4,10 +4,9 @@ import base64
 from app.processors.base import BaseProcessor
 
 class FaceCropper(BaseProcessor):
-    def __init__(self, output_size=(160, 160), scale=2.7):
+    def __init__(self, output_size=(160, 160), scale=1.3):
         self.output_size = output_size
-        # Tạm thời bỏ scale=2.7 của Anti-spoofing, dùng scale=1.2 để lấy vừa khuôn mặt
-        self.scale = 1.2 # scale
+        self.scale = scale
 
     def process(self, context: dict):
         frame = context.get('frame')

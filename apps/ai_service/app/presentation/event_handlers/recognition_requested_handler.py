@@ -4,10 +4,10 @@ import uuid
 from datetime import datetime, timezone
 
 from app.application.use_cases.identify_faces import IdentifyFacesUseCase
-from app.core.config import settings
 from app.domain.entities.face import BoundingBox, FaceInput
 from app.domain.entities.recognition_result import RecognitionDecision
 from app.infrastructure.integration.minio_client import MinioImageClient
+from app.infrastructure.integration.recognition_result_buffer import RecognitionResultBuffer
 from app.infrastructure.integration.redis_publisher import RedisStreamPublisher
 
 logger = logging.getLogger(__name__)
@@ -28,10 +28,12 @@ class RecognitionRequestedHandler:
         use_case: IdentifyFacesUseCase,
         minio_client: MinioImageClient,
         publisher: RedisStreamPublisher,
+        result_buffer: RecognitionResultBuffer,
     ) -> None:
         self._use_case = use_case
         self._minio = minio_client
         self._publisher = publisher
+        self._result_buffer = result_buffer
 
     async def handle(self, event: dict) -> None:
         payload = event.get("payload", {})
@@ -116,7 +118,7 @@ class RecognitionRequestedHandler:
                 ).hexdigest()
 
                 if result.decision == RecognitionDecision.KNOWN:
-                    await self._publish_recognition(
+                    candidate = self._build_recognition_candidate(
                         stream_id=stream_id,
                         frame_id=frame_id,
                         frame_sequence=frame_sequence,
@@ -130,7 +132,7 @@ class RecognitionRequestedHandler:
                         frame_height=frame_height,
                     )
                 else:  # UNKNOWN
-                    await self._publish_unknown(
+                    candidate = self._build_unknown_candidate(
                         stream_id=stream_id,
                         frame_id=frame_id,
                         frame_sequence=frame_sequence,
@@ -145,16 +147,22 @@ class RecognitionRequestedHandler:
                         frame_height=frame_height,
                     )
 
+                await self._result_buffer.add_candidate(
+                    stream_id=stream_id,
+                    track_id=track_id,
+                    candidate=candidate,
+                )
+
             except Exception as exc:
                 logger.error(
                     "Failed processing face track_id=%s: %s", track_id, exc, exc_info=True
                 )
 
-    async def _publish_recognition(
+    def _build_recognition_candidate(
         self, stream_id, frame_id, frame_sequence, track_id,
         result, dedupe_key, correlation_id, snapshot_media_asset, bbox,
         frame_width, frame_height,
-    ) -> None:
+    ) -> dict:
         envelope = self._publisher.build_envelope(
             event_name="recognition_event.detected",
             correlation_id=correlation_id,
@@ -179,20 +187,26 @@ class RecognitionRequestedHandler:
                 "bbox": bbox,
             },
         )
-        await self._publisher.publish(settings.REDIS_STREAM_AI_BACKEND, envelope)
         logger.info(
-            "Published recognition_event.detected person_id=%s track_id=%s score=%.4f det_conf=%.4f",
+            "Built recognition candidate person_id=%s track_id=%s score=%.4f det_conf=%.4f",
             result.match.person_id,
             track_id,
             result.match.match_score,
             result.detection_confidence,
         )
+        return {
+            "decision": "KNOWN",
+            "score": result.match.match_score,
+            "detection_confidence": result.detection_confidence,
+            "frame_sequence": frame_sequence,
+            "envelope": envelope,
+        }
 
-    async def _publish_unknown(
+    def _build_unknown_candidate(
         self, stream_id, frame_id, frame_sequence, track_id,
         detected_at, result, dedupe_key, correlation_id, snapshot_media_asset, bbox,
         frame_width, frame_height,
-    ) -> None:
+    ) -> dict:
         nearest_score = result.match.match_score if result.match else None
         envelope = self._publisher.build_envelope(
             event_name="unknown_event.detected",
@@ -218,9 +232,15 @@ class RecognitionRequestedHandler:
                 "bbox": bbox,
             },
         )
-        await self._publisher.publish(settings.REDIS_STREAM_AI_BACKEND, envelope)
         logger.info(
-            "Published unknown_event.detected track_id=%s nearest_score=%s",
+            "Built unknown candidate track_id=%s nearest_score=%s",
             track_id,
             f"{nearest_score:.4f}" if nearest_score is not None else "N/A",
         )
+        return {
+            "decision": "UNKNOWN",
+            "score": nearest_score,
+            "detection_confidence": result.detection_confidence,
+            "frame_sequence": frame_sequence,
+            "envelope": envelope,
+        }

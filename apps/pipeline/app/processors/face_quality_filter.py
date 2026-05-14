@@ -121,7 +121,7 @@ class FaceQualityFilter(BaseProcessor):
         face["_quality_face_width"] = fw
         face["_quality_face_height"] = fh
         face["_quality_side"] = min(fw, fh)
-        face["_quality_crop_area"] = int((min(fw, fh) * 2.7) ** 2)
+        face["_quality_crop_area"] = int((min(fw, fh) * 1.3) ** 2)
         return face["_quality_side"] >= self.min_face_size
 
     # ------------------------------------------------------------------ #

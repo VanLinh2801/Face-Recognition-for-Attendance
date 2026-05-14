@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     REDIS_STREAM_AI_BACKEND: str = "ai_backend"
     REDIS_CONSUMER_GROUP: str = "ai_service_group"
     REDIS_CONSUMER_NAME: str = "ai_service_1"
+    RECOGNITION_BUFFER_EXPECTED_CANDIDATES: int = 3
+    RECOGNITION_BUFFER_TTL_SECONDS: int = 3
+    RECOGNITION_BUFFER_PUBLISHED_TTL_SECONDS: int = 10
 
     # ── Qdrant ─────────────────────────────────────────────────────────────
     QDRANT_URL: str = "http://localhost:6333"

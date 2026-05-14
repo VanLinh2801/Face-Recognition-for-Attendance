@@ -9,6 +9,7 @@ from app.application.use_cases.identify_faces import IdentifyFacesUseCase
 from app.application.use_cases.register_face import RegisterFaceUseCase
 from app.infrastructure.ai_models.insightface_embedder import InsightFaceEmbedder
 from app.infrastructure.integration.minio_client import MinioImageClient
+from app.infrastructure.integration.recognition_result_buffer import RecognitionResultBuffer
 from app.infrastructure.integration.redis_consumer import RedisStreamConsumer
 from app.infrastructure.integration.redis_publisher import RedisStreamPublisher
 from app.infrastructure.persistence.qdrant_vector_store import QdrantVectorStore
@@ -32,6 +33,7 @@ class Container:
         self.vector_store = QdrantVectorStore()
         self.minio_client = MinioImageClient()
         self.publisher = RedisStreamPublisher()
+        self.recognition_result_buffer = RecognitionResultBuffer(self.publisher)
 
         # ── Use cases ─────────────────────────────────────────────────────
         self.identify_faces_use_case = IdentifyFacesUseCase(
@@ -48,6 +50,7 @@ class Container:
             use_case=self.identify_faces_use_case,
             minio_client=self.minio_client,
             publisher=self.publisher,
+            result_buffer=self.recognition_result_buffer,
         )
         self.registration_handler = RegistrationRequestedHandler(
             use_case=self.register_face_use_case,
