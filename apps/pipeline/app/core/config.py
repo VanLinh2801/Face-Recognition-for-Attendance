@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     SCRFD_MODEL_PATH: str = r"app\models\scrfd_2.5g_bnkps.onnx"
     FACE_DETECTION_THRESHOLD: float = 0.65
     FACE_TRACKER_COOLDOWN: int = 300  # 5 phút (300 giây)
+    FACE_TRACKER_MAX_AGE: float = 60.0 # Giây trước khi quên 1 track (mất dấu)
     MAX_INITIAL_SNAPSHOTS: int = 3   # Số ảnh tối đa trong 2 giây đầu
 
     # Face Quality Filter — hard filter: face fail thì không gửi lên ai_service

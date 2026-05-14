@@ -1,0 +1,42 @@
+# Build context: project root (.)
+# Base image: ubuntu (CPU only - no GPU dependency)
+# Entrypoint auto-detects GPU at runtime and uses CPU fallback
+
+FROM ubuntu:22.04
+
+# System deps needed by OpenCV (CPU version)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
+    libglib2.0-0 \
+    libgl1-mesa-glx \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python
+
+WORKDIR /app
+
+COPY apps/ai_service/requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir Cython numpy==2.1.3 \
+    && pip install --no-cache-dir -r requirements.txt
+
+# Install CPU-only packages (no CUDA)
+RUN pip install --no-cache-dir onnxruntime
+
+COPY apps/ai_service/app/ ./app/
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && mkdir -p /app/models/insightface /app/models/anti_spoof
+
+ENV PYTHONUNBUFFERED=1
+ENV SERVICE_NAME=ai-service
+ENV ONNXRUNTIME_PROVIDER=cpu
+
+EXPOSE 8000
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

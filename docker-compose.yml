@@ -1,51 +1,24 @@
 services:
+  # ============================================================
+  #  INFRASTRUCTURE SERVICES
+  # ============================================================
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: attendance
-      POSTGRES_USER: attendance
-      POSTGRES_PASSWORD: attendance
+      POSTGRES_DB: ${POSTGRES_DB:-attendance}
+      POSTGRES_USER: ${POSTGRES_USER:-attendance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-attendance}
     ports:
       - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
-      - ./infra/postgres:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U attendance -d attendance"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-attendance} -d ${POSTGRES_DB:-attendance}"]
       interval: 10s
       timeout: 5s
       retries: 10
-
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - "${MINIO_API_HOST_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
-
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "${QDRANT_HTTP_HOST_PORT:-6333}:6333"
-      - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"
-    volumes:
-      - ./infra/qdrant:/qdrant/config
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:6333/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  mediamtx:
-    image: bluenviron/mediamtx:latest
-    ports:
-      - "8554:8554" # RTSP
-      - "1935:1935" # RTMP
-      - "8888:8888" # HLS
-      - "8889:8889" # WebRTC
-      - "8189:8189/udp" # WebRTC ICE/UDP
+    networks:
+      - face_attend_net
 
   redis:
     image: redis:7-alpine
@@ -59,6 +32,284 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - face_attend_net
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "${MINIO_API_HOST_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - face_attend_net
+
+  minio-init:
+    image: minio/mc:latest
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-attendance}
+      PIPELINE_MINIO_BUCKET: ${PIPELINE_MINIO_BUCKET:-face-recognition}
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "until mc alias set local http://minio:9000 $${MINIO_ACCESS_KEY} $${MINIO_SECRET_KEY}; do sleep 1; done && mc mb --ignore-existing local/$${MINIO_BUCKET} && mc mb --ignore-existing local/$${PIPELINE_MINIO_BUCKET}",
+      ]
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - face_attend_net
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "${QDRANT_HTTP_HOST_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - face_attend_net
+
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    ports:
+      - "${MEDIAMTX_RTSP_PORT:-8554}:8554"
+      - "${MEDIAMTX_RTMP_PORT:-1935}:1935"
+      - "${MEDIAMTX_HLS_PORT:-8888}:8888"
+      - "${MEDIAMTX_WEBRTC_PORT:-8889}:8889"
+      - "${MEDIAMTX_ICE_PORT:-8189}:8189/udp"
+    networks:
+      - face_attend_net
+
+  # ============================================================
+  #  DATABASE MIGRATIONS
+  #  Runs alembic migrations before backend starts
+  # ============================================================
+  backend-migrate:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    env_file:
+      - .env.app
+    working_dir: /app/apps/backend
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - face_attend_net
+
+  # ============================================================
+  #  APPLICATION SERVICES
+  # ============================================================
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    env_file:
+      - .env.app
+    environment:
+      # Database — use service name so Docker DNS resolves it
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-attendance}:${POSTGRES_PASSWORD:-attendance}@postgres:5432/${POSTGRES_DB:-attendance}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-attendance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-attendance}
+      POSTGRES_DB: ${POSTGRES_DB:-attendance}
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      # MinIO
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-attendance}
+      # App
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ENV: ${ENV:-production}
+      ENABLE_EVENT_CONSUMER: "True"
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      AUTH_SEED_ADMIN_USERNAME: ${AUTH_SEED_ADMIN_USERNAME:-admin}
+      AUTH_SEED_ADMIN_PASSWORD: ${AUTH_SEED_ADMIN_PASSWORD:-admin123}
+      REDIS_STREAM_AI_EVENTS: ai_backend
+      REDIS_STREAM_PIPELINE_EVENTS: pipeline.backend.events
+      REDIS_STREAM_BACKEND_PIPELINE: pipeline_backend
+    ports:
+      - "${BACKEND_HOST_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      backend-migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - face_attend_net
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: apps/ai_service/${AI_SERVICE_DOCKERFILE:-Dockerfile.cpu}
+    env_file:
+      - .env.app
+    environment:
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      REDIS_STREAM_PIPELINE_AI: pipeline_ai
+      REDIS_STREAM_AI_BACKEND: ai_backend
+      # Qdrant
+      QDRANT_URL: http://qdrant:6333
+      # MinIO
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_SECURE: "false"
+      # AI Models — provider set auto by entrypoint.sh at runtime
+      INSIGHTFACE_MODEL_DIR: /app/models/insightface
+      INSIGHTFACE_CTX_ID: ${INSIGHTFACE_CTX_ID:-0}
+      ANTI_SPOOF_MODEL_PATH: /app/models/anti_spoof/minifasnet.onnx
+      # Thresholds
+      RECOGNITION_THRESHOLD: ${RECOGNITION_THRESHOLD:-0.45}
+      SPOOF_THRESHOLD: ${SPOOF_THRESHOLD:-0.70}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${AI_SERVICE_HOST_PORT:-8001}:8000"
+    volumes:
+      - ai_models:/app/models
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - face_attend_net
+
+  pipeline:
+    build:
+      context: .
+      dockerfile: apps/pipeline/${PIPELINE_DOCKERFILE:-Dockerfile.cpu}
+    env_file:
+      - .env.app
+    environment:
+      # API URLs (use Docker DNS service names)
+      AI_SERVICE_URL: http://ai-service:8000
+      BACKEND_URL: http://backend:8000
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      STREAM_REGISTRATION_REQ: pipeline_backend
+      STREAM_VISION_PROCESS: pipeline_ai
+      STREAM_PIPELINE_EVENTS: pipeline.backend.events
+      # MinIO
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_SECURE: "false"
+      MINIO_BUCKET_NAME: ${PIPELINE_MINIO_BUCKET:-face-recognition}
+      # Camera
+      CAMERA_SOURCES: ${CAMERA_SOURCES:-rtsp://mediamtx:8554/mystream}
+      # Thresholds
+      MOTION_THRESHOLD: ${MOTION_THRESHOLD:-0.02}
+      FRAME_INTERVAL: ${FRAME_INTERVAL:-0.1}
+      DEBUG: ${DEBUG:-false}
+      SCRFD_MODEL_PATH: /app/app/models/scrfd_2.5g_bnkps.onnx
+    ports:
+      - "${PIPELINE_HOST_PORT:-8002}:8000"
+    volumes:
+      - pipeline_models:/app/app/models
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      mediamtx:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+      ai-service:
+        condition: service_started
+      backend:
+        condition: service_started
+    networks:
+      - face_attend_net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    environment:
+      BACKEND_PROXY_TARGET: http://backend:8000
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "${FRONTEND_HOST_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - face_attend_net
+
+# ============================================================
+#  NETWORKS
+# ============================================================
+networks:
+  face_attend_net:
+    driver: bridge
+
+# ============================================================
+#  VOLUMES
+# ============================================================
 volumes:
+  postgres_data:
   redis_data:
+  minio_data:
+  qdrant_data:
+  ai_models:
+  pipeline_models:

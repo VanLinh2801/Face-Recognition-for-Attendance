@@ -1,0 +1,33 @@
+# Build context: project root (.)
+# Base image: ubuntu (CPU only - no GPU dependency)
+# Entrypoint auto-detects GPU at runtime and uses CPU fallback
+
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3-pip \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python
+
+WORKDIR /app
+
+# Install CPU packages only (onnxruntime CPU version)
+COPY apps/pipeline/requirements-cpu.txt ./requirements-cpu.txt
+RUN pip install --no-cache-dir -r requirements-cpu.txt
+
+COPY apps/pipeline/ ./app/
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+ENV PYTHONUNBUFFERED=1
+ENV SERVICE_NAME=pipeline
+ENV ONNXRUNTIME_PROVIDER=cpu
+
+EXPOSE 8000
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

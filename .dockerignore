@@ -1,0 +1,95 @@
+# ============================================================
+#  Docker Build Context Reduction
+#  Excludes heavy / unnecessary files from ALL Dockerfiles
+#  since build context is the project root (.).
+# ============================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+LICENSE
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+apps/frontend/node_modules/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Test files
+**/tests/
+**/__pycache__/
+
+# Local env files (use .env.app instead)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Data / uploads
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.jpg
+*.jpeg
+*.png
+*.gif
+uploads/
+data/
+outputs/
+
+# Jupyter
+.ipynb
+*.ipynb
+
+# Credentials / secrets
+*.pem
+*.key
+*.crt
+credentials/
+secrets/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Misc
+*.bak
+*.tmp
+.temp/
+.cache/

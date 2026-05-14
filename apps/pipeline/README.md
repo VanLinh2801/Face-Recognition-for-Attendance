@@ -62,3 +62,34 @@ CAMERA_SOURCES=rtsp://localhost:8554/mystream
 ```
 
 Sau đó khởi động Pipeline: `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
+
+---
+
+## 5. Khởi tạo Consumer Groups cho Redis
+
+Hệ thống sử dụng Redis Streams để giao tiếp giữa các dịch vụ. Bạn cần khởi tạo các "Consumer Group" để các dịch vụ có thể nhận dữ liệu.
+
+### Nếu chạy với Docker:
+Mở một Terminal mới tại thư mục gốc của dự án và chạy 2 lệnh sau (đảm bảo container `redis` đang chạy):
+
+```bash
+# Tạo group cho Backend nhận kết quả từ AI Service
+docker compose exec redis redis-cli XGROUP CREATE ai_backend backend-consumers $ MKSTREAM
+
+# Tạo group cho AI Service nhận dữ liệu từ Pipeline
+docker compose exec redis redis-cli XGROUP CREATE pipeline_ai ai-consumers $ MKSTREAM
+```
+
+### Nếu chạy local (không dùng Docker):
+Chạy file script đã chuẩn bị sẵn ở thư mục gốc:
+```bash
+.\setup_redis_groups.bat
+```
+
+> [!NOTE]
+> Bạn chỉ cần chạy lệnh này **một lần duy nhất** khi thiết lập hệ thống lần đầu hoặc sau khi xóa volume của Redis. Nếu Group đã tồn tại, lệnh sẽ báo lỗi `BUSYGROUP` - bạn có thể bỏ qua lỗi này.
+
+### 6. Kiểm tra ảnh từ pipeline gửi đến ai_service
+```bash
+python debug_face_image.py listen
+```

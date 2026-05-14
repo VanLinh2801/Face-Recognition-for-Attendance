@@ -12,6 +12,7 @@ class FaceTracker(BaseProcessor):
         #                     "initial_count": int, "passed_photos": int}}
         self.tracks = {}
         self.cooldown = settings.FACE_TRACKER_COOLDOWN
+        self.max_age = settings.FACE_TRACKER_MAX_AGE
         self.max_initial = settings.MAX_INITIAL_SNAPSHOTS
         # {track_id: [frame_sequence_1, frame_sequence_2, ...]} — các frame đã pass quality
         self._filter_passed = {}
@@ -112,5 +113,4 @@ class FaceTracker(BaseProcessor):
         return new_id
 
     def _cleanup_tracks(self, current_time):
-        expire_time = 60.0
-        self.tracks = {tid: t for tid, t in self.tracks.items() if current_time - t["last_seen"] < expire_time}
+        self.tracks = {tid: t for tid, t in self.tracks.items() if current_time - t["last_seen"] < self.max_age}

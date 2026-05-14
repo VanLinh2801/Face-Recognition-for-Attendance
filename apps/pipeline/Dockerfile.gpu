@@ -1,0 +1,35 @@
+# Build context: project root (.)
+# Base image: nvidia/cuda — works on both GPU and CPU machines at runtime
+# Entrypoint auto-detects GPU and installs correct onnxruntime package
+
+FROM nvidia/cuda:12.4-cudnn9-runtime-ubuntu22.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3-pip \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python
+
+WORKDIR /app
+
+# Install GPU packages (used when GPU is available)
+COPY apps/pipeline/requirements-gpu.txt ./requirements-gpu.txt
+RUN pip install --no-cache-dir -r requirements-gpu.txt
+
+# Install CPU packages (used when no GPU at runtime)
+COPY apps/pipeline/requirements-cpu.txt ./requirements-cpu.txt
+RUN pip install --no-cache-dir onnxruntime
+
+COPY apps/pipeline/ ./app/
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+ENV PYTHONUNBUFFERED=1
+ENV SERVICE_NAME=pipeline
+
+EXPOSE 8000
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
