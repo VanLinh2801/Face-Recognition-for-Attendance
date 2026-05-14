@@ -93,12 +93,14 @@ async def test_registration_handler_indexes_face_media_asset() -> None:
                 "face_media_asset": face_media_asset,
                 "source_media_asset_id": "source-1",
                 "quality_status": "passed",
+                "kpss": [[30, 40], [70, 40], [50, 60], [35, 80], [65, 80]],
             },
         }
     )
 
     assert minio.calls == [("attendance", "registration_faces/1.jpg")]
     assert use_case.calls[0][0].image_data == b"face-crop"
+    assert use_case.calls[0][0].kpss == [[30, 40], [70, 40], [50, 60], [35, 80], [65, 80]]
     payload = publisher.published[0][1]["payload"]
     assert payload["status"] == "indexed"
     assert payload["face_image_media_asset"] == face_media_asset

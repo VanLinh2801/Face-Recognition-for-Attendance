@@ -90,6 +90,7 @@ async def test_publish_registration_to_ai_service_uses_face_media_asset(monkeypa
         source_media_asset_id="source-1",
         quality_status="passed",
         pipeline_metadata={"bbox": [1.0, 2.0, 3.0, 4.0]},
+        kpss=[[30, 40], [70, 40], [50, 60], [35, 80], [65, 80]],
     )
 
     assert fake_client.sent[0][0] == pipeline_module.settings.STREAM_VISION_PROCESS
@@ -97,4 +98,5 @@ async def test_publish_registration_to_ai_service_uses_face_media_asset(monkeypa
     assert envelope["event_name"] == "registration.requested"
     assert envelope["producer"] == "pipeline"
     assert envelope["payload"]["face_media_asset"] == face_media_asset
+    assert envelope["payload"]["kpss"] == [[30, 40], [70, 40], [50, 60], [35, 80], [65, 80]]
     assert "source_media_asset" not in envelope["payload"]

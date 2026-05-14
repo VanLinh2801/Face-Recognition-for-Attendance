@@ -172,6 +172,7 @@ class PipelineService:
                 "track_id": registration_id,
                 "bbox": detection["bbox"],
                 "score": detection["score"],
+                "kpss": detection.get("kpss"),
                 "type": "REGISTRATION",
             }
             crop_context = {
@@ -216,6 +217,7 @@ class PipelineService:
             pipeline_metadata = {
                 "bbox": [float(v) for v in detection["bbox"]],
                 "detection_confidence": float(detection["score"]),
+                "kpss": processed_face.get("kpss"),
                 "crop_scale": processed_face.get("crop_scale"),
                 "detector": "scrfd",
             }
@@ -237,6 +239,7 @@ class PipelineService:
                 source_media_asset_id=source_media_asset_id,
                 quality_status="passed",
                 pipeline_metadata=pipeline_metadata,
+                kpss=processed_face.get("kpss"),
             )
             logger.info(
                 "[REGISTRATION] Published prepared face registration_id=%s to AI",
@@ -402,6 +405,7 @@ class PipelineService:
         source_media_asset_id: Optional[str],
         quality_status: str,
         pipeline_metadata: dict,
+        kpss: Optional[list] = None,
     ) -> None:
         envelope = {
             "event_name": "registration.requested",
@@ -417,6 +421,7 @@ class PipelineService:
                 "face_media_asset": face_media_asset,
                 "source_media_asset_id": source_media_asset_id,
                 "quality_status": quality_status,
+                "kpss": kpss,
                 "captured_at": datetime.now(timezone.utc).isoformat(),
                 "pipeline_metadata": pipeline_metadata,
             },

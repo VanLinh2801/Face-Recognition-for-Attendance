@@ -43,6 +43,7 @@ class QdrantVectorStore(IVectorStore):
             logger.debug("Qdrant collection already exists: %s", self._collection)
 
     async def search(self, vector: np.ndarray, top_k: int = 1) -> List[VectorSearchResult]:
+        vector = self._normalize(vector)
         results = await self._client.search(
             collection_name=self._collection,
             query_vector=vector.tolist(),
@@ -61,6 +62,7 @@ class QdrantVectorStore(IVectorStore):
     async def upsert(
         self, registration_id: str, person_id: str, vector: np.ndarray
     ) -> None:
+        vector = self._normalize(vector)
         await self._client.upsert(
             collection_name=self._collection,
             points=[
@@ -86,3 +88,11 @@ class QdrantVectorStore(IVectorStore):
             points_selector=PointIdsList(points=[registration_id]),
         )
         logger.info("Deleted vector registration_id=%s", registration_id)
+
+    @staticmethod
+    def _normalize(vector: np.ndarray) -> np.ndarray:
+        vector = np.asarray(vector, dtype=np.float32).reshape(-1)
+        norm = np.linalg.norm(vector)
+        if norm <= 0:
+            raise ValueError("Cannot normalize an empty vector")
+        return vector / norm

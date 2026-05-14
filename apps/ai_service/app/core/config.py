@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     INSIGHTFACE_MODEL_NAME: str = "buffalo_l"
     INSIGHTFACE_MODEL_VERSION: str = "1.0"
     INSIGHTFACE_MODEL_DIR: str = "/app/models/insightface"
+    INSIGHTFACE_RECOGNITION_MODEL_FILE: str | None = None
     INSIGHTFACE_CTX_ID: int = 0
     INSIGHTFACE_DET_SIZE: int = 640
 

@@ -77,6 +77,7 @@ class RegistrationRequestedHandler:
             face_input = FaceInput(
                 track_id=registration_id,  # registration_id serves as track_id here
                 image_data=image_bytes,
+                kpss=payload.get("kpss"),
                 quality_status=payload.get("quality_status"),
             )
 
