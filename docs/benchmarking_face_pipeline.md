@@ -53,10 +53,42 @@ embedding have different bottlenecks, dependencies, and owners. Separating them
 lets you see whether time is spent before the Redis handoff or inside AI
 processing. End-to-end system monitoring then shows the combined cost.
 
+## Benchmark Env
+
+Benchmark scripts load `benchmarks/.env.benchmark` by default when the file
+exists. Copy the example once and adjust local paths:
+
+```powershell
+Copy-Item benchmarks\.env.benchmark.example benchmarks\.env.benchmark
+```
+
+Use `--env-file` to point a script at a different config file:
+
+```powershell
+python benchmarks\ai_service\benchmark_ai_stages.py --env-file benchmarks\.env.benchmark
+```
+
+CLI arguments always override values from the env file. The most important
+settings are:
+
+- `BENCH_INPUT_DIR`, `BENCH_OUTPUT_DIR`, `BENCH_MANIFEST`
+- `SCRFD_MODEL_PATH`
+- `INSIGHTFACE_MODEL_DIR`, `INSIGHTFACE_MODEL_NAME`,
+  `INSIGHTFACE_RECOGNITION_MODEL_FILE`, `INSIGHTFACE_CTX_ID`
+- `BENCH_INCLUDE_QDRANT`, `QDRANT_URL`, `QDRANT_COLLECTION`
+- `BENCH_AI_SUMMARY_OUTPUT`, `BENCH_AI_SAMPLES_OUTPUT`
+- `BENCH_RESOURCE_OUTPUT`
+
 ## Pipeline Component Benchmark
 
 Use this when you want to know how expensive SCRFD detection and face crop
 preparation are, independent of Redis/MinIO/Qdrant:
+
+```powershell
+python benchmarks\face_pipeline\prepare_faces.py
+```
+
+You can still override any value from the command line:
 
 ```powershell
 python benchmarks\face_pipeline\prepare_faces.py `
@@ -77,6 +109,12 @@ Output:
 Use this after selecting a recognizer model in `Recognizer-Benchmark`. It uses
 the same `InsightFaceEmbedder` and optional `QdrantVectorStore` as the service,
 so model config stays close to production.
+
+```powershell
+python benchmarks\ai_service\benchmark_ai_stages.py
+```
+
+Example with explicit overrides:
 
 ```powershell
 python benchmarks\ai_service\benchmark_ai_stages.py `
@@ -115,6 +153,12 @@ and `--ctx-id`.
 ## System Resource Monitoring
 
 Run this while the full stack is processing a video/camera stream:
+
+```powershell
+python benchmarks\system\monitor_resources.py
+```
+
+Example with explicit overrides:
 
 ```powershell
 python benchmarks\system\monitor_resources.py `
