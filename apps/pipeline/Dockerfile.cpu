@@ -19,9 +19,10 @@ WORKDIR /app
 COPY apps/pipeline/requirements-cpu.txt ./requirements-cpu.txt
 RUN pip install --no-cache-dir -r requirements-cpu.txt
 
-COPY apps/pipeline/ ./app/
+COPY apps/pipeline/app/ ./app/
 COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENV PYTHONUNBUFFERED=1
 ENV SERVICE_NAME=pipeline

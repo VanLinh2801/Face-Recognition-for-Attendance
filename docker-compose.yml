@@ -82,7 +82,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:6333/healthz"]
+      test: ["CMD-SHELL", "bash -ec ':</dev/tcp/127.0.0.1/6333'"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -110,6 +110,13 @@ services:
       dockerfile: apps/backend/Dockerfile
     env_file:
       - .env.app
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-attendance}:${POSTGRES_PASSWORD:-attendance}@postgres:5432/${POSTGRES_DB:-attendance}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-attendance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-attendance}
+      POSTGRES_DB: ${POSTGRES_DB:-attendance}
     working_dir: /app/apps/backend
     command: ["alembic", "upgrade", "head"]
     depends_on:
@@ -253,7 +260,7 @@ services:
       # Thresholds
       MOTION_THRESHOLD: ${MOTION_THRESHOLD:-0.02}
       FRAME_INTERVAL: ${FRAME_INTERVAL:-0.1}
-      DEBUG: ${DEBUG:-false}
+      DEBUG: ${PIPELINE_DEBUG:-false}
       SCRFD_MODEL_PATH: /app/app/models/scrfd_2.5g_bnkps.onnx
     ports:
       - "${PIPELINE_HOST_PORT:-8002}:8000"
@@ -279,6 +286,8 @@ services:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
+      args:
+        BACKEND_PROXY_TARGET: http://backend:8000
     environment:
       BACKEND_PROXY_TARGET: http://backend:8000
       NODE_ENV: production

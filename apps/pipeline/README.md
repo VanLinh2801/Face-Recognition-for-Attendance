@@ -30,6 +30,17 @@ ffmpeg -f dshow -rtbufsize 100M -thread_queue_size 512 -i video="Integrated Webc
 -f rtsp -rtsp_transport tcp rtsp://localhost:8554/mystream
 ```
 
+--- rtx 4070
+
+```bash
+ffmpeg -f dshow -rtbufsize 1024M -thread_queue_size 4096 `
+-framerate 10 -video_size 1280x720 -i video="HD Camera" `
+-vf "format=yuv420p" `
+-c:v libx264 -preset ultrafast -tune zerolatency -crf 18 -maxrate 4000k -bufsize 8000k -g 20 `
+-f rtsp -rtsp_transport tcp rtsp://localhost:8554/mystream
+
+```
+
 **Giải thích thông số:**
 *   `-f dshow`: Dùng DirectShow của Windows để đọc thiết bị.
 *   `-rtbufsize 500M`: Tăng bộ nhớ đệm để tránh giật/rớt khung hình.

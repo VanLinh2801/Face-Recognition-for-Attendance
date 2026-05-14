@@ -17,14 +17,17 @@ interface UseRealtimeOverlayReturn {
   overlays: FrameOverlayEvent[];
 }
 
-const WS_BASE_URL = typeof window !== "undefined"
-  ? `ws://${window.location.hostname}:8000`
-  : "ws://localhost:8000";
-
 const HEARTBEAT_INTERVAL = 30000;
 const RECONNECT_DELAY_BASE = 1000;
 const RECONNECT_DELAY_MAX = 30000;
 const MAX_STORED_OVERLAYS = 20;
+
+function getSameOriginWsUrl(path: string): string {
+  if (typeof window === "undefined") return path;
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}${path}`;
+}
 
 export function useRealtimeOverlay({
   token,
@@ -99,7 +102,9 @@ export function useRealtimeOverlay({
     if (!isMountedRef.current || !enabled) return;
 
     const channels = ["stream.overlay"];
-    const wsUrl = `${WS_BASE_URL}/api/ws/v1/realtime?token=${encodeURIComponent(token)}&channels=${channels.join(",")}`;
+    const wsUrl = getSameOriginWsUrl(
+      `/api/ws/v1/realtime?token=${encodeURIComponent(token)}&channels=${channels.join(",")}`,
+    );
 
     setStatus("connecting");
     onStatusChange?.("connecting");

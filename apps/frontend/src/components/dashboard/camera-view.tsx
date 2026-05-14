@@ -7,13 +7,15 @@ import { CameraOverlay } from "./camera-overlay";
 import { transformRecognitionToRenderBox, type RecognitionBoxSource } from "@/lib/overlay-utils";
 import type { OverlayRenderBox } from "@/lib/types";
 
-const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:18000";
-const WS_URL = `${BACKEND_BASE_URL.replace(/^http/, "ws")}/api/ws/v1/realtime`;
-
 // Which stream IDs to display overlays for. Empty array = show all.
 const ALLOWED_STREAM_IDS: string[] = [];
 
 const OVERLAY_TTL_MS = 1000;
+
+function getSameOriginWsUrl(path: string): string {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}${path}`;
+}
 
 export function CameraView() {
   const [videoDimensions, setVideoDimensions] = useState<VideoDimensions | null>(null);
@@ -85,7 +87,7 @@ export function CameraView() {
     const connect = () => {
       if (!isMounted) return;
       setWsStatus("connecting");
-      ws = new WebSocket(WS_URL);
+      ws = new WebSocket(getSameOriginWsUrl("/api/ws/v1/realtime"));
 
       ws.onopen = () => {
         if (!isMounted) { ws?.close(); return; }

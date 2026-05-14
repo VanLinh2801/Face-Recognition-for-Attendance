@@ -222,12 +222,22 @@ class FaceQualityFilter(BaseProcessor):
         if kpss is None:
             logger.debug(f"[QUALITY] {face.get('track_id')} missing_kps: kpss=None")
             return False
-        kps = np.array(kpss)
+        try:
+            kps = np.asarray(kpss, dtype=np.float32)
+        except (ValueError, TypeError):
+            logger.debug(f"[QUALITY] {face.get('track_id')} missing_kps: invalid kpss={kpss}")
+            return False
+
         if kps.shape != (5, 2):
             logger.debug(f"[QUALITY] {face.get('track_id')} missing_kps: shape={kps.shape}")
             return False
+        if not np.isfinite(kps).all():
+            logger.debug(f"[QUALITY] {face.get('track_id')} missing_kps: non_finite kpss={kpss}")
+            return False
 
         bbox = face.get("bbox")
+        if not bbox or len(bbox) != 4:
+            return False
         x1, y1, x2, y2 = bbox
 
         for idx, kp in enumerate(kps):
@@ -242,6 +252,42 @@ class FaceQualityFilter(BaseProcessor):
                 if dist < self.min_kps_dist:
                     logger.debug(f"[QUALITY] {face.get('track_id')} missing_kps: dist({i},{j})={dist:.1f} < {self.min_kps_dist}")
                     return False
+
+        if not self._check_kps_geometry(face, kps):
+            return False
+
+        return True
+
+    def _check_kps_geometry(self, face: dict, kps: np.ndarray) -> bool:
+        left_eye, right_eye, nose, mouth_left, mouth_right = kps
+        bbox = face.get("bbox")
+        x1, y1, x2, y2 = bbox
+        bw = float(x2 - x1)
+        bh = float(y2 - y1)
+        if bw <= 0 or bh <= 0:
+            return False
+
+        eye_dist = float(np.linalg.norm(right_eye - left_eye))
+        min_eye_dist = max(self.min_kps_dist * 2.0, bw * 0.12)
+        if eye_dist < min_eye_dist:
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
+                f"eye_dist={eye_dist:.1f} < {min_eye_dist:.1f}"
+            )
+            return False
+
+        if left_eye[0] >= right_eye[0] or mouth_left[0] >= mouth_right[0]:
+            logger.debug(f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: left/right order")
+            return False
+
+        eye_y = (left_eye[1] + right_eye[1]) / 2.0
+        mouth_y = (mouth_left[1] + mouth_right[1]) / 2.0
+        if not (eye_y < nose[1] < mouth_y):
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
+                f"eye_y={eye_y:.1f}, nose_y={nose[1]:.1f}, mouth_y={mouth_y:.1f}"
+            )
+            return False
 
         return True
 
@@ -296,8 +342,10 @@ class FaceQualityFilter(BaseProcessor):
             return False
 
         try:
-            kps = np.array(kpss)
+            kps = np.asarray(kpss, dtype=np.float32)
             if kps.shape != (5, 2):
+                return False
+            if not np.isfinite(kps).all():
                 return False
         except (ValueError, TypeError):
             return False
@@ -312,7 +360,9 @@ class FaceQualityFilter(BaseProcessor):
         dx = eye_vector[0]
         dy = eye_vector[1]
         roll_rad = np.arctan2(dy, dx)
-        roll_deg = np.abs(np.degrees(roll_rad))
+        roll_deg = abs(float(np.degrees(roll_rad)))
+        if roll_deg > 90.0:
+            roll_deg = 180.0 - roll_deg
 
         # 2. Tính YAW (quay mặt trái/phải)
         L = np.linalg.norm(eye_vector)
@@ -324,7 +374,7 @@ class FaceQualityFilter(BaseProcessor):
             p = np.dot(W, u)
             # Tỷ lệ: p lệch khỏi tâm L/2 bao nhiêu phần trăm so với L/2
             yaw_ratio = np.abs(2 * p - L) / L
-            yaw_deg = yaw_ratio * 90.0
+            yaw_deg = min(float(yaw_ratio * 90.0), 90.0)
 
         # Lưu lại để debug/log
         face["_quality_yaw_deg"] = float(yaw_deg)
@@ -365,4 +415,39 @@ class FaceQualityFilter(BaseProcessor):
         if sharpness is not None and sharpness < self.min_sharpness:
             reasons.append(f"sharpness({sharpness:.1f}<{self.min_sharpness})")
 
+        detail = self._format_quality_detail(face)
+        if detail:
+            reasons.append(detail)
+
         return reasons
+
+    def _format_quality_detail(self, face: dict) -> str:
+        bbox = face.get("bbox")
+        parts = []
+        if bbox and len(bbox) == 4:
+            x1, y1, x2, y2 = [float(v) for v in bbox]
+            parts.append(f"bbox=({x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f})")
+            parts.append(f"side={min(x2 - x1, y2 - y1):.0f}px")
+
+        yaw_deg = face.get("_quality_yaw_deg")
+        roll_deg = face.get("_quality_roll_deg")
+        if yaw_deg is not None:
+            parts.append(f"yaw={yaw_deg:.1f}")
+        if roll_deg is not None:
+            parts.append(f"roll={roll_deg:.1f}")
+
+        sharpness = face.get("_quality_sharpness")
+        if sharpness is not None:
+            parts.append(f"sharpness={sharpness:.1f}")
+
+        kpss = face.get("kpss")
+        if kpss is not None:
+            try:
+                kps = np.asarray(kpss, dtype=np.float32)
+                if kps.shape == (5, 2):
+                    compact = ";".join(f"{x:.0f},{y:.0f}" for x, y in kps)
+                    parts.append(f"kps=[{compact}]")
+            except (ValueError, TypeError):
+                parts.append("kps=invalid")
+
+        return "debug(" + " ".join(parts) + ")" if parts else ""

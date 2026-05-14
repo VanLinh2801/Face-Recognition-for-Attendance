@@ -76,6 +76,36 @@ class InsightFaceEmbedder(IFaceEmbedder):
             if candidate.exists():
                 return candidate
 
+        if settings.INSIGHTFACE_AUTO_DOWNLOAD:
+            logger.info(
+                "InsightFace model file not found. Downloading model pack '%s' into %s",
+                settings.INSIGHTFACE_MODEL_NAME,
+                root,
+            )
+            root.mkdir(parents=True, exist_ok=True)
+            try:
+                from insightface.app import FaceAnalysis  # noqa: PLC0415
+
+                app = FaceAnalysis(
+                    name=settings.INSIGHTFACE_MODEL_NAME,
+                    root=str(root),
+                    providers=[settings.ONNX_EXECUTION_PROVIDER],
+                )
+                app.prepare(
+                    ctx_id=settings.INSIGHTFACE_CTX_ID,
+                    det_size=(settings.INSIGHTFACE_DET_SIZE, settings.INSIGHTFACE_DET_SIZE),
+                )
+            except Exception as exc:
+                raise FileNotFoundError(
+                    "InsightFace recognition model was not found and auto-download failed. "
+                    "Expected one of: "
+                    + ", ".join(str(path) for path in candidates)
+                ) from exc
+
+            for candidate in candidates:
+                if candidate.exists():
+                    return candidate
+
         raise FileNotFoundError(
             "InsightFace recognition model not found. Expected one of: "
             + ", ".join(str(path) for path in candidates)

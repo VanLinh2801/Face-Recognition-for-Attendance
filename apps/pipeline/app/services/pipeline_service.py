@@ -137,9 +137,23 @@ class PipelineService:
                 )
                 return
 
+            frame_h, frame_w = frame.shape[:2]
+            logger.info(
+                "[REGISTRATION] Decoded image registration_id=%s size=%sx%s bytes=%s",
+                registration_id,
+                frame_w,
+                frame_h,
+                len(image_bytes),
+            )
+
             context = {"frame": frame}
             context = self.face_detector.process(context)
             detections = context.get("detections", [])
+            logger.info(
+                "[REGISTRATION] Detector result registration_id=%s detections=%s",
+                registration_id,
+                len(detections),
+            )
 
             if not detections:
                 await self._publish_registration_input_validated(
@@ -175,6 +189,39 @@ class PipelineService:
                 "kpss": detection.get("kpss"),
                 "type": "REGISTRATION",
             }
+
+            quality_context = {
+                "frame": frame,
+                "frame_width": frame_w,
+                "frame_height": frame_h,
+                "frame_sequence": 0,
+                "faces_to_emit": [face],
+            }
+            quality_context = self.face_quality_filter.process(quality_context)
+            filtered_faces = quality_context.get("filtered_faces", [])
+            if not filtered_faces:
+                quality_reasons = self.face_quality_filter._collect_reasons(face)
+                await self._publish_registration_input_validated(
+                    person_id=person_id,
+                    registration_id=registration_id,
+                    correlation_id=correlation_id,
+                    status="rejected",
+                    failure_code="QUALITY_FAILED",
+                    failure_message=(
+                        "Registration image did not pass face quality checks: "
+                        + ", ".join(quality_reasons)
+                    ),
+                    source_media_asset_id=source_media_asset_id,
+                    quality_status="failed",
+                    pipeline_metadata={
+                        "detections_count": len(detections),
+                        "bbox": detection["bbox"],
+                        "quality_reasons": quality_reasons,
+                    },
+                )
+                return
+
+            face = filtered_faces[0]
             crop_context = {
                 "frame": frame,
                 "faces_to_emit": [face],
@@ -219,6 +266,15 @@ class PipelineService:
                 "detection_confidence": float(detection["score"]),
                 "kpss": processed_face.get("kpss"),
                 "crop_scale": processed_face.get("crop_scale"),
+                "quality": {
+                    "face_width": face.get("_quality_face_width"),
+                    "face_height": face.get("_quality_face_height"),
+                    "side": face.get("_quality_side"),
+                    "sharpness": face.get("_quality_sharpness"),
+                    "yaw_deg": face.get("_quality_yaw_deg"),
+                    "roll_deg": face.get("_quality_roll_deg"),
+                    "crop_pixel_area": face.get("_quality_crop_area"),
+                },
                 "detector": "scrfd",
             }
             await self._publish_registration_input_validated(
@@ -393,7 +449,35 @@ class PipelineService:
                 "pipeline_metadata": pipeline_metadata,
             },
         }
-        await redis_stream_client.send_event(settings.STREAM_PIPELINE_EVENTS, envelope)
+        try:
+            await asyncio.wait_for(
+                redis_stream_client.send_event(settings.STREAM_PIPELINE_EVENTS, envelope),
+                timeout=2.0,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "[REGISTRATION] Timeout publishing validation event registration_id=%s stream=%s",
+                registration_id,
+                settings.STREAM_PIPELINE_EVENTS,
+            )
+            return
+
+        if status == "rejected":
+            logger.warning(
+                "[REGISTRATION] Rejected registration_id=%s code=%s message=%s metadata=%s",
+                registration_id,
+                failure_code,
+                failure_message,
+                pipeline_metadata,
+            )
+        else:
+            logger.info(
+                "[REGISTRATION] Validated registration_id=%s status=%s quality=%s metadata=%s",
+                registration_id,
+                status,
+                quality_status,
+                pipeline_metadata,
+            )
 
     async def _publish_registration_to_ai_service(
         self,
@@ -426,6 +510,16 @@ class PipelineService:
                 "pipeline_metadata": pipeline_metadata,
             },
         }
-        await redis_stream_client.send_event(settings.STREAM_VISION_PROCESS, envelope)
+        try:
+            await asyncio.wait_for(
+                redis_stream_client.send_event(settings.STREAM_VISION_PROCESS, envelope),
+                timeout=2.0,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "[REGISTRATION] Timeout publishing AI request registration_id=%s stream=%s",
+                registration_id,
+                settings.STREAM_VISION_PROCESS,
+            )
 
 pipeline_service = PipelineService()

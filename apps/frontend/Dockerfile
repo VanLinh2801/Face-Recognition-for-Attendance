@@ -6,6 +6,8 @@ RUN npm ci
 FROM node:22-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG BACKEND_PROXY_TARGET=http://backend:8000
+ENV BACKEND_PROXY_TARGET=${BACKEND_PROXY_TARGET}
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/frontend ./
 RUN npm run build
