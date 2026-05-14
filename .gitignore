@@ -48,6 +48,9 @@ yarn-error.log*
 # 4. THƯ MỤC TẠM & RÁC DỰ ÁN (PROJECT SPECIFIC)
 # ==========================================
 debug_images/
+bench_data/
+bench_results/
+benchmarks/.env.benchmark
 
 # ==========================================
 # 5. IDE & HỆ ĐIỀU HÀNH (OS & EDITORS)

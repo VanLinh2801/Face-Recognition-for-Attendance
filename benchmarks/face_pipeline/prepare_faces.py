@@ -9,8 +9,14 @@ import sys
 import time
 from pathlib import Path
 
+BENCHMARKS_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BENCHMARKS_ROOT))
+
+from env_utils import bootstrap_env, env_bool, env_int  # noqa: E402
+
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+DEFAULT_ENV_FILE = BENCHMARKS_ROOT / ".env.benchmark"
 
 
 def percentile(values: list[float], pct: float) -> float:
@@ -34,16 +40,56 @@ def summarize_ms(values: list[float]) -> dict:
 
 
 def parse_args() -> argparse.Namespace:
+    loaded_env_file = bootstrap_env(DEFAULT_ENV_FILE)
     parser = argparse.ArgumentParser(
         description="Prepare aligned-benchmark inputs from raw images using pipeline detector/cropper."
     )
-    parser.add_argument("--input-dir", required=True, help="Directory containing raw frame/image files.")
-    parser.add_argument("--output-dir", required=True, help="Directory to write cropped face images.")
-    parser.add_argument("--manifest", required=True, help="JSONL manifest with prepared face crops and landmarks.")
-    parser.add_argument("--scrfd-model-path", help="Override SCRFD_MODEL_PATH.")
-    parser.add_argument("--max-images", type=int, default=0, help="Limit number of input images; 0 means all.")
-    parser.add_argument("--all-faces", action="store_true", help="Emit all detected faces instead of largest face only.")
-    return parser.parse_args()
+    parser.add_argument("--env-file", default=str(loaded_env_file), help="Benchmark env file to load.")
+    parser.add_argument(
+        "--input-dir",
+        default=os.environ.get("BENCH_INPUT_DIR"),
+        help="Directory containing raw frame/image files. Env: BENCH_INPUT_DIR.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=os.environ.get("BENCH_OUTPUT_DIR"),
+        help="Directory to write cropped face images. Env: BENCH_OUTPUT_DIR.",
+    )
+    parser.add_argument(
+        "--manifest",
+        default=os.environ.get("BENCH_MANIFEST"),
+        help="JSONL manifest with prepared face crops and landmarks. Env: BENCH_MANIFEST.",
+    )
+    parser.add_argument(
+        "--scrfd-model-path",
+        default=os.environ.get("SCRFD_MODEL_PATH"),
+        help="Override SCRFD_MODEL_PATH.",
+    )
+    parser.add_argument(
+        "--max-images",
+        type=int,
+        default=env_int("BENCH_MAX_IMAGES", 0),
+        help="Limit number of input images; 0 means all. Env: BENCH_MAX_IMAGES.",
+    )
+    parser.add_argument(
+        "--all-faces",
+        action="store_true",
+        default=env_bool("BENCH_ALL_FACES", False),
+        help="Emit all detected faces instead of largest face only. Env: BENCH_ALL_FACES.",
+    )
+    args = parser.parse_args()
+    missing = [
+        name
+        for name in ("input_dir", "output_dir", "manifest")
+        if not getattr(args, name)
+    ]
+    if missing:
+        parser.error(
+            "Missing required benchmark path(s): "
+            + ", ".join(f"--{name.replace('_', '-')}" for name in missing)
+            + ". Set them in benchmarks/.env.benchmark or pass CLI args."
+        )
+    return args
 
 
 def main() -> None:

@@ -10,6 +10,13 @@ import time
 from pathlib import Path
 from typing import Any
 
+BENCHMARKS_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BENCHMARKS_ROOT))
+
+from env_utils import bootstrap_env, env_bool, env_int  # noqa: E402
+
+DEFAULT_ENV_FILE = BENCHMARKS_ROOT / ".env.benchmark"
+
 
 def percentile(values: list[float], pct: float) -> float:
     if not values:
@@ -32,23 +39,42 @@ def summarize_ms(values: list[float]) -> dict[str, float | int]:
 
 
 def parse_args() -> argparse.Namespace:
+    loaded_env_file = bootstrap_env(DEFAULT_ENV_FILE)
     parser = argparse.ArgumentParser(
         description="Benchmark AI service stages with the currently selected recognizer."
     )
-    parser.add_argument("--manifest", required=True, help="JSONL from benchmarks/face_pipeline/prepare_faces.py.")
-    parser.add_argument("--model-name", help="Override INSIGHTFACE_MODEL_NAME, e.g. buffalo_l.")
-    parser.add_argument("--model-dir", help="Override INSIGHTFACE_MODEL_DIR.")
-    parser.add_argument("--model-file", help="Override INSIGHTFACE_RECOGNITION_MODEL_FILE.")
-    parser.add_argument("--ctx-id", type=int, help="Override INSIGHTFACE_CTX_ID. Use 0 for GPU, -1 for CPU.")
-    parser.add_argument("--qdrant-url", help="Override QDRANT_URL.")
-    parser.add_argument("--qdrant-collection", help="Override QDRANT_COLLECTION.")
-    parser.add_argument("--warmup", type=int, default=20)
-    parser.add_argument("--repeat", type=int, default=1)
-    parser.add_argument("--limit", type=int, default=0, help="Limit manifest rows; 0 means all.")
-    parser.add_argument("--include-qdrant", action="store_true", help="Measure Qdrant search for each embedding.")
-    parser.add_argument("--output", help="Write summary JSON to this path.")
-    parser.add_argument("--samples-output", help="Write per-sample JSONL timings to this path.")
-    return parser.parse_args()
+    parser.add_argument("--env-file", default=str(loaded_env_file), help="Benchmark env file to load.")
+    parser.add_argument(
+        "--manifest",
+        default=os.environ.get("BENCH_MANIFEST"),
+        help="JSONL from benchmarks/face_pipeline/prepare_faces.py. Env: BENCH_MANIFEST.",
+    )
+    parser.add_argument("--model-name", default=os.environ.get("INSIGHTFACE_MODEL_NAME"), help="Override INSIGHTFACE_MODEL_NAME, e.g. buffalo_l.")
+    parser.add_argument("--model-dir", default=os.environ.get("INSIGHTFACE_MODEL_DIR"), help="Override INSIGHTFACE_MODEL_DIR.")
+    parser.add_argument("--model-file", default=os.environ.get("INSIGHTFACE_RECOGNITION_MODEL_FILE"), help="Override INSIGHTFACE_RECOGNITION_MODEL_FILE.")
+    parser.add_argument(
+        "--ctx-id",
+        type=int,
+        default=int(os.environ["INSIGHTFACE_CTX_ID"]) if os.environ.get("INSIGHTFACE_CTX_ID") else None,
+        help="Override INSIGHTFACE_CTX_ID. Use 0 for GPU, -1 for CPU.",
+    )
+    parser.add_argument("--qdrant-url", default=os.environ.get("QDRANT_URL"), help="Override QDRANT_URL.")
+    parser.add_argument("--qdrant-collection", default=os.environ.get("QDRANT_COLLECTION"), help="Override QDRANT_COLLECTION.")
+    parser.add_argument("--warmup", type=int, default=env_int("BENCH_WARMUP", 20))
+    parser.add_argument("--repeat", type=int, default=env_int("BENCH_REPEAT", 1))
+    parser.add_argument("--limit", type=int, default=env_int("BENCH_LIMIT", 0), help="Limit manifest rows; 0 means all.")
+    parser.add_argument(
+        "--include-qdrant",
+        action="store_true",
+        default=env_bool("BENCH_INCLUDE_QDRANT", False),
+        help="Measure Qdrant search for each embedding. Env: BENCH_INCLUDE_QDRANT.",
+    )
+    parser.add_argument("--output", default=os.environ.get("BENCH_AI_SUMMARY_OUTPUT"), help="Write summary JSON to this path.")
+    parser.add_argument("--samples-output", default=os.environ.get("BENCH_AI_SAMPLES_OUTPUT"), help="Write per-sample JSONL timings to this path.")
+    args = parser.parse_args()
+    if not args.manifest:
+        parser.error("Missing --manifest. Set BENCH_MANIFEST in benchmarks/.env.benchmark or pass --manifest.")
+    return args
 
 
 def apply_env_overrides(args: argparse.Namespace) -> None:

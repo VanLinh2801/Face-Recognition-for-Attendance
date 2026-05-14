@@ -2,28 +2,54 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+BENCHMARKS_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BENCHMARKS_ROOT))
+
+from env_utils import bootstrap_env, env_float, env_list  # noqa: E402
+
+DEFAULT_ENV_FILE = BENCHMARKS_ROOT / ".env.benchmark"
+
 
 def parse_args() -> argparse.Namespace:
+    loaded_env_file = bootstrap_env(DEFAULT_ENV_FILE)
     parser = argparse.ArgumentParser(
         description="Sample Docker container, GPU, and optional host process resource usage."
     )
-    parser.add_argument("--duration-sec", type=float, default=60.0)
-    parser.add_argument("--interval-sec", type=float, default=1.0)
-    parser.add_argument("--output", required=True, help="JSONL samples output path.")
+    parser.add_argument("--env-file", default=str(loaded_env_file), help="Benchmark env file to load.")
+    parser.add_argument(
+        "--duration-sec",
+        type=float,
+        default=env_float("BENCH_RESOURCE_DURATION_SEC", 60.0),
+    )
+    parser.add_argument(
+        "--interval-sec",
+        type=float,
+        default=env_float("BENCH_RESOURCE_INTERVAL_SEC", 1.0),
+    )
+    parser.add_argument(
+        "--output",
+        default=os.environ.get("BENCH_RESOURCE_OUTPUT"),
+        help="JSONL samples output path. Env: BENCH_RESOURCE_OUTPUT.",
+    )
     parser.add_argument(
         "--process-name",
         action="append",
-        default=[],
+        default=env_list("BENCH_RESOURCE_PROCESS_NAMES"),
         help="Optional process name to sample via psutil when installed. Can be repeated.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.output:
+        parser.error("Missing --output. Set BENCH_RESOURCE_OUTPUT in benchmarks/.env.benchmark or pass --output.")
+    return args
 
 
 def parse_size_to_mb(value: str) -> float | None:
