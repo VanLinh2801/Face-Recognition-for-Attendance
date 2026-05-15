@@ -1,9 +1,11 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/data/page-header";
 import { PersonsTable } from "@/components/persons/persons-table";
 import { ApiError, apiFetch } from "@/lib/api-client";
+import { getTranslatedBackendError } from "@/lib/translated-backend-error";
 import type { Department, PageResult, Person } from "@/lib/types";
 
 type PersonRow = Person & {
@@ -11,6 +13,7 @@ type PersonRow = Person & {
 };
 
 export default function PersonsPage() {
+  const t = useTranslations();
   const [persons, setPersons] = useState<Person[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,9 +21,11 @@ export default function PersonsPage() {
 
   useEffect(() => {
     let mounted = true;
+
     async function loadData() {
       setLoading(true);
       setError("");
+
       try {
         const [personsResponse, departmentsResponse] = await Promise.all([
           apiFetch<PageResult<Person>>("/persons?page=1&page_size=100", { withAuth: true }),
@@ -31,36 +36,37 @@ export default function PersonsPage() {
         setDepartments(departmentsResponse.items);
       } catch (err) {
         if (!mounted) return;
-        setError(err instanceof ApiError ? err.message : "Không tải được danh sách nhân sự.");
+        setError(err instanceof ApiError ? getTranslatedBackendError(t, err, "persons") : t("errors.system.requestFailed"));
       } finally {
         if (mounted) setLoading(false);
       }
     }
+
     void loadData();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [t]);
 
   const personRows: PersonRow[] = useMemo(() => {
     const departmentMap = new Map(departments.map((department) => [department.id, department.name]));
     return persons.map((person) => ({
       ...person,
-      department_name: person.department_id ? departmentMap.get(person.department_id) ?? "Unknown" : "No department",
+      department_name: person.department_id ? departmentMap.get(person.department_id) ?? t("common.unknown") : t("common.notAssigned"),
     }));
-  }, [persons, departments]);
+  }, [departments, persons, t]);
 
   return (
     <div>
       <PageHeader
-        title="Nhân sự"
-        description="Quản lý hồ sơ nhân sự và trạng thái đăng ký khuôn mặt."
-        action="Thêm nhân sự"
+        title={t("persons.page.title")}
+        description={t("persons.page.description")}
+        action={t("persons.page.addAction")}
         actionHref="/persons/new"
       />
       <div className="space-y-4 p-6">
         {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
-        {loading ? <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Đang tải dữ liệu nhân sự...</div> : null}
+        {loading ? <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{t("persons.page.loading")}</div> : null}
         {!loading ? <PersonsTable persons={personRows} departments={departments} /> : null}
       </div>
     </div>

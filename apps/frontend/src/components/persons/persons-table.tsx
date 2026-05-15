@@ -1,16 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, CalendarSearch, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eye, MoreHorizontal, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import {
+  Building2,
+  CalendarSearch,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Eye,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PersonStatusBadge } from "@/components/data/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api-client";
-import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { validatePersonProfileFields } from "@/lib/person-validation";
+import { getTranslatedBackendError } from "@/lib/translated-backend-error";
 import type { Department, Person } from "@/lib/types";
+import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { useOutsideClick } from "@/lib/use-outside-click";
 
 type PersonRow = Person & {
@@ -20,19 +37,12 @@ type PersonRow = Person & {
 export type EditablePersonStatus = Exclude<Person["status"], "inactive">;
 type PersonStatusFilter = "all" | EditablePersonStatus;
 
-type DeleteRequest =
-  | {
-      type: "single";
-      ids: string[];
-      title: string;
-      description: string;
-    }
-  | {
-      type: "bulk";
-      ids: string[];
-      title: string;
-      description: string;
-    };
+type DeleteRequest = {
+  type: "single" | "bulk";
+  ids: string[];
+  title: string;
+  description: string;
+};
 
 type ToastState = {
   title: string;
@@ -54,6 +64,7 @@ export function PersonsTable({
   persons: PersonRow[];
   departments: Department[];
 }) {
+  const t = useTranslations();
   const [persons, setPersons] = useState<PersonRow[]>(initialPersons);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [editingPerson, setEditingPerson] = useState<PersonRow | null>(null);
@@ -97,8 +108,10 @@ export function PersonsTable({
   const pageRangeEnd = Math.min(pageStartIndex + paginatedPersons.length, filteredPersons.length);
   const paginationPages = getVisiblePageNumbers(safeCurrentPage, totalPages);
 
-  const selectedCount = selectedFilteredCount;
-  const selectedText = selectedCount === 0 ? "Chưa chọn nhân sự" : `${selectedCount} đã chọn`;
+  const selectedText =
+    selectedFilteredCount === 0
+      ? t("persons.table.selectedNone")
+      : t("persons.table.selectedCount", { count: selectedFilteredCount });
 
   useEffect(() => {
     if (!toast) return;
@@ -121,46 +134,13 @@ export function PersonsTable({
     window.setTimeout(() => setToast(null), 300);
   }
 
-  function handleSearchQueryChange(value: string) {
-    setSearchQuery(value);
-    setCurrentPage(1);
-  }
-
-  function handleDepartmentIdChange(value: string) {
-    setDepartmentId(value);
-    setCurrentPage(1);
-  }
-
-  function handleStatusFilterChange(value: PersonStatusFilter) {
-    setStatusFilter(value);
-    setCurrentPage(1);
-  }
-
-  function toggleAll(checked: boolean) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      for (const person of paginatedPersons) {
-        if (checked) next.add(person.id);
-        else next.delete(person.id);
-      }
-      return next;
-    });
-  }
-
-  function toggleOne(personId: string, checked: boolean) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (checked) {
-        next.add(personId);
-      } else {
-        next.delete(personId);
-      }
-      return next;
-    });
+  function updateEditingPerson(field: keyof Person, value: string | null) {
+    setEditingPerson((current) => (current ? { ...current, [field]: value } : current));
   }
 
   async function saveEditingPerson() {
     if (!editingPerson) return;
+
     const validationError = validatePersonProfileFields({
       email: editingPerson.email,
       phone: editingPerson.phone,
@@ -168,8 +148,8 @@ export function PersonsTable({
     });
     if (validationError) {
       showToast({
-        title: "Dữ liệu chưa hợp lệ",
-        description: validationError,
+        title: t("persons.toast.invalidTitle"),
+        description: translatePersonValidationMessage(validationError, t),
         variant: "danger",
       });
       return;
@@ -194,7 +174,7 @@ export function PersonsTable({
         }),
       });
       const departmentName =
-        departments.find((department) => department.id === updatedPerson.department_id)?.name ?? "No department";
+        departments.find((department) => department.id === updatedPerson.department_id)?.name ?? t("common.notAssigned");
 
       setPersons((current) =>
         current.map((person) =>
@@ -208,21 +188,26 @@ export function PersonsTable({
       );
       setEditingPerson(null);
       showToast({
-        title: "Cập nhật thành công",
-        description: `Thông tin nhân viên ${updatedPerson.full_name} đã được cập nhật.`,
+        title: t("persons.toast.updateSuccessTitle"),
+        description: t("persons.toast.updateSuccessDescription", { name: updatedPerson.full_name }),
         variant: "success",
       });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Không thể cập nhật thông tin nhân viên.";
       const duplicateField = getDuplicatePersonField(err);
       if (duplicateField === "email") {
-        setEditFieldErrors({ email: "Email đã được sử dụng bởi nhân viên khác." });
+        setEditFieldErrors({ email: t("persons.fieldErrors.duplicateEmail") });
       } else if (duplicateField === "phone") {
-        setEditFieldErrors({ phone: "Số điện thoại đã được sử dụng bởi nhân viên khác." });
+        setEditFieldErrors({ phone: t("persons.fieldErrors.duplicatePhone") });
       }
+
       showToast({
-        title: "Cập nhật thất bại",
-        description: duplicateField === "email" ? "Email đã tồn tại. Vui lòng kiểm tra lại." : duplicateField === "phone" ? "Số điện thoại đã tồn tại. Vui lòng kiểm tra lại." : message,
+        title: t("persons.toast.updateFailedTitle"),
+        description:
+          duplicateField === "email"
+            ? t("persons.messages.duplicateEmail")
+            : duplicateField === "phone"
+              ? t("persons.messages.duplicatePhone")
+              : getTranslatedBackendError(t, err, "persons"),
         variant: "danger",
       });
     } finally {
@@ -230,19 +215,12 @@ export function PersonsTable({
     }
   }
 
-  function updateEditingPerson(field: keyof Person, value: string | null) {
-    setEditingPerson((current) => {
-      if (!current) return current;
-      return { ...current, [field]: value };
-    });
-  }
-
   function requestDeletePerson(person: PersonRow) {
     setDeleteRequest({
       type: "single",
       ids: [person.id],
-      title: "Xóa nhân viên?",
-      description: `Bạn có chắc muốn xóa ${person.full_name}? Thao tác này sẽ xóa nhân viên trên backend.`,
+      title: t("persons.deleteDialog.singleTitle"),
+      description: t("persons.deleteDialog.singleDescription", { name: person.full_name }),
     });
     setOpenActionId(null);
   }
@@ -253,8 +231,8 @@ export function PersonsTable({
     setDeleteRequest({
       type: "bulk",
       ids,
-      title: "Xóa nhân viên đã chọn?",
-      description: `Bạn có chắc muốn xóa ${ids.length} nhân viên đã chọn? Thao tác này sẽ xóa dữ liệu trên backend.`,
+      title: t("persons.deleteDialog.bulkTitle"),
+      description: t("persons.deleteDialog.bulkDescription", { count: ids.length }),
     });
   }
 
@@ -300,18 +278,17 @@ export function PersonsTable({
       });
       setDeleteRequest(null);
       showToast({
-        title: "Xóa thành công",
+        title: t("persons.toast.deleteSuccessTitle"),
         description:
           deleteRequest.type === "single"
-            ? "Nhân viên đã được xóa khỏi hệ thống."
-            : `${deleteRequest.ids.length} nhân viên đã được xóa khỏi hệ thống.`,
+            ? t("persons.toast.deleteSingleSuccessDescription")
+            : t("persons.toast.deleteBulkSuccessDescription", { count: deleteRequest.ids.length }),
         variant: "success",
       });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Không thể xóa nhân viên.";
       showToast({
-        title: "Xóa thất bại",
-        description: message,
+        title: t("persons.toast.deleteFailedTitle"),
+        description: getTranslatedBackendError(t, err, "persons"),
         variant: "danger",
       });
     } finally {
@@ -325,13 +302,32 @@ export function PersonsTable({
         <CardContent className="grid gap-3 md:grid-cols-[minmax(240px,0.78fr)_220px_280px_auto]">
           <Input
             value={searchQuery}
-            onChange={(event) => handleSearchQueryChange(event.target.value)}
-            placeholder="Tìm theo tên hoặc mã nhân viên"
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder={t("persons.table.searchPlaceholder")}
           />
-          <StatusFilterSelect value={statusFilter} onChange={handleStatusFilterChange} />
-          <DepartmentTreeSelect departments={departments} value={departmentId} onChange={handleDepartmentIdChange} />
-          <Button variant="outline" disabled={selectedCount === 0 || deleting} onClick={requestDeleteSelected}>
-            <Trash2 className="h-4 w-4" /> Xóa
+          <StatusFilterSelect
+            value={statusFilter}
+            onChange={(value) => {
+              setStatusFilter(value);
+              setCurrentPage(1);
+            }}
+          />
+          <DepartmentTreeSelect
+            departments={departments}
+            value={departmentId}
+            onChange={(value) => {
+              setDepartmentId(value);
+              setCurrentPage(1);
+            }}
+            rootValue="all"
+            rootLabel={t("persons.table.allDepartments")}
+          />
+          <Button variant="outline" disabled={selectedFilteredCount === 0 || deleting} onClick={requestDeleteSelected}>
+            <Trash2 className="h-4 w-4" />
+            {t("persons.table.bulkDelete")}
           </Button>
         </CardContent>
       </Card>
@@ -345,20 +341,20 @@ export function PersonsTable({
                   <th className="w-9 py-3">
                     <input
                       type="checkbox"
-                      aria-label="Chọn tất cả nhân viên"
+                      aria-label={t("persons.table.selectAll")}
                       checked={allSelected}
-                      onChange={(event) => toggleAll(event.target.checked)}
+                      onChange={(event) => toggleAllSelection(paginatedPersons, setSelectedIds, event.target.checked)}
                       className="h-4 w-4 rounded border-slate-300"
                     />
                   </th>
-                  <th className="w-12 py-3">STT</th>
-                  <th className="w-[18%]">Họ tên</th>
-                  <th className="w-[15%]">Phòng ban</th>
-                  <th className="w-[15%]">Chức danh</th>
-                  <th className="w-[22%]">Liên hệ</th>
-                  <th className="w-[11%]">Trạng thái</th>
-                  <th className="w-[11%]">Ngày vào</th>
-                  <th className="w-14 text-right">Action</th>
+                  <th className="w-12 py-3">{t("persons.table.index")}</th>
+                  <th className="w-[18%]">{t("persons.table.fullName")}</th>
+                  <th className="w-[15%]">{t("persons.table.department")}</th>
+                  <th className="w-[15%]">{t("persons.table.title")}</th>
+                  <th className="w-[22%]">{t("persons.table.contact")}</th>
+                  <th className="w-[11%]">{t("persons.table.status")}</th>
+                  <th className="w-[11%]">{t("persons.table.joinedAt")}</th>
+                  <th className="w-14 text-right">{t("common.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -367,31 +363,30 @@ export function PersonsTable({
                     <td className="py-3">
                       <input
                         type="checkbox"
-                        aria-label={`Chọn ${person.full_name}`}
+                        aria-label={t("persons.table.selectOne", { name: person.full_name })}
                         checked={selectedIds.has(person.id)}
-                        onChange={(event) => toggleOne(person.id, event.target.checked)}
+                        onChange={(event) => toggleSingleSelection(setSelectedIds, person.id, event.target.checked)}
                         className="h-4 w-4 rounded border-slate-300"
                       />
                     </td>
                     <td className="font-mono text-xs text-slate-500">{pageStartIndex + index + 1}</td>
                     <td className="truncate pr-4 font-medium">{person.full_name}</td>
-                    <td className="truncate pr-4">{person.department_name}</td>
-                    <td className="truncate pr-4">{person.title}</td>
+                    <td className="truncate pr-4">{person.department_name || t("common.notAssigned")}</td>
+                    <td className="truncate pr-4">{person.title || t("common.unknown")}</td>
                     <td className="truncate pr-4">
-                      <div className="truncate">{person.email}</div>
-                      <div className="text-xs text-slate-500">{person.phone}</div>
+                      <div className="truncate">{person.email || t("common.unknown")}</div>
+                      <div className="text-xs text-slate-500">{person.phone || t("common.unknown")}</div>
                     </td>
-                    <td><PersonStatusBadge status={person.status} /></td>
+                    <td>
+                      <PersonStatusBadge status={person.status} />
+                    </td>
                     <td className="truncate">{person.joined_at}</td>
                     <td className="text-right">
-                      <div
-                        ref={openActionId === person.id ? actionMenuRef : undefined}
-                        className="relative inline-flex justify-end"
-                      >
+                      <div ref={openActionId === person.id ? actionMenuRef : undefined} className="relative inline-flex justify-end">
                         <Button
                           variant="outline"
                           size="icon"
-                          aria-label={`Mở action cho ${person.full_name}`}
+                          aria-label={t("persons.table.openActions", { name: person.full_name })}
                           onClick={() => setOpenActionId((current) => (current === person.id ? null : person.id))}
                         >
                           <MoreHorizontal className="h-4 w-4" />
@@ -404,7 +399,7 @@ export function PersonsTable({
                               onClick={() => setOpenActionId(null)}
                             >
                               <Eye className="h-4 w-4" />
-                              Xem chi tiết
+                              {t("persons.table.viewDetails")}
                             </Link>
                             <Link
                               href={`/persons/${person.id}/face-registrations/new`}
@@ -412,7 +407,7 @@ export function PersonsTable({
                               onClick={() => setOpenActionId(null)}
                             >
                               <Plus className="h-4 w-4" />
-                              Thêm face
+                              {t("persons.table.addFace")}
                             </Link>
                             <button
                               type="button"
@@ -424,7 +419,7 @@ export function PersonsTable({
                               }}
                             >
                               <Pencil className="h-4 w-4" />
-                              Sửa thông tin
+                              {t("persons.table.edit")}
                             </button>
                             <button
                               type="button"
@@ -432,7 +427,7 @@ export function PersonsTable({
                               onClick={() => requestDeletePerson(person)}
                             >
                               <Trash2 className="h-4 w-4" />
-                              Xóa
+                              {t("persons.table.delete")}
                             </button>
                           </div>
                         ) : null}
@@ -444,12 +439,19 @@ export function PersonsTable({
             </table>
             {filteredPersons.length === 0 ? (
               <div className="rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                Không tìm thấy nhân sự phù hợp.
+                {t("persons.table.empty")}
               </div>
             ) : null}
           </div>
           <div className="mt-4 flex flex-col gap-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
-            <span>Hiển thị {pageRangeStart}-{pageRangeEnd}/{filteredPersons.length} nhân sự · {selectedText}</span>
+            <span>
+              {t("persons.table.showing", {
+                from: pageRangeStart,
+                to: pageRangeEnd,
+                total: filteredPersons.length,
+                selected: selectedText,
+              })}
+            </span>
             <div className="flex flex-wrap items-center gap-1">
               <Button
                 variant="outline"
@@ -457,7 +459,7 @@ export function PersonsTable({
                 className="h-8 w-8"
                 disabled={safeCurrentPage <= 1}
                 onClick={() => setCurrentPage(1)}
-                aria-label="Về trang đầu"
+                aria-label={t("persons.table.firstPage")}
               >
                 <ChevronsLeft className="h-4 w-4" />
               </Button>
@@ -467,7 +469,7 @@ export function PersonsTable({
                 className="h-8 w-8"
                 disabled={safeCurrentPage <= 1}
                 onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                aria-label="Lùi một trang"
+                aria-label={t("persons.table.previousPage")}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -478,7 +480,7 @@ export function PersonsTable({
                   size="icon"
                   className="h-8 w-8"
                   onClick={() => setCurrentPage(page)}
-                  aria-label={`Đi tới trang ${page}`}
+                  aria-label={t("persons.table.goToPage", { page })}
                   aria-current={page === safeCurrentPage ? "page" : undefined}
                 >
                   {page}
@@ -490,7 +492,7 @@ export function PersonsTable({
                 className="h-8 w-8"
                 disabled={safeCurrentPage >= totalPages}
                 onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                aria-label="Tiến một trang"
+                aria-label={t("persons.table.nextPage")}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -500,7 +502,7 @@ export function PersonsTable({
                 className="h-8 w-8"
                 disabled={safeCurrentPage >= totalPages}
                 onClick={() => setCurrentPage(totalPages)}
-                aria-label="Tới trang cuối"
+                aria-label={t("persons.table.lastPage")}
               >
                 <ChevronsRight className="h-4 w-4" />
               </Button>
@@ -520,12 +522,10 @@ export function PersonsTable({
           >
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
               <div>
-                <h2 className="text-lg font-semibold">Sửa thông tin nhân viên</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Chỉ chỉnh thông tin lưu trong bảng persons, không bao gồm face registration.
-                </p>
+                <h2 className="text-lg font-semibold">{t("persons.editDialog.title")}</h2>
+                <p className="mt-1 text-sm text-slate-500">{t("persons.editDialog.description")}</p>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setEditingPerson(null)} aria-label="Đóng panel sửa">
+              <Button variant="ghost" size="icon" onClick={() => setEditingPerson(null)} aria-label={t("persons.editDialog.close")}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -533,49 +533,39 @@ export function PersonsTable({
             <div className="flex-1 space-y-5 overflow-visible p-5">
               <div className="grid items-start gap-4 md:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Mã nhân viên</span>
-                  <Input
-                    value={visibleEditingPerson.employee_code}
-                    disabled
-                    className="bg-slate-50 text-slate-500"
-                  />
-                  <div className="text-xs text-slate-500">Mã nhân viên không được chỉnh sửa từ màn hình này.</div>
+                  <span className="text-sm font-medium">{t("persons.editDialog.employeeCode")}</span>
+                  <Input value={visibleEditingPerson.employee_code} disabled className="bg-slate-50 text-slate-500" />
+                  <div className="text-xs text-slate-500">{t("persons.editDialog.employeeCodeHint")}</div>
                 </label>
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Họ tên</span>
-                  <Input
-                    value={visibleEditingPerson.full_name}
-                    onChange={(event) => updateEditingPerson("full_name", event.target.value)}
-                  />
+                  <span className="text-sm font-medium">{t("persons.editDialog.fullName")}</span>
+                  <Input value={visibleEditingPerson.full_name} onChange={(event) => updateEditingPerson("full_name", event.target.value)} />
                 </label>
               </div>
 
               <div className="grid items-start gap-4 md:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Phòng ban</span>
+                  <span className="text-sm font-medium">{t("persons.editDialog.department")}</span>
                   <DepartmentTreeSelect
                     departments={departments}
                     value={visibleEditingPerson.department_id ?? ""}
                     onChange={(value) => updateEditingPerson("department_id", value || null)}
                     rootValue=""
-                    rootLabel="Chưa chọn phòng ban"
+                    rootLabel={t("persons.table.noDepartmentSelected")}
                   />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Chức danh</span>
-                  <Input
-                    value={visibleEditingPerson.title}
-                    onChange={(event) => updateEditingPerson("title", event.target.value)}
-                  />
+                  <span className="text-sm font-medium">{t("persons.editDialog.title")}</span>
+                  <Input value={visibleEditingPerson.title ?? ""} onChange={(event) => updateEditingPerson("title", event.target.value)} />
                 </label>
               </div>
 
               <div className="grid items-start gap-4 md:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Email</span>
+                  <span className="text-sm font-medium">{t("persons.editDialog.email")}</span>
                   <Input
                     type="email"
-                    value={visibleEditingPerson.email}
+                    value={visibleEditingPerson.email ?? ""}
                     onChange={(event) => {
                       updateEditingPerson("email", event.target.value);
                       setEditFieldErrors((current) => ({ ...current, email: undefined }));
@@ -583,11 +573,12 @@ export function PersonsTable({
                     aria-invalid={editFieldErrors.email ? true : undefined}
                     className={editFieldErrors.email ? "border-red-300 focus:border-red-400 focus:ring-red-100" : undefined}
                   />
+                  {editFieldErrors.email ? <div className="text-xs text-red-600">{editFieldErrors.email}</div> : null}
                 </label>
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Điện thoại</span>
+                  <span className="text-sm font-medium">{t("persons.editDialog.phone")}</span>
                   <Input
-                    value={visibleEditingPerson.phone}
+                    value={visibleEditingPerson.phone ?? ""}
                     onChange={(event) => {
                       updateEditingPerson("phone", event.target.value);
                       setEditFieldErrors((current) => ({ ...current, phone: undefined }));
@@ -595,41 +586,34 @@ export function PersonsTable({
                     aria-invalid={editFieldErrors.phone ? true : undefined}
                     className={editFieldErrors.phone ? "border-red-300 focus:border-red-400 focus:ring-red-100" : undefined}
                   />
+                  {editFieldErrors.phone ? <div className="text-xs text-red-600">{editFieldErrors.phone}</div> : null}
                 </label>
               </div>
 
               <div className="grid items-start gap-4 md:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Ngày vào làm</span>
-                  <DatePicker
-                    value={visibleEditingPerson.joined_at}
-                    onChange={(value) => updateEditingPerson("joined_at", value)}
-                  />
+                  <span className="text-sm font-medium">{t("persons.editDialog.joinedAt")}</span>
+                  <DatePicker value={visibleEditingPerson.joined_at} onChange={(value) => updateEditingPerson("joined_at", value)} />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Trạng thái</span>
-                  <PersonStatusSelect
-                    value={visibleEditingPerson.status}
-                    onChange={(value) => updateEditingPerson("status", value)}
-                  />
+                  <span className="text-sm font-medium">{t("persons.table.status")}</span>
+                  <PersonStatusSelect value={visibleEditingPerson.status} onChange={(value) => updateEditingPerson("status", value)} />
                 </label>
               </div>
 
               <label className="block space-y-2">
-                <span className="text-sm font-medium">Ghi chú</span>
-                <Textarea
-                  value={visibleEditingPerson.notes ?? ""}
-                  onChange={(event) => updateEditingPerson("notes", event.target.value || null)}
-                />
+                <span className="text-sm font-medium">{t("persons.editDialog.notes")}</span>
+                <Textarea value={visibleEditingPerson.notes ?? ""} onChange={(event) => updateEditingPerson("notes", event.target.value || null)} />
               </label>
-
             </div>
 
             <div className="flex justify-end gap-2 border-t border-slate-200 p-5">
-              <Button variant="outline" onClick={() => setEditingPerson(null)}>Hủy</Button>
+              <Button variant="outline" onClick={() => setEditingPerson(null)}>
+                {t("common.cancel")}
+              </Button>
               <Button onClick={saveEditingPerson} disabled={savingEdit}>
                 <Save className="h-4 w-4" />
-                {savingEdit ? "Đang lưu..." : "Lưu thay đổi"}
+                {savingEdit ? t("persons.editDialog.saving") : t("persons.editDialog.save")}
               </Button>
             </div>
           </div>
@@ -657,10 +641,12 @@ export function PersonsTable({
               </div>
             </div>
             <div className="flex justify-end gap-2 p-5">
-              <Button variant="outline" onClick={() => setDeleteRequest(null)} disabled={deleting}>Hủy</Button>
+              <Button variant="outline" onClick={() => setDeleteRequest(null)} disabled={deleting}>
+                {t("common.cancel")}
+              </Button>
               <Button variant="danger" onClick={confirmDelete} disabled={deleting}>
                 <Trash2 className="h-4 w-4" />
-                {deleting ? "Đang xóa..." : "Xác nhận xóa"}
+                {deleting ? t("persons.deleteDialog.deleting") : t("persons.deleteDialog.confirm")}
               </Button>
             </div>
           </div>
@@ -693,7 +679,7 @@ export function PersonsTable({
               type="button"
               onClick={closeToast}
               className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900"
-              aria-label="Đóng thông báo"
+              aria-label={t("persons.toast.close")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -765,6 +751,48 @@ function getErrorDetailsText(details: unknown) {
   }
 }
 
+function translatePersonValidationMessage(message: string, t: ReturnType<typeof useTranslations>) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("email")) {
+    return t("persons.validation.invalidEmail");
+  }
+  if (normalized.includes("dien thoai") || normalized.includes("phone")) {
+    return t("persons.validation.invalidPhone");
+  }
+  if (normalized.includes("ngay vao lam") || normalized.includes("joined")) {
+    return t("persons.validation.futureJoinedAt");
+  }
+  return message;
+}
+
+function toggleAllSelection(
+  paginatedPersons: PersonRow[],
+  setSelectedIds: React.Dispatch<React.SetStateAction<Set<string>>>,
+  checked: boolean,
+) {
+  setSelectedIds((current) => {
+    const next = new Set(current);
+    for (const person of paginatedPersons) {
+      if (checked) next.add(person.id);
+      else next.delete(person.id);
+    }
+    return next;
+  });
+}
+
+function toggleSingleSelection(
+  setSelectedIds: React.Dispatch<React.SetStateAction<Set<string>>>,
+  personId: string,
+  checked: boolean,
+) {
+  setSelectedIds((current) => {
+    const next = new Set(current);
+    if (checked) next.add(personId);
+    else next.delete(personId);
+    return next;
+  });
+}
+
 export function DatePicker({
   value,
   onChange,
@@ -774,18 +802,17 @@ export function DatePicker({
   onChange: (value: string) => void;
   placement?: "bottom" | "top";
 }) {
+  const t = useTranslations("persons.datePicker");
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleMonth, setVisibleMonth] = useState(() => monthStart(value));
   const selectedDate = parseDate(value);
   const days = calendarDays(visibleMonth);
-  const monthLabel = visibleMonth.toLocaleDateString("vi-VN", { month: "long", year: "numeric", timeZone: "UTC" });
+  const monthLabel = visibleMonth.toLocaleDateString(locale, { month: "long", year: "numeric", timeZone: "UTC" });
+  const weekdayKeys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
   useOutsideClick(containerRef, open, () => setOpen(false));
-
-  function shiftMonth(offset: number) {
-    setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + offset, 1)));
-  }
 
   return (
     <div ref={containerRef} className="relative">
@@ -796,28 +823,34 @@ export function DatePicker({
       >
         <span className="flex min-w-0 items-center gap-2">
           <CalendarSearch className="h-4 w-4 shrink-0 text-slate-500" />
-          <span className="truncate font-medium text-slate-800">{formatDateLabel(value)}</span>
+          <span className="truncate font-medium text-slate-800">{formatDateLabel(value, locale)}</span>
         </span>
         <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
       </button>
 
       {open ? (
-        <div className={placement === "top" ? "absolute bottom-11 left-0 z-[70] w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl" : "absolute left-0 top-11 z-[70] w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"}>
+        <div
+          className={
+            placement === "top"
+              ? "absolute bottom-11 left-0 z-[70] w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
+              : "absolute left-0 top-11 z-[70] w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
+          }
+        >
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
             <button
               type="button"
-              onClick={() => shiftMonth(-1)}
+              onClick={() => setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - 1, 1)))}
               className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              aria-label="Tháng trước"
+              aria-label={t("previousMonth")}
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <div className="text-sm font-semibold capitalize text-slate-950">{monthLabel}</div>
             <button
               type="button"
-              onClick={() => shiftMonth(1)}
+              onClick={() => setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1)))}
               className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              aria-label="Tháng sau"
+              aria-label={t("nextMonth")}
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -825,8 +858,8 @@ export function DatePicker({
 
           <div className="p-3">
             <div className="grid grid-cols-7 gap-1 pb-2 text-center text-[11px] font-semibold uppercase text-slate-400">
-              {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((day) => (
-                <div key={day}>{day}</div>
+              {weekdayKeys.map((day) => (
+                <div key={day}>{t(`weekdays.${day}`)}</div>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-1">
@@ -893,8 +926,8 @@ function sameDay(a: Date, b: Date) {
   return toDateValue(a) === toDateValue(b);
 }
 
-function formatDateLabel(value: string) {
-  return parseDate(value).toLocaleDateString("vi-VN", {
+function formatDateLabel(value: string, locale: string) {
+  return parseDate(value).toLocaleDateString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -938,7 +971,11 @@ export function PersonStatusSelect({
                 onChange(option);
                 setOpen(false);
               }}
-              className={value === option ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+              className={
+                value === option
+                  ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white"
+                  : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+              }
             >
               <PersonStatusBadge status={option} />
             </button>
@@ -956,12 +993,13 @@ function StatusFilterSelect({
   value: PersonStatusFilter;
   onChange: (value: PersonStatusFilter) => void;
 }) {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const options: Array<{ value: PersonStatusFilter; label: string }> = [
-    { value: "all", label: "Tất cả" },
-    { value: "active", label: "active" },
-    { value: "resigned", label: "resigned" },
+    { value: "all", label: t("persons.table.allStatuses") },
+    { value: "active", label: t("common.status.active") },
+    { value: "resigned", label: t("common.status.resigned") },
   ];
   const selectedOption = options.find((option) => option.value === value) ?? options[0];
 
@@ -994,13 +1032,13 @@ function StatusFilterSelect({
                 onChange(option.value);
                 setOpen(false);
               }}
-              className={value === option.value ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+              className={
+                value === option.value
+                  ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white"
+                  : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+              }
             >
-              {option.value === "all" ? (
-                <span>Tất cả trạng thái</span>
-              ) : (
-                <PersonStatusBadge status={option.value} />
-              )}
+              {option.value === "all" ? <span>{t("persons.table.allStatuses")}</span> : <PersonStatusBadge status={option.value} />}
             </button>
           ))}
         </div>
@@ -1014,7 +1052,7 @@ export function DepartmentTreeSelect({
   value,
   onChange,
   rootValue = "all",
-  rootLabel = "Tất cả phòng ban",
+  rootLabel,
 }: {
   departments: Department[];
   value: string;
@@ -1022,6 +1060,7 @@ export function DepartmentTreeSelect({
   rootValue?: string;
   rootLabel?: string;
 }) {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
@@ -1029,8 +1068,9 @@ export function DepartmentTreeSelect({
     new Set(departments.filter((department) => department.parent_id === null).map((department) => department.id)),
   );
 
+  const fallbackRootLabel = rootLabel ?? t("persons.table.allDepartments");
   const selectedDepartment = departments.find((department) => department.id === value);
-  const selectedLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : rootLabel;
+  const selectedLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : fallbackRootLabel;
   const normalizedQuery = query.trim().toLowerCase();
 
   useOutsideClick(containerRef, open, () => setOpen(false));
@@ -1063,7 +1103,7 @@ export function DepartmentTreeSelect({
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Tìm phòng ban"
+                placeholder={t("persons.table.departmentSearchPlaceholder")}
                 className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm focus:border-transparent focus:ring-0"
               />
             </div>
@@ -1076,10 +1116,14 @@ export function DepartmentTreeSelect({
                 onChange(rootValue);
                 setOpen(false);
               }}
-              className={value === rootValue ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+              className={
+                value === rootValue
+                  ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white"
+                  : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+              }
             >
               <Building2 className="h-4 w-4" />
-              {rootLabel}
+              {fallbackRootLabel}
             </button>
 
             <div className="mt-1 space-y-1">
@@ -1128,6 +1172,7 @@ function DepartmentTreeOption({
   onToggle: (departmentId: string) => void;
   onSelect: (departmentId: string) => void;
 }) {
+  const t = useTranslations("departments.detail");
   const children = departments.filter((item) => item.parent_id === department.id);
   const expanded = expandedIds.has(department.id);
   const hasChildren = children.length > 0;
@@ -1142,7 +1187,11 @@ function DepartmentTreeOption({
   return (
     <div>
       <div
-        className={selectedId === department.id ? "flex items-center gap-2 rounded-md bg-slate-950 px-2 py-2 text-sm font-medium text-white" : "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-slate-50"}
+        className={
+          selectedId === department.id
+            ? "flex items-center gap-2 rounded-md bg-slate-950 px-2 py-2 text-sm font-medium text-white"
+            : "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-slate-50"
+        }
         style={{ paddingLeft: 8 + depth * 18 }}
       >
         <button
@@ -1153,13 +1202,15 @@ function DepartmentTreeOption({
             onToggle(department.id);
           }}
           className="grid h-5 w-5 shrink-0 place-items-center rounded hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-transparent"
-          aria-label={expanded ? `Thu gọn ${department.name}` : `Mở rộng ${department.name}`}
+          aria-label={expanded ? t("collapse", { name: department.name }) : t("expand", { name: department.name })}
         >
           <ChevronRight className={expanded ? "h-4 w-4 rotate-90 transition-transform" : "h-4 w-4 transition-transform"} />
         </button>
         <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => onSelect(department.id)}>
           <Building2 className="h-4 w-4 shrink-0" />
-          <span className="truncate">{department.code} · {department.name}</span>
+          <span className="truncate">
+            {department.code} · {department.name}
+          </span>
         </button>
       </div>
       {expanded || query.length > 0

@@ -10,10 +10,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.application.use_cases.attendance import (
     GetAttendanceDailySummaryUseCase,
     GetAttendanceEventUseCase,
+    GetAttendanceHourlyStatsUseCase,
     ListAttendanceEventsUseCase,
     ListPersonAttendanceHistoryUseCase,
 )
 from app.application.use_cases.auth import (
+    ChangePasswordUseCase,
     GetCurrentUserUseCase,
     LoginUseCase,
     LogoutUseCase,
@@ -71,6 +73,7 @@ from app.application.use_cases.spoof_alert_events import (
     ListSpoofAlertEventsUseCase,
     UpdateSpoofAlertEventReviewUseCase,
 )
+from app.application.use_cases.system import GetDashboardHealthUseCase
 from app.application.use_cases.unknown_events import (
     GetUnknownEventUseCase,
     ListUnknownEventsUseCase,
@@ -93,6 +96,7 @@ from app.infrastructure.persistence.repositories import (
     SqlAlchemyUserRepository,
 )
 from app.infrastructure.integrations.pipeline_client import PipelineEventPublisher
+from app.infrastructure.integrations.dashboard_health_state import DashboardHealthState
 from app.infrastructure.realtime import HubRealtimeEventBus, WebSocketHub
 from app.infrastructure.persistence.session import SessionProvider
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -110,6 +114,7 @@ class Container:
     session_provider: SessionProvider
     websocket_hub: WebSocketHub
     realtime_event_bus: HubRealtimeEventBus
+    dashboard_health_state: DashboardHealthState
 
     def create_uow(self, session: Session) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(session)
@@ -218,6 +223,9 @@ class Container:
     def build_get_attendance_daily_summary_use_case(self, session: Session) -> GetAttendanceDailySummaryUseCase:
         return GetAttendanceDailySummaryUseCase(SqlAlchemyAttendanceRepository(session))
 
+    def build_get_attendance_hourly_stats_use_case(self, session: Session) -> GetAttendanceHourlyStatsUseCase:
+        return GetAttendanceHourlyStatsUseCase(SqlAlchemyAttendanceRepository(session))
+
     def build_create_attendance_exception_use_case(self, session: Session) -> CreateAttendanceExceptionUseCase:
         return CreateAttendanceExceptionUseCase(SqlAlchemyAttendanceExceptionRepository(session))
 
@@ -323,6 +331,7 @@ class Container:
             unknown_repository=SqlAlchemyUnknownEventRepository(session),
             spoof_repository=SqlAlchemySpoofAlertEventRepository(session),
             face_registration_repository=SqlAlchemyFaceRegistrationRepository(session),
+            person_repository=SqlAlchemyPersonRepository(session),
         )
 
     def build_login_use_case(self, session: Session) -> LoginUseCase:
@@ -342,8 +351,18 @@ class Container:
     def build_logout_use_case(self, session: Session) -> LogoutUseCase:
         return LogoutUseCase(SqlAlchemyRefreshTokenRepository(session))
 
+    def build_change_password_use_case(self, session: Session) -> ChangePasswordUseCase:
+        return ChangePasswordUseCase(
+            user_repository=SqlAlchemyUserRepository(session),
+            refresh_token_repository=SqlAlchemyRefreshTokenRepository(session),
+            settings=self.settings,
+        )
+
     def build_get_current_user_use_case(self, session: Session) -> GetCurrentUserUseCase:
         return GetCurrentUserUseCase(SqlAlchemyUserRepository(session), self.settings)
+
+    def build_get_dashboard_health_use_case(self) -> GetDashboardHealthUseCase:
+        return GetDashboardHealthUseCase(self.dashboard_health_state)
 
 
 def build_container(settings: Settings | None = None) -> Container:
@@ -354,6 +373,7 @@ def build_container(settings: Settings | None = None) -> Container:
     session_provider = SessionProvider(session_factory)
     websocket_hub = WebSocketHub(runtime_settings)
     realtime_event_bus = HubRealtimeEventBus(websocket_hub)
+    dashboard_health_state = DashboardHealthState()
     return Container(
         settings=runtime_settings,
         engine=engine,
@@ -361,4 +381,5 @@ def build_container(settings: Settings | None = None) -> Container:
         session_provider=session_provider,
         websocket_hub=websocket_hub,
         realtime_event_bus=realtime_event_bus,
+        dashboard_health_state=dashboard_health_state,
     )

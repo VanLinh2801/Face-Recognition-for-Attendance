@@ -13,6 +13,7 @@ from app.core.exceptions import ValidationError
 from app.core.security import (
     create_access_token,
     generate_refresh_token,
+    hash_password,
     hash_refresh_token,
     verify_password,
     verify_jwt_token,
@@ -37,6 +38,13 @@ class LoginResult:
 @dataclass(slots=True, kw_only=True)
 class RefreshCommand:
     refresh_token: str
+
+
+@dataclass(slots=True, kw_only=True)
+class ChangePasswordCommand:
+    user_id: UUID
+    current_password: str
+    new_password: str
 
 
 class LoginUseCase:
@@ -136,3 +144,33 @@ class GetCurrentUserUseCase:
         if user is None or not user.is_active:
             raise ValidationError("User not found")
         return user
+
+
+class ChangePasswordUseCase:
+    def __init__(
+        self,
+        *,
+        user_repository: UserRepository,
+        refresh_token_repository: RefreshTokenRepository,
+        settings: Settings,
+    ) -> None:
+        self._user_repository = user_repository
+        self._refresh_token_repository = refresh_token_repository
+        self._settings = settings
+
+    def execute(self, command: ChangePasswordCommand) -> None:
+        user = self._user_repository.get_by_id(command.user_id)
+        if user is None or not user.is_active:
+            raise ValidationError("User not found")
+        if not verify_password(command.current_password, user.password_hash):
+            raise ValidationError("Current password is incorrect")
+        if command.current_password == command.new_password:
+            raise ValidationError("New password must be different from the current password")
+        if len(command.new_password) < 8:
+            raise ValidationError("New password must be at least 8 characters")
+
+        self._user_repository.update_password(
+            user.id,
+            hash_password(command.new_password, self._settings.auth_bcrypt_rounds),
+        )
+        self._refresh_token_repository.revoke_all_for_user(user.id, datetime.now(timezone.utc))

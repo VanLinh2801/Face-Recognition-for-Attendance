@@ -25,6 +25,16 @@ class AttendanceSummaryView(Protocol):
     unique_persons: int
     total_entries: int
     total_exits: int
+    unknown_count: int
+    spoof_alert_count: int
+
+
+class AttendanceHourlyStatView(Protocol):
+    hour: str
+    events: int
+    entries: int
+    exits: int
+    alerts: int
 
 
 class AttendanceRepository(Protocol):
@@ -51,3 +61,5 @@ class AttendanceRepository(Protocol):
     ) -> tuple[list[AttendanceEventView], int]: ...
 
     def get_daily_summary(self, work_date: date) -> AttendanceSummaryView: ...
+
+    def get_hourly_stats(self, work_date: date) -> list[AttendanceHourlyStatView]: ...

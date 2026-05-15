@@ -1,4 +1,6 @@
-export function validatePersonProfileFields({
+export type PersonValidationKey = "invalidEmail" | "invalidPhone" | "futureJoinedAt";
+
+export function getPersonProfileValidationKey({
   email,
   phone,
   joinedAt,
@@ -11,17 +13,35 @@ export function validatePersonProfileFields({
   const phoneValue = phone?.trim() ?? "";
 
   if (emailValue && !isValidEmail(emailValue)) {
-    return "Email không đúng định dạng.";
+    return "invalidEmail";
   }
 
   if (phoneValue && !isValidPhone(phoneValue)) {
-    return "Số điện thoại không hợp lệ. Vui lòng nhập 8-15 chữ số, có thể kèm dấu +, khoảng trắng, dấu gạch ngang hoặc ngoặc.";
+    return "invalidPhone";
   }
 
   if (joinedAt && joinedAt > todayValue()) {
-    return "Ngày vào làm không được là ngày trong tương lai.";
+    return "futureJoinedAt";
   }
 
+  return null;
+}
+
+export function validatePersonProfileFields(input: {
+  email: string | null | undefined;
+  phone: string | null | undefined;
+  joinedAt: string | null | undefined;
+}) {
+  const key = getPersonProfileValidationKey(input);
+  if (key === "invalidEmail") {
+    return "Email khong dung dinh dang.";
+  }
+  if (key === "invalidPhone") {
+    return "So dien thoai khong hop le. Vui long nhap 8-15 chu so, co the kem dau +, khoang trang, dau gach ngang hoac ngoac.";
+  }
+  if (key === "futureJoinedAt") {
+    return "Ngay vao lam khong duoc la ngay trong tuong lai.";
+  }
   return null;
 }
 

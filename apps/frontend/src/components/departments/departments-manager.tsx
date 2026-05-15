@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Building2, ChevronRight, Eye, Pencil, Plus, PowerOff, Save, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api-client";
+import { normalizeBackendError } from "@/lib/backend-error-normalizer";
+import { getTranslatedBackendError } from "@/lib/translated-backend-error";
 import type { Department } from "@/lib/types";
 import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { useOutsideClick } from "@/lib/use-outside-click";
@@ -45,6 +48,7 @@ export function DepartmentsManager({
 }: {
   initialDepartments: Department[];
 }) {
+  const t = useTranslations();
   const [departments, setDepartments] = useState<Department[]>(initialDepartments);
   const [draft, setDraft] = useState<DepartmentDraft | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
@@ -82,8 +86,8 @@ export function DepartmentsManager({
   }
 
   function getDepartmentName(id: string | null) {
-    if (!id) return "Không trực thuộc";
-    return departments.find((department) => department.id === id)?.name ?? "Không xác định";
+    if (!id) return t("common.notAssigned");
+    return departments.find((department) => department.id === id)?.name ?? t("common.unknown");
   }
 
   function openCreateDialog() {
@@ -108,11 +112,11 @@ export function DepartmentsManager({
     const name = draft.name.trim();
     if (!code || !name) {
       setFieldErrors({
-        code: !code ? "Mã phòng ban không được để trống." : undefined,
+        code: !code ? t("departments.form.codeRequired") : undefined,
       });
       showToast({
-        title: "Dữ liệu chưa hợp lệ",
-        description: !code ? "Mã phòng ban không được để trống." : "Tên phòng ban không được để trống.",
+        title: t("departments.toast.invalidTitle"),
+        description: !code ? t("departments.form.codeRequired") : t("departments.form.nameRequired"),
         variant: "danger",
       });
       return;
@@ -135,8 +139,8 @@ export function DepartmentsManager({
 
         setDepartments((current) => current.map((department) => (department.id === updatedDepartment.id ? updatedDepartment : department)));
         showToast({
-          title: "Cập nhật thành công",
-          description: `Phòng ban ${updatedDepartment.name} đã được cập nhật.`,
+          title: t("departments.toast.updateSuccessTitle"),
+          description: t("departments.toast.updateSuccessDescription", { name: updatedDepartment.name }),
           variant: "success",
         });
       } else {
@@ -152,18 +156,18 @@ export function DepartmentsManager({
         });
         setDepartments((current) => [createdDepartment, ...current]);
         showToast({
-          title: "Tạo phòng ban thành công",
-          description: `Phòng ban ${createdDepartment.name} đã được tạo.`,
+          title: t("departments.toast.createSuccessTitle"),
+          description: t("departments.toast.createSuccessDescription", { name: createdDepartment.name }),
           variant: "success",
         });
       }
       setDraft(null);
     } catch (err) {
-      const nextErrors = getDepartmentFieldErrors(err);
+      const nextErrors = getDepartmentFieldErrors(err, t);
       setFieldErrors(nextErrors);
       showToast({
-        title: draft.id ? "Cập nhật thất bại" : "Tạo phòng ban thất bại",
-        description: getDepartmentErrorMessage(err),
+        title: draft.id ? t("departments.toast.updateFailedTitle") : t("departments.toast.createFailedTitle"),
+        description: getDepartmentErrorMessage(err, t),
         variant: "danger",
       });
     } finally {
@@ -183,15 +187,15 @@ export function DepartmentsManager({
         current.map((department) => (department.id === deleteTarget.id ? { ...department, is_active: false } : department)),
       );
       showToast({
-        title: "Ngưng hoạt động thành công",
-        description: `Phòng ban ${deleteTarget.name} đã được chuyển sang inactive.`,
+        title: t("departments.toast.deactivateSuccessTitle"),
+        description: t("departments.toast.deactivateSuccessDescription", { name: deleteTarget.name }),
         variant: "success",
       });
       setDeleteTarget(null);
     } catch (err) {
       showToast({
-        title: "Ngưng hoạt động thất bại",
-        description: err instanceof ApiError ? err.message : "Không thể ngưng hoạt động phòng ban.",
+        title: t("departments.toast.deactivateFailedTitle"),
+        description: err instanceof ApiError ? getTranslatedBackendError(t, err, "departments") : t("errors.system.requestFailed"),
         variant: "danger",
       });
     } finally {
@@ -223,33 +227,33 @@ export function DepartmentsManager({
         <Card>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="text-sm font-medium">Danh sách phòng ban</div>
+              <div className="text-sm font-medium">{t("departments.list.summaryTitle")}</div>
               <div className="mt-1 text-sm text-slate-500">
-                {departments.length} phòng ban · {activeDepartments.length} đang hoạt động
+                {t("departments.list.summaryDescription", { total: departments.length, active: activeDepartments.length })}
               </div>
             </div>
             <Button onClick={openCreateDialog}>
               <Plus className="h-4 w-4" />
-              Thêm phòng ban
+              {t("departments.list.addAction")}
             </Button>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Phòng ban</CardTitle>
+            <CardTitle>{t("departments.list.tableTitle")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] table-fixed text-left text-sm">
                 <thead className="text-xs uppercase text-slate-500">
                   <tr className="border-b border-slate-200">
-                    <th className="w-16 py-3">STT</th>
-                    <th className="w-28">Mã</th>
-                    <th>Tên phòng ban</th>
-                    <th className="w-48">Trực thuộc</th>
-                    <th className="w-28">Trạng thái</th>
-                    <th className="w-40 text-right">Action</th>
+                    <th className="w-16 py-3">{t("departments.list.index")}</th>
+                    <th className="w-28">{t("departments.list.code")}</th>
+                    <th>{t("departments.list.name")}</th>
+                    <th className="w-48">{t("departments.list.parent")}</th>
+                    <th className="w-28">{t("departments.list.status")}</th>
+                    <th className="w-40 text-right">{t("common.actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -261,7 +265,7 @@ export function DepartmentsManager({
                       <td className="truncate pr-4">{getDepartmentName(department.parent_id)}</td>
                       <td>
                         <Badge variant={department.is_active ? "success" : "default"}>
-                          {department.is_active ? "active" : "inactive"}
+                          {department.is_active ? t("common.status.active") : t("common.status.inactive")}
                         </Badge>
                       </td>
                       <td className="text-right">
@@ -269,18 +273,18 @@ export function DepartmentsManager({
                           <Link
                             href={`/departments/${department.id}`}
                             className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-900 hover:bg-slate-50"
-                            aria-label={`Xem ${department.name}`}
+                            aria-label={t("departments.list.view", { name: department.name })}
                           >
                             <Eye className="h-4 w-4" />
                           </Link>
-                          <Button variant="outline" size="icon" aria-label={`Sửa ${department.name}`} onClick={() => openEditDialog(department)}>
+                          <Button variant="outline" size="icon" aria-label={t("departments.list.edit", { name: department.name })} onClick={() => openEditDialog(department)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="outline"
                             size="icon"
-                            aria-label={department.is_active ? `Ngưng hoạt động ${department.name}` : `${department.name} đã ngưng hoạt động`}
-                            title={department.is_active ? `Ngưng hoạt động ${department.name}` : "Phòng ban đã ngưng hoạt động"}
+                            aria-label={department.is_active ? t("departments.list.deactivate", { name: department.name }) : t("departments.list.deactivated")}
+                            title={department.is_active ? t("departments.list.deactivate", { name: department.name }) : t("departments.list.deactivated")}
                             disabled={!department.is_active}
                             onClick={() => setDeleteTarget(department)}
                           >
@@ -312,11 +316,11 @@ export function DepartmentsManager({
                   <Building2 className="h-5 w-5 text-slate-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold">{visibleDraft.id ? "Sửa phòng ban" : "Thêm phòng ban"}</h2>
-                  <p className="mt-1 text-sm text-slate-500">Dữ liệu sẽ được lưu trực tiếp vào backend.</p>
+                  <h2 className="text-lg font-semibold">{visibleDraft.id ? t("departments.form.editTitle") : t("departments.form.createTitle")}</h2>
+                  <p className="mt-1 text-sm text-slate-500">{t("departments.form.createDescription")}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setDraft(null)} aria-label="Đóng dialog phòng ban">
+              <Button variant="ghost" size="icon" onClick={() => setDraft(null)} aria-label={t("departments.form.close")}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -324,27 +328,27 @@ export function DepartmentsManager({
             <div className="space-y-4 p-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Mã phòng ban</span>
+                  <span className="text-sm font-medium">{t("departments.form.code")}</span>
                   <Input
                     value={visibleDraft.code}
                     onChange={(event) => {
                       setDraft({ ...visibleDraft, code: event.target.value });
                       setFieldErrors((current) => ({ ...current, code: undefined }));
                     }}
-                    placeholder="ENG"
+                    placeholder={t("departments.form.codePlaceholder")}
                     aria-invalid={fieldErrors.code ? true : undefined}
                     className={fieldErrors.code ? "border-red-300 focus:border-red-400 focus:ring-red-100" : undefined}
                   />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Tên phòng ban</span>
-                  <Input value={visibleDraft.name} onChange={(event) => setDraft({ ...visibleDraft, name: event.target.value })} placeholder="Engineering" />
+                  <span className="text-sm font-medium">{t("departments.form.name")}</span>
+                  <Input value={visibleDraft.name} onChange={(event) => setDraft({ ...visibleDraft, name: event.target.value })} placeholder={t("departments.form.namePlaceholder")} />
                 </label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Trực thuộc</span>
+                  <span className="text-sm font-medium">{t("departments.form.parent")}</span>
                   <DepartmentTreeSelect
                     departments={parentCandidates()}
                     value={visibleDraft.parent_id ?? ""}
@@ -356,12 +360,12 @@ export function DepartmentsManager({
                   />
                   {visibleDraft.id ? (
                     <span className="text-xs text-slate-500">
-                      Không thể chọn chính phòng ban này hoặc phòng ban con/cháu làm trực thuộc.
+                      {t("departments.form.invalidParentHint")}
                     </span>
                   ) : null}
                 </label>
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Trạng thái</span>
+                  <span className="text-sm font-medium">{t("departments.form.status")}</span>
                   <DepartmentStatusSelect
                     value={visibleDraft.is_active}
                     onChange={(value) => setDraft({ ...visibleDraft, is_active: value })}
@@ -371,10 +375,10 @@ export function DepartmentsManager({
             </div>
 
             <div className="flex justify-end gap-2 border-t border-slate-200 p-5">
-              <Button variant="outline" onClick={() => setDraft(null)} disabled={saving}>Hủy</Button>
+              <Button variant="outline" onClick={() => setDraft(null)} disabled={saving}>{t("common.cancel")}</Button>
               <Button onClick={saveDraft} disabled={saving}>
                 <Save className="h-4 w-4" />
-                {saving ? "Đang lưu..." : "Lưu"}
+                {saving ? t("departments.form.saving") : t("departments.form.save")}
               </Button>
             </div>
           </div>
@@ -397,20 +401,20 @@ export function DepartmentsManager({
                   <PowerOff className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold">Ngưng hoạt động phòng ban?</h2>
+                  <h2 className="text-lg font-semibold">{t("departments.deleteDialog.title")}</h2>
                   <p className="mt-2 text-sm text-slate-600">
-                    Bạn có chắc muốn ngưng hoạt động {visibleDeleteTarget.name}? Thao tác này sẽ chuyển phòng ban sang trạng thái inactive, không xóa dữ liệu.
+                    {t("departments.deleteDialog.description", { name: visibleDeleteTarget.name })}
                   </p>
                 </div>
               </div>
             </div>
             <div className="flex justify-end gap-2 p-5">
               <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
-                Hủy
+                {t("common.cancel")}
               </Button>
               <Button variant="default" onClick={confirmDelete} disabled={deleting}>
                 <PowerOff className="h-4 w-4" />
-                {deleting ? "Đang xử lý..." : "Ngưng hoạt động"}
+                {deleting ? t("departments.deleteDialog.processing") : t("departments.deleteDialog.confirm")}
               </Button>
             </div>
           </div>
@@ -434,7 +438,7 @@ export function DepartmentsManager({
               type="button"
               onClick={closeToast}
               className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-950"
-              aria-label="Đóng thông báo"
+              aria-label={t("departments.toast.close")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -456,6 +460,7 @@ function DepartmentTreeSelect({
   onChange: (value: string) => void;
   invalid?: boolean;
 }) {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
@@ -464,7 +469,7 @@ function DepartmentTreeSelect({
   );
 
   const selectedDepartment = departments.find((department) => department.id === value);
-  const selectedLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : "Không trực thuộc";
+  const selectedLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : t("departments.form.noParent");
   const normalizedQuery = query.trim().toLowerCase();
 
   useOutsideClick(containerRef, open, () => setOpen(false));
@@ -503,7 +508,7 @@ function DepartmentTreeSelect({
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Tìm phòng ban"
+                placeholder={t("departments.form.searchPlaceholder")}
                 className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm focus:border-transparent focus:ring-0"
               />
             </div>
@@ -519,7 +524,7 @@ function DepartmentTreeSelect({
               className={value === "" ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
             >
               <Building2 className="h-4 w-4" />
-              Không trực thuộc
+              {t("departments.form.noParent")}
             </button>
 
             <div className="mt-1 space-y-1">
@@ -554,6 +559,7 @@ function DepartmentStatusSelect({
   value: boolean;
   onChange: (value: boolean) => void;
 }) {
+  const t = useTranslations("common.status");
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const options = [
@@ -588,7 +594,7 @@ function DepartmentStatusSelect({
               }}
               className={value === option.value ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
             >
-              <DepartmentStatusBadge active={option.value} />
+              {t(option.label)}
             </button>
           ))}
         </div>
@@ -598,7 +604,8 @@ function DepartmentStatusSelect({
 }
 
 function DepartmentStatusBadge({ active }: { active: boolean }) {
-  return <Badge variant={active ? "success" : "default"}>{active ? "active" : "inactive"}</Badge>;
+  const t = useTranslations("common.status");
+  return <Badge variant={active ? "success" : "default"}>{active ? t("active") : t("inactive")}</Badge>;
 }
 
 function DepartmentTreeOption({
@@ -673,50 +680,30 @@ function DepartmentTreeOption({
   );
 }
 
-function getDepartmentFieldErrors(error: unknown): DepartmentFieldErrors {
-  if (!(error instanceof ApiError)) return {};
-
-  const details = getErrorDetailsText(error.details);
-  const text = `${error.message} ${details}`.toLowerCase();
-  const errors: DepartmentFieldErrors = {};
-
-  if (text.includes("code")) {
-    errors.code = "Mã phòng ban đã tồn tại hoặc chưa hợp lệ.";
-  }
-
-  if (text.includes("parent") || text.includes("cycle") || text.includes("circular") || text.includes("self")) {
-    errors.parent_id = "Phòng ban trực thuộc không hợp lệ.";
-  }
-
-  return errors;
+function getDepartmentFieldErrors(error: unknown, t: ReturnType<typeof useTranslations>): DepartmentFieldErrors {
+  const normalized = normalizeBackendError(error, "departments");
+  return {
+    code: normalized.key === "departments.codeExists" ? t("departments.fieldErrors.invalidCode") : undefined,
+    parent_id:
+      normalized.key === "departments.parentNotFound" ||
+      normalized.key === "departments.parentCannotBeSelf" ||
+      normalized.key === "departments.parentCannotBeDescendant"
+        ? t("departments.fieldErrors.invalidParent")
+        : undefined,
+  };
 }
 
-function getDepartmentErrorMessage(error: unknown) {
-  if (!(error instanceof ApiError)) return "Không thể lưu phòng ban. Vui lòng thử lại.";
-
-  const details = getErrorDetailsText(error.details);
-  const text = `${error.message} ${details}`.toLowerCase();
-
-  if (text.includes("code")) {
-    return "Mã phòng ban đã tồn tại. Vui lòng kiểm tra lại.";
+function getDepartmentErrorMessage(error: unknown, t: ReturnType<typeof useTranslations>) {
+  const normalized = normalizeBackendError(error, "departments");
+  if (normalized.key === "departments.codeExists") return t("departments.messages.duplicateCode");
+  if (
+    normalized.key === "departments.parentNotFound" ||
+    normalized.key === "departments.parentCannotBeSelf" ||
+    normalized.key === "departments.parentCannotBeDescendant"
+  ) {
+    return t("departments.messages.invalidParent");
   }
-
-  if (text.includes("parent") || text.includes("cycle") || text.includes("circular") || text.includes("self")) {
-    return "Phòng ban trực thuộc không hợp lệ. Vui lòng kiểm tra lại.";
-  }
-
-  return error.message || "Không thể lưu phòng ban. Vui lòng thử lại.";
-}
-
-function getErrorDetailsText(details: unknown): string {
-  if (!details) return "";
-  if (typeof details === "string") return details;
-
-  try {
-    return JSON.stringify(details);
-  } catch {
-    return "";
-  }
+  return getTranslatedBackendError(t, error, "departments");
 }
 
 

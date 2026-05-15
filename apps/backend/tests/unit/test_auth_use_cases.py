@@ -7,6 +7,8 @@ from uuid import uuid4
 import pytest
 
 from app.application.use_cases.auth import (
+    ChangePasswordCommand,
+    ChangePasswordUseCase,
     GetCurrentUserUseCase,
     LoginCommand,
     LoginUseCase,
@@ -43,6 +45,10 @@ class _UserRepo:
         _ = username, password_hash, is_active
         return self.user
 
+    def update_password(self, user_id, password_hash):
+        _ = user_id
+        self.user = replace(self.user, password_hash=password_hash)
+
     def update_last_login(self, user_id, last_login_at):
         _ = user_id
         self.user = replace(self.user, last_login_at=last_login_at)
@@ -77,6 +83,14 @@ class _RefreshRepo:
             return False
         self.items[token_hash] = replace(item, revoked_at=revoked_at)
         return True
+
+    def revoke_all_for_user(self, user_id, revoked_at):
+        revoked = 0
+        for token_hash, item in list(self.items.items()):
+            if item.user_id == user_id and item.revoked_at is None:
+                self.items[token_hash] = replace(item, revoked_at=revoked_at)
+                revoked += 1
+        return revoked
 
     def touch_last_used(self, token_hash: str, used_at):
         item = self.items.get(token_hash)
@@ -140,3 +154,54 @@ def test_refresh_expired_token_rejected() -> None:
     refresh_repo.items[hash_refresh_token("expired")] = refresh_repo.items.pop("expired-hash")
     with pytest.raises(ValidationError):
         refresh.execute(RefreshCommand(refresh_token="expired"))
+
+
+def test_change_password_revokes_existing_refresh_tokens_and_accepts_new_password() -> None:
+    user_repo = _UserRepo()
+    refresh_repo = _RefreshRepo()
+    settings = _settings()
+    login = LoginUseCase(user_repository=user_repo, refresh_token_repository=refresh_repo, settings=settings)
+    change_password = ChangePasswordUseCase(
+        user_repository=user_repo,
+        refresh_token_repository=refresh_repo,
+        settings=settings,
+    )
+    refresh = RefreshAccessTokenUseCase(user_repository=user_repo, refresh_token_repository=refresh_repo, settings=settings)
+
+    login_result = login.execute(LoginCommand(username="admin", password="secret"))
+
+    change_password.execute(
+        ChangePasswordCommand(
+            user_id=user_repo.user.id,
+            current_password="secret",
+            new_password="secret-new",
+        )
+    )
+
+    with pytest.raises(ValidationError):
+        refresh.execute(RefreshCommand(refresh_token=login_result.refresh_token))
+
+    with pytest.raises(ValidationError):
+        login.execute(LoginCommand(username="admin", password="secret"))
+
+    next_login = login.execute(LoginCommand(username="admin", password="secret-new"))
+    assert next_login.access_token
+
+
+def test_change_password_rejects_invalid_current_password() -> None:
+    user_repo = _UserRepo()
+    refresh_repo = _RefreshRepo()
+    change_password = ChangePasswordUseCase(
+        user_repository=user_repo,
+        refresh_token_repository=refresh_repo,
+        settings=_settings(),
+    )
+
+    with pytest.raises(ValidationError):
+        change_password.execute(
+            ChangePasswordCommand(
+                user_id=user_repo.user.id,
+                current_password="wrong-secret",
+                new_password="secret-new",
+            )
+        )

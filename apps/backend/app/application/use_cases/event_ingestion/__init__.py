@@ -9,6 +9,7 @@ import logging
 from mimetypes import guess_type
 from pathlib import PurePosixPath
 import time
+from typing import Any
 from uuid import UUID
 
 from app.application.interfaces.repositories.event_inbox_repository import EventInboxRepository
@@ -27,7 +28,6 @@ from app.domain.shared.enums import (
     StorageProvider,
     UnknownEventReviewStatus,
 )
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -41,6 +41,7 @@ class IngestStatus(StrEnum):
 class IngestResult:
     status: IngestStatus
     reason: str | None = None
+    item: Any | None = None
 
 
 @dataclass(slots=True)
@@ -292,7 +293,7 @@ class IngestRecognitionEventUseCase:
                 details={"dedupe_key": dedupe_key},
             )
             self._uow.commit()
-            return IngestResult(status=IngestStatus.PROCESSED)
+            return IngestResult(status=IngestStatus.PROCESSED, item=recognition)
 
 
 class IngestUnknownEventUseCase:
@@ -374,7 +375,7 @@ class IngestUnknownEventUseCase:
                 details={"dedupe_key": dedupe_key},
             )
             self._uow.commit()
-            return IngestResult(status=IngestStatus.PROCESSED)
+            return IngestResult(status=IngestStatus.PROCESSED, item=unknown_event)
 
 
 class IngestSpoofAlertEventUseCase:
@@ -486,4 +487,4 @@ class IngestSpoofAlertEventUseCase:
                 details={"dedupe_key": dedupe_key},
             )
             self._uow.commit()
-            return IngestResult(status=IngestStatus.PROCESSED)
+            return IngestResult(status=IngestStatus.PROCESSED, item=spoof_event)

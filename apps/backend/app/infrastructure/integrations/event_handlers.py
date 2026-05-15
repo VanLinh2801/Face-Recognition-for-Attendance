@@ -7,7 +7,12 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from app.application.dtos.realtime import RealtimeChannel, RealtimeEnvelope
+from app.application.dtos.realtime import (
+    RealtimeChannel,
+    RealtimeEnvelope,
+    RealtimeSpoofDetectedPayload,
+    RealtimeUnknownDetectedPayload,
+)
 from app.application.use_cases.event_ingestion import IngestStatus
 from app.application.use_cases.face_registrations import (
     ApplyRegistrationInputValidationUseCase,
@@ -18,6 +23,8 @@ from app.application.use_cases.face_registrations import (
 from app.bootstrap.container import Container
 from app.domain.face_registrations.entities import PersonFaceRegistration
 from app.domain.shared.enums import RegistrationStatus
+from app.domain.spoof_alert_events.entities import SpoofAlertEvent
+from app.domain.unknown_events.entities import UnknownEvent
 from app.core.exceptions import ValidationError
 from app.infrastructure.integrations.redis_event_consumer import RedisEventConsumer
 
@@ -62,11 +69,19 @@ class BackendEventHandlers:
                             raw_payload.get("dedupe_key"),
                         )
                         if unknown_result.status == IngestStatus.PROCESSED:
+                            unknown_event = unknown_result.item if isinstance(unknown_result.item, UnknownEvent) else None
                             await self._container.realtime_event_bus.publish(
-                                self._to_realtime_envelope(
+                                RealtimeEnvelope(
                                     channel=RealtimeChannel.EVENTS_BUSINESS,
                                     event_type="unknown_event.detected",
-                                    envelope=unknown_envelope,
+                                    occurred_at=self._parse_occurred_at(unknown_envelope),
+                                    correlation_id=self._as_optional_str(unknown_envelope, "correlation_id"),
+                                    dedupe_key=unknown_event.dedupe_key if unknown_event is not None else None,
+                                    payload=self._build_unknown_realtime_payload(
+                                        event=unknown_event,
+                                        raw_payload=unknown_envelope.get("payload"),
+                                    ),
+                                    metadata={"message_id": unknown_envelope.get("message_id"), "producer": unknown_envelope.get("producer")},
                                 )
                             )
                         return unknown_result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
@@ -86,11 +101,19 @@ class BackendEventHandlers:
                         raw_payload.get("dedupe_key"),
                     )
                     if unknown_result.status == IngestStatus.PROCESSED:
+                        unknown_event = unknown_result.item if isinstance(unknown_result.item, UnknownEvent) else None
                         await self._container.realtime_event_bus.publish(
-                            self._to_realtime_envelope(
+                            RealtimeEnvelope(
                                 channel=RealtimeChannel.EVENTS_BUSINESS,
                                 event_type="unknown_event.detected",
-                                envelope=unknown_envelope,
+                                occurred_at=self._parse_occurred_at(unknown_envelope),
+                                correlation_id=self._as_optional_str(unknown_envelope, "correlation_id"),
+                                dedupe_key=unknown_event.dedupe_key if unknown_event is not None else None,
+                                payload=self._build_unknown_realtime_payload(
+                                    event=unknown_event,
+                                    raw_payload=unknown_envelope.get("payload"),
+                                ),
+                                metadata={"message_id": unknown_envelope.get("message_id"), "producer": unknown_envelope.get("producer")},
                             )
                         )
                     return unknown_result.status in {IngestStatus.PROCESSED, IngestStatus.DUPLICATE, IngestStatus.IGNORED}
@@ -162,11 +185,19 @@ class BackendEventHandlers:
                     (envelope.get("payload") or {}).get("track_id"),
                     (envelope.get("payload") or {}).get("bbox"),
                 )
+                unknown_event = result.item if isinstance(result.item, UnknownEvent) else None
                 await self._container.realtime_event_bus.publish(
-                    self._to_realtime_envelope(
+                    RealtimeEnvelope(
                         channel=RealtimeChannel.EVENTS_BUSINESS,
                         event_type="unknown_event.detected",
-                        envelope=envelope,
+                        occurred_at=self._parse_occurred_at(envelope),
+                        correlation_id=self._as_optional_str(envelope, "correlation_id"),
+                        dedupe_key=unknown_event.dedupe_key if unknown_event is not None else None,
+                        payload=self._build_unknown_realtime_payload(
+                            event=unknown_event,
+                            raw_payload=envelope.get("payload"),
+                        ),
+                        metadata={"message_id": envelope.get("message_id"), "producer": envelope.get("producer")},
                     )
                 )
             logger.info(
@@ -183,11 +214,24 @@ class BackendEventHandlers:
             use_case = self._container.build_ingest_spoof_alert_event_use_case(session, uow)
             result = use_case.execute(envelope)
             if result.status == IngestStatus.PROCESSED:
+                spoof_event = result.item if isinstance(result.item, SpoofAlertEvent) else None
+                person_name: str | None = None
+                if spoof_event is not None and spoof_event.person_id is not None:
+                    person = self._container.create_person_repository(session).get_person(spoof_event.person_id)
+                    person_name = person.full_name if person is not None else None
                 await self._container.realtime_event_bus.publish(
-                    self._to_realtime_envelope(
+                    RealtimeEnvelope(
                         channel=RealtimeChannel.EVENTS_BUSINESS,
                         event_type="spoof_alert.detected",
-                        envelope=envelope,
+                        occurred_at=self._parse_occurred_at(envelope),
+                        correlation_id=self._as_optional_str(envelope, "correlation_id"),
+                        dedupe_key=spoof_event.dedupe_key if spoof_event is not None else None,
+                        payload=self._build_spoof_realtime_payload(
+                            event=spoof_event,
+                            person_name=person_name,
+                            raw_payload=envelope.get("payload"),
+                        ),
+                        metadata={"message_id": envelope.get("message_id"), "producer": envelope.get("producer")},
                     )
                 )
             logger.info(
@@ -209,6 +253,12 @@ class BackendEventHandlers:
         return True
 
     async def handle_stream_health_updated(self, envelope: dict[str, Any], _payload: dict[str, Any]) -> bool:
+        payload = envelope.get("payload")
+        if isinstance(payload, dict):
+            self._container.dashboard_health_state.record_stream_health(
+                payload=payload,
+                occurred_at=self._parse_occurred_at(envelope),
+            )
         await self._container.realtime_event_bus.publish(
             self._to_realtime_envelope(
                 channel=RealtimeChannel.STREAM_HEALTH,
@@ -394,6 +444,82 @@ class BackendEventHandlers:
             "created_at": registration.created_at.isoformat(),
             "updated_at": registration.updated_at.isoformat(),
         }
+
+    @staticmethod
+    def _build_unknown_realtime_payload(event: UnknownEvent | None, raw_payload: Any) -> dict[str, Any]:
+        if event is None:
+            fallback_payload = raw_payload if isinstance(raw_payload, dict) else {}
+            return {
+                "id": fallback_payload.get("id"),
+                "detected_at": fallback_payload.get("detected_at"),
+                "event_direction": fallback_payload.get("event_direction"),
+                "match_score": fallback_payload.get("match_score"),
+                "spoof_score": fallback_payload.get("spoof_score"),
+                "event_source": fallback_payload.get("event_source"),
+                "review_status": fallback_payload.get("review_status"),
+                "notes": fallback_payload.get("notes"),
+                "snapshot_media_asset_id": fallback_payload.get("snapshot_media_asset_id"),
+                "track_id": fallback_payload.get("track_id"),
+                "dedupe_key": fallback_payload.get("dedupe_key"),
+            }
+
+        track_id = None
+        if isinstance(event.raw_payload, dict):
+            raw_track_id = event.raw_payload.get("track_id")
+            track_id = raw_track_id if isinstance(raw_track_id, str) else None
+
+        return RealtimeUnknownDetectedPayload(
+            id=event.id,
+            detected_at=event.detected_at,
+            event_direction=event.event_direction,
+            match_score=event.match_score,
+            spoof_score=event.spoof_score,
+            event_source=event.event_source,
+            review_status=event.review_status,
+            notes=event.notes,
+            snapshot_media_asset_id=event.snapshot_media_asset_id,
+            track_id=track_id,
+            dedupe_key=event.dedupe_key or None,
+        ).to_message()
+
+    @staticmethod
+    def _build_spoof_realtime_payload(event: SpoofAlertEvent | None, person_name: str | None, raw_payload: Any) -> dict[str, Any]:
+        if event is None:
+            fallback_payload = raw_payload if isinstance(raw_payload, dict) else {}
+            return {
+                "id": fallback_payload.get("id"),
+                "person_id": fallback_payload.get("person_id"),
+                "person_name": person_name,
+                "detected_at": fallback_payload.get("detected_at"),
+                "spoof_score": fallback_payload.get("spoof_score"),
+                "severity": fallback_payload.get("severity"),
+                "event_source": fallback_payload.get("event_source"),
+                "review_status": fallback_payload.get("review_status"),
+                "notes": fallback_payload.get("notes"),
+                "snapshot_media_asset_id": fallback_payload.get("snapshot_media_asset_id"),
+                "track_id": fallback_payload.get("track_id"),
+                "dedupe_key": fallback_payload.get("dedupe_key"),
+            }
+
+        track_id = None
+        if isinstance(event.raw_payload, dict):
+            raw_track_id = event.raw_payload.get("track_id")
+            track_id = raw_track_id if isinstance(raw_track_id, str) else None
+
+        return RealtimeSpoofDetectedPayload(
+            id=event.id,
+            person_id=event.person_id,
+            person_name=person_name,
+            detected_at=event.detected_at,
+            spoof_score=event.spoof_score,
+            severity=event.severity,
+            event_source=event.event_source,
+            review_status=event.review_status,
+            notes=event.notes,
+            snapshot_media_asset_id=event.snapshot_media_asset_id,
+            track_id=track_id,
+            dedupe_key=event.dedupe_key or None,
+        ).to_message()
 
 
 def register_backend_event_handlers(consumer: RedisEventConsumer, handlers: BackendEventHandlers) -> None:

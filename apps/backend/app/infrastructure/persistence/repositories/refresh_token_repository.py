@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from datetime import timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -56,6 +56,18 @@ class SqlAlchemyRefreshTokenRepository(RefreshTokenRepository):
         item.revoked_at = revoked_at
         self._session.flush()
         return True
+
+    def revoke_all_for_user(self, user_id: UUID, revoked_at: datetime) -> int:
+        stmt = select(AuthRefreshTokenModel).where(
+            AuthRefreshTokenModel.user_id == user_id,
+            AuthRefreshTokenModel.revoked_at.is_(None),
+        )
+        items = list(self._session.execute(stmt).scalars())
+        for item in items:
+            item.revoked_at = revoked_at
+        if items:
+            self._session.flush()
+        return len(items)
 
     def touch_last_used(self, token_hash: str, used_at: datetime) -> None:
         stmt = select(AuthRefreshTokenModel).where(AuthRefreshTokenModel.token_hash == token_hash)

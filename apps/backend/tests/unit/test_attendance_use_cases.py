@@ -5,6 +5,7 @@ from uuid import uuid4
 from app.application.use_cases.attendance import (
     GetAttendanceDailySummaryUseCase,
     GetAttendanceEventUseCase,
+    GetAttendanceHourlyStatsUseCase,
     ListAttendanceEventsQuery,
     ListAttendanceEventsUseCase,
 )
@@ -30,6 +31,17 @@ class _FakeSummary:
     unique_persons: int
     total_entries: int
     total_exits: int
+    unknown_count: int
+    spoof_alert_count: int
+
+
+@dataclass
+class _FakeHourlyStat:
+    hour: str
+    events: int
+    entries: int
+    exits: int
+    alerts: int
 
 
 class _FakeAttendanceRepository:
@@ -67,7 +79,19 @@ class _FakeAttendanceRepository:
         return self.list_attendance_events()
 
     def get_daily_summary(self, work_date):
-        return _FakeSummary(work_date=work_date, total_events=10, unique_persons=3, total_entries=6, total_exits=4)
+        return _FakeSummary(
+            work_date=work_date,
+            total_events=10,
+            unique_persons=3,
+            total_entries=6,
+            total_exits=4,
+            unknown_count=2,
+            spoof_alert_count=1,
+        )
+
+    def get_hourly_stats(self, work_date):
+        _ = work_date
+        return [_FakeHourlyStat(hour="08:00", events=4, entries=3, exits=1, alerts=2)]
 
 
 def test_list_attendance_events_use_case():
@@ -83,6 +107,16 @@ def test_get_attendance_daily_summary_use_case():
     summary = use_case.execute(work_date)
     assert summary.work_date == work_date
     assert summary.total_events == 10
+    assert summary.unknown_count == 2
+
+
+def test_get_attendance_hourly_stats_use_case():
+    work_date = date.today()
+    use_case = GetAttendanceHourlyStatsUseCase(_FakeAttendanceRepository())
+    result = use_case.execute(work_date)
+    assert result.work_date == work_date
+    assert result.items[0].hour == "08:00"
+    assert result.items[0].alerts == 2
 
 
 def test_get_attendance_event_use_case():

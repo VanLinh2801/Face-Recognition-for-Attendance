@@ -1,37 +1,60 @@
 "use client";
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { EventsReviewCenter } from "@/components/events/events-review-center";
 import { PageHeader } from "@/components/data/page-header";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { getAccessToken } from "@/lib/auth-client";
-import type { EventFeedItem, EventFeedListResponse, EventFeedType } from "@/lib/types";
+import { getFilterPolicy, getDefaultEventRange, getEventBoundaryValues, normalizeEventRange } from "@/lib/filter-policy";
+import { buildFocusRange } from "@/lib/realtime-notifications";
+import { getTranslatedBackendError } from "@/lib/translated-backend-error";
+import type { EventFeedItem, EventFeedListResponse, EventFeedType, FilterPolicy } from "@/lib/types";
 
 const PAGE_SIZE = 10;
 
 export default function EventsPage() {
+  const t = useTranslations();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [rows, setRows] = useState<EventFeedItem[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [filterPolicy, setFilterPolicy] = useState<FilterPolicy | null>(null);
   const [activeType, setActiveType] = useState<"all" | EventFeedType>("all");
   const [query, setQuery] = useState("");
-  const [fromTime, setFromTime] = useState(() => getTodayRange().from);
-  const [toTime, setToTime] = useState(() => getTodayRange().to);
+  const [fromTime, setFromTime] = useState(() => getInitialEventRange().fromTime);
+  const [toTime, setToTime] = useState(() => getInitialEventRange().toTime);
   const deferredQuery = useDeferredValue(query);
+  const selectedEventId = searchParams.get("eventId");
+  const focusTime = searchParams.get("focusTime");
+  const requestedType = searchParams.get("type");
+  const appliedFocusSignatureRef = useRef<string | null>(null);
+
+  const normalizedRange = useMemo(() => {
+    if (!filterPolicy) return null;
+    return normalizeEventRange({ fromTime, toTime }, filterPolicy, "from");
+  }, [filterPolicy, fromTime, toTime]);
+
+  const eventBoundaries = useMemo(() => {
+    if (!filterPolicy) return null;
+    return getEventBoundaryValues(filterPolicy);
+  }, [filterPolicy]);
 
   const requestPath = useMemo(() => {
+    if (!normalizedRange) return null;
+
     const params = new URLSearchParams({
       page: String(currentPage),
       page_size: String(PAGE_SIZE),
       type: activeType,
     });
 
-    if (fromTime) params.set("from_at", new Date(fromTime).toISOString());
-    if (toTime) params.set("to_at", new Date(toTime).toISOString());
+    params.set("from_at", new Date(normalizedRange.fromTime).toISOString());
+    params.set("to_at", new Date(normalizedRange.toTime).toISOString());
 
     const trimmedQuery = deferredQuery.trim();
     if (trimmedQuery) {
@@ -39,10 +62,12 @@ export default function EventsPage() {
     }
 
     return `/events?${params.toString()}`;
-  }, [activeType, currentPage, deferredQuery, fromTime, toTime]);
+  }, [activeType, currentPage, deferredQuery, normalizedRange]);
 
   const loadEvents = useCallback(
     async (signal?: AbortSignal) => {
+      if (!requestPath) return;
+
       await Promise.resolve();
       if (signal?.aborted) return;
 
@@ -50,7 +75,6 @@ export default function EventsPage() {
       setError("");
 
       try {
-        // v1: keep the current no-pagination UX by requesting a larger first page.
         const response = await apiFetch<EventFeedListResponse>(requestPath, {
           withAuth: true,
           signal,
@@ -62,35 +86,15 @@ export default function EventsPage() {
         if (signal?.aborted) return;
         setRows([]);
         setTotal(0);
-        setError(err instanceof ApiError ? err.message : "Failed to load events.");
+        setError(err instanceof ApiError ? getTranslatedBackendError(t, err, "events") : t("errors.system.requestFailed"));
       } finally {
         if (!signal?.aborted) {
           setLoading(false);
         }
       }
     },
-    [requestPath],
+    [requestPath, t],
   );
-
-  function handleTypeChange(value: "all" | EventFeedType) {
-    setActiveType(value);
-    setCurrentPage(1);
-  }
-
-  function handleQueryChange(value: string) {
-    setQuery(value);
-    setCurrentPage(1);
-  }
-
-  function handleFromTimeChange(value: string) {
-    setFromTime(value);
-    setCurrentPage(1);
-  }
-
-  function handleToTimeChange(value: string) {
-    setToTime(value);
-    setCurrentPage(1);
-  }
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -99,18 +103,77 @@ export default function EventsPage() {
     }
 
     const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      void loadEvents(controller.signal);
+    const timer = window.setTimeout(async () => {
+      try {
+        const policy = await getFilterPolicy();
+        if (controller.signal.aborted) return;
+        const defaults = getDefaultEventRange(policy);
+        setFilterPolicy(policy);
+        setFromTime(defaults.fromTime);
+        setToTime(defaults.toTime);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setError(err instanceof ApiError ? getTranslatedBackendError(t, err, "events") : t("events.page.loadingPolicy"));
+        setLoading(false);
+      }
     }, 0);
+
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [loadEvents, router]);
+  }, [router, t]);
+
+  useEffect(() => {
+    if (!filterPolicy || !requestPath) return;
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void loadEvents(controller.signal);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [filterPolicy, loadEvents, requestPath]);
+
+  useEffect(() => {
+    if (!filterPolicy) return;
+    const signature = [requestedType ?? "", selectedEventId ?? "", focusTime ?? ""].join("|");
+
+    if (appliedFocusSignatureRef.current === signature) return;
+
+    const syncTimer = window.setTimeout(() => {
+      const nextActiveType =
+        requestedType === "unknown" || requestedType === "spoof" || requestedType === "recognition" ? requestedType : null;
+
+      if (nextActiveType && activeType !== nextActiveType) {
+        setActiveType(nextActiveType);
+        setCurrentPage(1);
+      }
+
+      if (!focusTime) {
+        appliedFocusSignatureRef.current = signature;
+        return;
+      }
+
+      const focusedRange = normalizeEventRange(buildFocusRange(focusTime), filterPolicy);
+      if (!focusedRange) return;
+
+      appliedFocusSignatureRef.current = signature;
+
+      if (focusedRange.fromTime !== fromTime) setFromTime(focusedRange.fromTime);
+      if (focusedRange.toTime !== toTime) setToTime(focusedRange.toTime);
+      setCurrentPage(1);
+    }, 0);
+
+    return () => window.clearTimeout(syncTimer);
+  }, [activeType, filterPolicy, focusTime, fromTime, requestedType, selectedEventId, toTime]);
 
   return (
     <div>
-      <PageHeader title="Sự kiện" description="Review recognition, unknown, and spoof alerts from one backend-driven feed." />
+      <PageHeader title={t("events.page.title")} description={t("events.page.description")} />
       <EventsReviewCenter
         rows={rows}
         total={total}
@@ -122,24 +185,48 @@ export default function EventsPage() {
         query={query}
         fromTime={fromTime}
         toTime={toTime}
-        onTypeChange={handleTypeChange}
-        onQueryChange={handleQueryChange}
-        onFromTimeChange={handleFromTimeChange}
-        onToTimeChange={handleToTimeChange}
+        retentionDays={filterPolicy?.retention_days ?? null}
+        minTime={eventBoundaries?.minEventStart ?? null}
+        maxTime={eventBoundaries?.maxEventEnd ?? null}
+        selectedEventId={selectedEventId}
+        onTypeChange={(value) => {
+          setActiveType(value);
+          setCurrentPage(1);
+        }}
+        onQueryChange={(value) => {
+          setQuery(value);
+          setCurrentPage(1);
+        }}
+        onFromTimeChange={(value) => {
+          if (!filterPolicy) return;
+          const nextRange = normalizeEventRange({ fromTime: value, toTime }, filterPolicy, "from");
+          if (!nextRange) return;
+          setFromTime(nextRange.fromTime);
+          setToTime(nextRange.toTime);
+          setCurrentPage(1);
+        }}
+        onToTimeChange={(value) => {
+          if (!filterPolicy) return;
+          const nextRange = normalizeEventRange({ fromTime, toTime: value }, filterPolicy, "to");
+          if (!nextRange) return;
+          setFromTime(nextRange.fromTime);
+          setToTime(nextRange.toTime);
+          setCurrentPage(1);
+        }}
         onPageChange={setCurrentPage}
       />
     </div>
   );
 }
 
-function getTodayRange() {
+function getInitialEventRange() {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
 
   return {
-    from: `${year}-${month}-${day}T00:00`,
-    to: `${year}-${month}-${day}T23:59`,
+    fromTime: `${year}-${month}-${day}T00:00`,
+    toTime: `${year}-${month}-${day}T23:59`,
   };
 }

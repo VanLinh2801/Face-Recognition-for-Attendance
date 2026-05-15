@@ -10,7 +10,10 @@ from app.application.interfaces.repositories.event_feed_repository import (
     SeverityFilter,
 )
 from app.application.use_cases.events import ListEventFeedQuery, ListEventFeedUseCase
+from app.bootstrap.container import Container
 from app.core.dependencies import get_admin_user, get_list_event_feed_use_case
+from app.core.filter_policy import validate_event_filter_range
+from app.core.dependencies import get_container
 from app.presentation.schemas.events import EventFeedItemResponse, EventFeedListResponse
 
 router = APIRouter(prefix="/events", tags=["events"], dependencies=[Depends(get_admin_user)])
@@ -26,8 +29,14 @@ def list_event_feed(
     q: str | None = Query(default=None),
     review_status: ReviewStatusFilter | None = Query(default=None),
     severity: SeverityFilter | None = Query(default=None),
+    container: Container = Depends(get_container),
     use_case: ListEventFeedUseCase = Depends(get_list_event_feed_use_case),
 ) -> EventFeedListResponse:
+    validate_event_filter_range(
+        from_at=from_at,
+        to_at=to_at,
+        settings=container.settings,
+    )
     result = use_case.execute(
         ListEventFeedQuery(
             page=page,

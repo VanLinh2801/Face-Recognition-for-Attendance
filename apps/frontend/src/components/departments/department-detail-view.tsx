@@ -1,13 +1,17 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Building2, ChevronRight, Eye, MoreHorizontal, Pencil, Save, Search, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PersonStatusBadge } from "@/components/data/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ApiError, apiFetch } from "@/lib/api-client";
+import { apiFetch } from "@/lib/api-client";
+import { normalizeBackendError } from "@/lib/backend-error-normalizer";
+import { getTranslatedBackendError } from "@/lib/translated-backend-error";
 import type { Department, Person } from "@/lib/types";
 import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { useOutsideClick } from "@/lib/use-outside-click";
@@ -25,6 +29,8 @@ type DepartmentFieldErrors = {
   parent_id?: string;
 };
 
+type DepartmentPerson = Person & { department_name: string };
+
 export function DepartmentDetailView({
   department,
   departments,
@@ -33,13 +39,14 @@ export function DepartmentDetailView({
 }: {
   department: Department;
   departments: Department[];
-  persons: Array<Person & { department_name: string }>;
+  persons: DepartmentPerson[];
   onDepartmentUpdated: (department: Department) => void;
 }) {
+  const t = useTranslations();
   const router = useRouter();
   const [deletedPersonIds, setDeletedPersonIds] = useState<Set<string>>(new Set());
   const [openPersonActionId, setOpenPersonActionId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<(Person & { department_name: string }) | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DepartmentPerson | null>(null);
   const [editDraft, setEditDraft] = useState<DepartmentDraft | null>(null);
   const [editFieldErrors, setEditFieldErrors] = useState<DepartmentFieldErrors>({});
   const [deleting, setDeleting] = useState(false);
@@ -84,8 +91,8 @@ export function DepartmentDetailView({
   }
 
   function getDepartmentName(id: string | null) {
-    if (!id) return "Không trực thuộc";
-    return departments.find((item) => item.id === id)?.name ?? "Không xác định";
+    if (!id) return t("common.notAssigned");
+    return departments.find((item) => item.id === id)?.name ?? t("common.unknown");
   }
 
   function childDepartments(parentId: string) {
@@ -111,7 +118,7 @@ export function DepartmentDetailView({
 
   function departmentTreePersons(departmentId: string) {
     const departmentIds = descendantDepartmentIds(departmentId);
-    return departmentPeople.filter((person) => person.department_id ? departmentIds.has(person.department_id) : false);
+    return departmentPeople.filter((person) => (person.department_id ? departmentIds.has(person.department_id) : false));
   }
 
   function openEditDialog() {
@@ -137,11 +144,11 @@ export function DepartmentDetailView({
     const name = editDraft.name.trim();
     if (!code || !name) {
       setEditFieldErrors({
-        code: !code ? "Mã phòng ban không được để trống." : undefined,
+        code: !code ? t("departments.form.codeRequired") : undefined,
       });
       showToast({
-        title: "Dữ liệu chưa hợp lệ",
-        description: !code ? "Mã phòng ban không được để trống." : "Tên phòng ban không được để trống.",
+        title: t("departments.toast.invalidTitle"),
+        description: !code ? t("departments.form.codeRequired") : t("departments.form.nameRequired"),
         variant: "danger",
       });
       return;
@@ -164,15 +171,15 @@ export function DepartmentDetailView({
       onDepartmentUpdated(updatedDepartment);
       setEditDraft(null);
       showToast({
-        title: "Cập nhật thành công",
-        description: `Phòng ban ${updatedDepartment.name} đã được cập nhật.`,
+        title: t("departments.toast.updateSuccessTitle"),
+        description: t("departments.toast.updateSuccessDescription", { name: updatedDepartment.name }),
         variant: "success",
       });
     } catch (err) {
-      setEditFieldErrors(getDepartmentFieldErrors(err));
+      setEditFieldErrors(getDepartmentFieldErrors(err, t));
       showToast({
-        title: "Cập nhật thất bại",
-        description: getDepartmentErrorMessage(err),
+        title: t("departments.toast.updateFailedTitle"),
+        description: getDepartmentErrorMessage(err, t),
         variant: "danger",
       });
     } finally {
@@ -191,14 +198,14 @@ export function DepartmentDetailView({
       setOpenPersonActionId(null);
       setDeleteTarget(null);
       showToast({
-        title: "Xóa nhân viên thành công",
-        description: "Nhân viên đã được ẩn khỏi danh sách hiện tại.",
+        title: t("departments.toast.personDeleteSuccessTitle"),
+        description: t("departments.toast.personDeleteSuccessDescription"),
         variant: "success",
       });
     } catch (err) {
       showToast({
-        title: "Xóa nhân viên thất bại",
-        description: err instanceof ApiError ? err.message : "Không thể xóa nhân viên. Vui lòng thử lại.",
+        title: t("departments.toast.personDeleteFailedTitle"),
+        description: getTranslatedBackendError(t, err, "persons"),
         variant: "danger",
       });
     } finally {
@@ -206,109 +213,141 @@ export function DepartmentDetailView({
     }
   }
 
+  const treePersons = departmentTreePersons(department.id);
+
   return (
     <>
       <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
         <div className="space-y-4">
-        <Card>
-          <CardHeader><CardTitle>Thông tin phòng ban</CardTitle></CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="flex justify-between gap-3"><span className="text-slate-500">Mã</span><span className="font-mono text-xs">{department.code}</span></div>
-            <div className="flex justify-between gap-3"><span className="text-slate-500">Tên</span><span className="font-medium">{department.name}</span></div>
-            <div className="flex justify-between gap-3"><span className="text-slate-500">Trực thuộc</span><span>{getDepartmentName(department.parent_id)}</span></div>
-            <div className="flex justify-between gap-3"><span className="text-slate-500">Trạng thái</span><Badge variant={department.is_active ? "success" : "default"}>{department.is_active ? "active" : "inactive"}</Badge></div>
-            <div className="flex justify-between gap-3"><span className="text-slate-500">Phòng ban con</span><span>{childDepartments(department.id).length}</span></div>
-            <div className="flex justify-between gap-3"><span className="text-slate-500">Nhân viên</span><span>{departmentTreePersons(department.id).length}</span></div>
-            <Button variant="outline" className="mt-2 w-full" onClick={openEditDialog}>
-              <Pencil className="h-4 w-4" />
-              Sửa phòng ban
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>Cây trực thuộc</CardTitle></CardHeader>
-          <CardContent>
-            <DepartmentTree
-              rootId={department.id}
-              departments={departments}
-              getPersonCount={(departmentId) => departmentPersons(departmentId).length}
-              onOpenDepartment={(target) => router.push(`/departments/${target.id}`)}
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader><CardTitle>Nhân viên thuộc phòng ban và cấp dưới</CardTitle></CardHeader>
-        <CardContent>
-          <div className="overflow-visible">
-                    <table className="w-full table-fixed text-left text-sm">
-                      <thead className="text-xs uppercase text-slate-500">
-                        <tr className="border-b border-slate-200"><th className="w-12 py-3">STT</th><th>Nhân viên</th><th className="w-[24%]">Phòng ban</th><th className="w-[18%]">Chức danh</th><th className="w-24">Trạng thái</th><th className="w-16 text-right">Action</th></tr>
-                      </thead>
-                      <tbody>
-                        {departmentTreePersons(department.id).map((person, index) => (
-                  <tr key={person.id} className="border-b border-slate-100">
-                    <td className="py-3 font-mono text-xs text-slate-500">{index + 1}</td>
-                            <td className="min-w-0 pr-3">
-                              <div className="truncate font-medium">{person.full_name}</div>
-                              <div className="truncate text-xs text-slate-500">{person.email}</div>
-                              <div className="truncate text-xs text-slate-500">{person.phone}</div>
-                            </td>
-                            <td className="truncate pr-4">{person.department_name}</td>
-                            <td className="truncate pr-4">{person.title}</td>
-                            <td><Badge variant={person.status === "active" ? "success" : "default"}>{person.status}</Badge></td>
-                            <td className="text-right">
-                              <div
-                                ref={openPersonActionId === person.id ? personActionMenuRef : undefined}
-                                className="relative inline-flex justify-end"
-                              >
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  aria-label={`Mở action cho ${person.full_name}`}
-                                  onClick={() => setOpenPersonActionId((current) => (current === person.id ? null : person.id))}
-                                >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                                {openPersonActionId === person.id ? (
-                                  <div className="absolute right-0 top-10 z-20 w-44 overflow-hidden rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg">
-                                    <button
-                                      type="button"
-                                      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                                      onClick={() => router.push(`/persons/${person.id}`)}
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                      Xem chi tiết
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-700 hover:bg-red-50"
-                                      onClick={() => {
-                                        setDeleteTarget(person);
-                                        setOpenPersonActionId(null);
-                                      }}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                      Xóa
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-              </tbody>
-            </table>
-            {departmentTreePersons(department.id).length === 0 ? (
-              <div className="rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                Chưa có nhân viên thuộc phòng ban này hoặc các phòng ban cấp dưới.
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("departments.detail.infoTitle")}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500">{t("departments.detail.code")}</span>
+                <span className="font-mono text-xs">{department.code}</span>
               </div>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500">{t("departments.detail.name")}</span>
+                <span className="font-medium">{department.name}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500">{t("departments.detail.parent")}</span>
+                <span>{getDepartmentName(department.parent_id)}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500">{t("departments.detail.status")}</span>
+                <DepartmentStatusBadge active={department.is_active} />
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500">{t("departments.detail.children")}</span>
+                <span>{childDepartments(department.id).length}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-slate-500">{t("departments.detail.persons")}</span>
+                <span>{treePersons.length}</span>
+              </div>
+              <Button variant="outline" className="mt-2 w-full" onClick={openEditDialog}>
+                <Pencil className="h-4 w-4" />
+                {t("departments.detail.editAction")}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("departments.detail.treeTitle")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DepartmentTree
+                rootId={department.id}
+                departments={departments}
+                getPersonCount={(departmentId) => departmentPersons(departmentId).length}
+                onOpenDepartment={(target) => router.push(`/departments/${target.id}`)}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("departments.detail.personsTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-visible">
+              <table className="w-full table-fixed text-left text-sm">
+                <thead className="text-xs uppercase text-slate-500">
+                  <tr className="border-b border-slate-200">
+                    <th className="w-12 py-3">{t("departments.list.index")}</th>
+                    <th>{t("departments.detail.person")}</th>
+                    <th className="w-[24%]">{t("departments.list.parent")}</th>
+                    <th className="w-[18%]">{t("departments.detail.position")}</th>
+                    <th className="w-24">{t("departments.detail.status")}</th>
+                    <th className="w-16 text-right">{t("common.actions")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {treePersons.map((person, index) => (
+                    <tr key={person.id} className="border-b border-slate-100">
+                      <td className="py-3 font-mono text-xs text-slate-500">{index + 1}</td>
+                      <td className="min-w-0 pr-3">
+                        <div className="truncate font-medium">{person.full_name}</div>
+                        <div className="truncate text-xs text-slate-500">{person.email || t("common.unknown")}</div>
+                        <div className="truncate text-xs text-slate-500">{person.phone || t("common.unknown")}</div>
+                      </td>
+                      <td className="truncate pr-4">{person.department_name || t("common.notAssigned")}</td>
+                      <td className="truncate pr-4">{person.title || t("common.unknown")}</td>
+                      <td>
+                        <PersonStatusBadge status={person.status} />
+                      </td>
+                      <td className="text-right">
+                        <div ref={openPersonActionId === person.id ? personActionMenuRef : undefined} className="relative inline-flex justify-end">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label={t("departments.personActions.open", { name: person.full_name })}
+                            onClick={() => setOpenPersonActionId((current) => (current === person.id ? null : person.id))}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                          {openPersonActionId === person.id ? (
+                            <div className="absolute right-0 top-10 z-20 w-44 overflow-hidden rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg">
+                              <button
+                                type="button"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                onClick={() => router.push(`/persons/${person.id}`)}
+                              >
+                                <Eye className="h-4 w-4" />
+                                {t("departments.personActions.viewDetails")}
+                              </button>
+                              <button
+                                type="button"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-700 hover:bg-red-50"
+                                onClick={() => {
+                                  setDeleteTarget(person);
+                                  setOpenPersonActionId(null);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                {t("departments.personActions.delete")}
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {treePersons.length === 0 ? (
+                <div className="rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                  {t("departments.detail.emptyPersons")}
+                </div>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {visibleEditDraft ? (
@@ -326,11 +365,11 @@ export function DepartmentDetailView({
                   <Building2 className="h-5 w-5 text-slate-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold">Sửa phòng ban</h2>
-                  <p className="mt-1 text-sm text-slate-500">Cập nhật thông tin phòng ban trực tiếp từ trang chi tiết.</p>
+                  <h2 className="text-lg font-semibold">{t("departments.form.editTitle")}</h2>
+                  <p className="mt-1 text-sm text-slate-500">{t("departments.form.editDescription")}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setEditDraft(null)} aria-label="Đóng dialog phòng ban">
+              <Button variant="ghost" size="icon" onClick={() => setEditDraft(null)} aria-label={t("departments.form.close")}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -338,31 +377,31 @@ export function DepartmentDetailView({
             <div className="space-y-4 p-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Mã phòng ban</span>
+                  <span className="text-sm font-medium">{t("departments.form.code")}</span>
                   <Input
                     value={visibleEditDraft.code}
                     onChange={(event) => {
                       setEditDraft({ ...visibleEditDraft, code: event.target.value });
                       setEditFieldErrors((current) => ({ ...current, code: undefined }));
                     }}
-                    placeholder="ENG"
+                    placeholder={t("departments.form.codePlaceholder")}
                     aria-invalid={editFieldErrors.code ? true : undefined}
                     className={editFieldErrors.code ? "border-red-300 focus:border-red-400 focus:ring-red-100" : undefined}
                   />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Tên phòng ban</span>
+                  <span className="text-sm font-medium">{t("departments.form.name")}</span>
                   <Input
                     value={visibleEditDraft.name}
                     onChange={(event) => setEditDraft({ ...visibleEditDraft, name: event.target.value })}
-                    placeholder="Engineering"
+                    placeholder={t("departments.form.namePlaceholder")}
                   />
                 </label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Trực thuộc</span>
+                  <span className="text-sm font-medium">{t("departments.form.parent")}</span>
                   <DepartmentTreeSelect
                     departments={parentCandidates()}
                     value={visibleEditDraft.parent_id ?? ""}
@@ -372,12 +411,10 @@ export function DepartmentDetailView({
                     }}
                     invalid={Boolean(editFieldErrors.parent_id)}
                   />
-                  <span className="text-xs text-slate-500">
-                    Không thể chọn chính phòng ban này hoặc phòng ban con/cháu làm trực thuộc.
-                  </span>
+                  <span className="text-xs text-slate-500">{t("departments.form.invalidParentHint")}</span>
                 </label>
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Trạng thái</span>
+                  <span className="text-sm font-medium">{t("departments.form.status")}</span>
                   <DepartmentStatusSelect
                     value={visibleEditDraft.is_active}
                     onChange={(value) => setEditDraft({ ...visibleEditDraft, is_active: value })}
@@ -388,11 +425,11 @@ export function DepartmentDetailView({
 
             <div className="flex justify-end gap-2 border-t border-slate-200 p-5">
               <Button variant="outline" onClick={() => setEditDraft(null)} disabled={savingDepartment}>
-                Hủy
+                {t("common.cancel")}
               </Button>
               <Button onClick={saveDepartmentDraft} disabled={savingDepartment}>
                 <Save className="h-4 w-4" />
-                {savingDepartment ? "Đang lưu..." : "Lưu thay đổi"}
+                {savingDepartment ? t("departments.form.saving") : t("departments.form.saveChanges")}
               </Button>
             </div>
           </div>
@@ -414,23 +451,23 @@ export function DepartmentDetailView({
                   <Trash2 className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold">Xóa nhân viên?</h2>
+                  <h2 className="text-lg font-semibold">{t("departments.personActions.deleteTitle")}</h2>
                   <p className="mt-2 text-sm text-slate-600">
-                    Bạn có chắc muốn xóa {visibleDeleteTarget.full_name}? Thao tác này sẽ gọi API xóa nhân viên ở backend.
+                    {t("departments.personActions.deleteDescription", { name: visibleDeleteTarget.full_name })}
                   </p>
                 </div>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(null)} aria-label="Đóng xác nhận xóa">
+              <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(null)} aria-label={t("departments.personActions.close")}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
             <div className="flex justify-end gap-2 p-5">
               <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
-                Hủy
+                {t("common.cancel")}
               </Button>
               <Button variant="danger" onClick={() => deletePerson(visibleDeleteTarget.id)} disabled={deleting}>
                 <Trash2 className="h-4 w-4" />
-                {deleting ? "Đang xóa..." : "Xác nhận xóa"}
+                {deleting ? t("departments.personActions.deleting") : t("departments.personActions.confirmDelete")}
               </Button>
             </div>
           </div>
@@ -454,7 +491,7 @@ export function DepartmentDetailView({
               type="button"
               onClick={closeToast}
               className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-950"
-              aria-label="Đóng thông báo"
+              aria-label={t("departments.toast.close")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -476,20 +513,12 @@ function DepartmentTree({
   getPersonCount: (departmentId: string) => number;
   onOpenDepartment: (department: Department) => void;
 }) {
+  const t = useTranslations("departments.detail");
   const children = departments.filter((item) => item.parent_id === rootId);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(children.map((item) => item.id)));
 
   if (children.length === 0) {
-    return <div className="rounded-md border border-dashed border-slate-300 p-4 text-sm text-slate-500">Không có phòng ban trực thuộc.</div>;
-  }
-
-  function toggleDepartment(departmentId: string) {
-    setExpandedIds((current) => {
-      const next = new Set(current);
-      if (next.has(departmentId)) next.delete(departmentId);
-      else next.add(departmentId);
-      return next;
-    });
+    return <div className="rounded-md border border-dashed border-slate-300 p-4 text-sm text-slate-500">{t("emptyChildren")}</div>;
   }
 
   return (
@@ -502,7 +531,14 @@ function DepartmentTree({
           getPersonCount={getPersonCount}
           depth={0}
           expandedIds={expandedIds}
-          onToggle={toggleDepartment}
+          onToggle={(departmentId) =>
+            setExpandedIds((current) => {
+              const next = new Set(current);
+              if (next.has(departmentId)) next.delete(departmentId);
+              else next.add(departmentId);
+              return next;
+            })
+          }
           onOpenDepartment={onOpenDepartment}
         />
       ))}
@@ -527,6 +563,7 @@ function DepartmentTreeNode({
   onToggle: (departmentId: string) => void;
   onOpenDepartment: (department: Department) => void;
 }) {
+  const t = useTranslations("departments.detail");
   const children = departments.filter((item) => item.parent_id === department.id);
   const hasChildren = children.length > 0;
   const expanded = expandedIds.has(department.id);
@@ -537,7 +574,7 @@ function DepartmentTreeNode({
         className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm hover:bg-slate-100"
         style={{ marginLeft: depth * 16 }}
         onDoubleClick={() => onOpenDepartment(department)}
-        title="Double click để xem chi tiết phòng ban này"
+        title={t("doubleClickHint")}
       >
         <button
           type="button"
@@ -546,7 +583,7 @@ function DepartmentTreeNode({
             event.stopPropagation();
             onToggle(department.id);
           }}
-          aria-label={expanded ? `Thu gọn ${department.name}` : `Mở rộng ${department.name}`}
+          aria-label={expanded ? t("collapse", { name: department.name }) : t("expand", { name: department.name })}
           className="grid h-5 w-5 place-items-center rounded text-slate-500 hover:bg-slate-200 disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
         >
           <ChevronRight className={expanded ? "h-4 w-4 rotate-90 transition-transform" : "h-4 w-4 transition-transform"} />
@@ -588,6 +625,7 @@ function DepartmentTreeSelect({
   onChange: (value: string) => void;
   invalid?: boolean;
 }) {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
@@ -596,22 +634,13 @@ function DepartmentTreeSelect({
   );
 
   const selectedDepartment = departments.find((department) => department.id === value);
-  const selectedLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : "Không trực thuộc";
+  const selectedLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : t("departments.form.noParent");
   const normalizedQuery = query.trim().toLowerCase();
 
   useOutsideClick(containerRef, open, () => setOpen(false));
 
-  function toggleDepartment(departmentId: string) {
-    setExpandedIds((current) => {
-      const next = new Set(current);
-      if (next.has(departmentId)) next.delete(departmentId);
-      else next.add(departmentId);
-      return next;
-    });
-  }
-
   const rootDepartments = departments.filter(
-    (department) => department.parent_id === null || !departments.some((item) => item.id === department.parent_id),
+    (item) => item.parent_id === null || !departments.some((department) => department.id === item.parent_id),
   );
 
   return (
@@ -635,7 +664,7 @@ function DepartmentTreeSelect({
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Tìm phòng ban"
+                placeholder={t("departments.form.searchPlaceholder")}
                 className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm focus:border-transparent focus:ring-0"
               />
             </div>
@@ -648,23 +677,34 @@ function DepartmentTreeSelect({
                 onChange("");
                 setOpen(false);
               }}
-              className={value === "" ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+              className={
+                value === ""
+                  ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white"
+                  : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+              }
             >
               <Building2 className="h-4 w-4" />
-              Không trực thuộc
+              {t("departments.form.noParent")}
             </button>
 
             <div className="mt-1 space-y-1">
-              {rootDepartments.map((department) => (
+              {rootDepartments.map((item) => (
                 <DepartmentTreeOption
-                  key={department.id}
-                  department={department}
+                  key={item.id}
+                  department={item}
                   departments={departments}
                   selectedId={value}
                   depth={0}
                   expandedIds={expandedIds}
                   query={normalizedQuery}
-                  onToggle={toggleDepartment}
+                  onToggle={(departmentId) =>
+                    setExpandedIds((current) => {
+                      const next = new Set(current);
+                      if (next.has(departmentId)) next.delete(departmentId);
+                      else next.add(departmentId);
+                      return next;
+                    })
+                  }
                   onSelect={(departmentId) => {
                     onChange(departmentId);
                     setOpen(false);
@@ -688,10 +728,7 @@ function DepartmentStatusSelect({
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const options = [
-    { value: true, label: "active" },
-    { value: false, label: "inactive" },
-  ];
+  const options = [true, false];
 
   useOutsideClick(containerRef, open, () => setOpen(false));
 
@@ -712,15 +749,19 @@ function DepartmentStatusSelect({
         <div className="absolute left-0 top-11 z-30 w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
           {options.map((option) => (
             <button
-              key={option.label}
+              key={option ? "active" : "inactive"}
               type="button"
               onClick={() => {
-                onChange(option.value);
+                onChange(option);
                 setOpen(false);
               }}
-              className={value === option.value ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+              className={
+                value === option
+                  ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white"
+                  : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+              }
             >
-              <DepartmentStatusBadge active={option.value} />
+              <DepartmentStatusBadge active={option} />
             </button>
           ))}
         </div>
@@ -730,7 +771,8 @@ function DepartmentStatusSelect({
 }
 
 function DepartmentStatusBadge({ active }: { active: boolean }) {
-  return <Badge variant={active ? "success" : "default"}>{active ? "active" : "inactive"}</Badge>;
+  const t = useTranslations("common.status");
+  return <Badge variant={active ? "success" : "default"}>{active ? t("active") : t("inactive")}</Badge>;
 }
 
 function DepartmentTreeOption({
@@ -752,6 +794,7 @@ function DepartmentTreeOption({
   onToggle: (departmentId: string) => void;
   onSelect: (departmentId: string) => void;
 }) {
+  const t = useTranslations("departments.detail");
   const children = departments.filter((item) => item.parent_id === department.id);
   const expanded = expandedIds.has(department.id);
   const hasChildren = children.length > 0;
@@ -766,7 +809,11 @@ function DepartmentTreeOption({
   return (
     <div>
       <div
-        className={selectedId === department.id ? "flex items-center gap-2 rounded-md bg-slate-950 px-2 py-2 text-sm font-medium text-white" : "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-slate-50"}
+        className={
+          selectedId === department.id
+            ? "flex items-center gap-2 rounded-md bg-slate-950 px-2 py-2 text-sm font-medium text-white"
+            : "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-slate-50"
+        }
         style={{ paddingLeft: 8 + depth * 18 }}
       >
         <button
@@ -777,13 +824,15 @@ function DepartmentTreeOption({
             onToggle(department.id);
           }}
           className="grid h-5 w-5 shrink-0 place-items-center rounded hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-transparent"
-          aria-label={expanded ? `Thu gọn ${department.name}` : `Mở rộng ${department.name}`}
+          aria-label={expanded ? t("collapse", { name: department.name }) : t("expand", { name: department.name })}
         >
           <ChevronRight className={expanded ? "h-4 w-4 rotate-90 transition-transform" : "h-4 w-4 transition-transform"} />
         </button>
         <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => onSelect(department.id)}>
           <Building2 className="h-4 w-4 shrink-0" />
-          <span className="truncate">{department.code} · {department.name}</span>
+          <span className="truncate">
+            {department.code} · {department.name}
+          </span>
         </button>
       </div>
       {expanded || query.length > 0
@@ -805,38 +854,28 @@ function DepartmentTreeOption({
   );
 }
 
-function getDepartmentFieldErrors(error: unknown): DepartmentFieldErrors {
-  if (!(error instanceof ApiError)) return {};
-
-  const text = `${error.message} ${getErrorDetailsText(error.details)}`.toLowerCase();
+function getDepartmentFieldErrors(error: unknown, t: ReturnType<typeof useTranslations>): DepartmentFieldErrors {
+  const normalized = normalizeBackendError(error, "departments");
   return {
-    code: text.includes("code") ? "Mã phòng ban đã tồn tại hoặc chưa hợp lệ." : undefined,
+    code: normalized.key === "departments.codeExists" ? t("departments.fieldErrors.invalidCode") : undefined,
     parent_id:
-      text.includes("parent") || text.includes("cycle") || text.includes("circular") || text.includes("self")
-        ? "Phòng ban trực thuộc không hợp lệ."
+      normalized.key === "departments.parentNotFound" ||
+      normalized.key === "departments.parentCannotBeSelf" ||
+      normalized.key === "departments.parentCannotBeDescendant"
+        ? t("departments.fieldErrors.invalidParent")
         : undefined,
   };
 }
 
-function getDepartmentErrorMessage(error: unknown) {
-  if (!(error instanceof ApiError)) return "Không thể lưu phòng ban. Vui lòng thử lại.";
-
-  const text = `${error.message} ${getErrorDetailsText(error.details)}`.toLowerCase();
-  if (text.includes("code")) return "Mã phòng ban đã tồn tại. Vui lòng kiểm tra lại.";
-  if (text.includes("parent") || text.includes("cycle") || text.includes("circular") || text.includes("self")) {
-    return "Phòng ban trực thuộc không hợp lệ. Vui lòng kiểm tra lại.";
+function getDepartmentErrorMessage(error: unknown, t: ReturnType<typeof useTranslations>) {
+  const normalized = normalizeBackendError(error, "departments");
+  if (normalized.key === "departments.codeExists") return t("departments.messages.duplicateCode");
+  if (
+    normalized.key === "departments.parentNotFound" ||
+    normalized.key === "departments.parentCannotBeSelf" ||
+    normalized.key === "departments.parentCannotBeDescendant"
+  ) {
+    return t("departments.messages.invalidParent");
   }
-  return error.message || "Không thể lưu phòng ban. Vui lòng thử lại.";
+  return getTranslatedBackendError(t, error, "departments");
 }
-
-function getErrorDetailsText(details: unknown): string {
-  if (!details) return "";
-  if (typeof details === "string") return details;
-
-  try {
-    return JSON.stringify(details);
-  } catch {
-    return "";
-  }
-}
-

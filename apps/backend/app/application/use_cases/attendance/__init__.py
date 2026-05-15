@@ -31,6 +31,21 @@ class AttendanceDailySummaryView(Protocol):
     unique_persons: int
     total_entries: int
     total_exits: int
+    unknown_count: int
+    spoof_alert_count: int
+
+
+class AttendanceHourlyStatView(Protocol):
+    hour: str
+    events: int
+    entries: int
+    exits: int
+    alerts: int
+
+
+class AttendanceHourlyStatsView(Protocol):
+    work_date: date
+    items: list[AttendanceHourlyStatView]
 
 
 @dataclass(slots=True, kw_only=True)
@@ -100,3 +115,20 @@ class GetAttendanceDailySummaryUseCase:
 
     def execute(self, work_date: date) -> AttendanceDailySummaryView:
         return self._repository.get_daily_summary(work_date)
+
+
+@dataclass(slots=True)
+class AttendanceHourlyStatsResult:
+    work_date: date
+    items: list[AttendanceHourlyStatView]
+
+
+class GetAttendanceHourlyStatsUseCase:
+    def __init__(self, repository: AttendanceRepository) -> None:
+        self._repository = repository
+
+    def execute(self, work_date: date) -> AttendanceHourlyStatsView:
+        return AttendanceHourlyStatsResult(
+            work_date=work_date,
+            items=self._repository.get_hourly_stats(work_date),
+        )

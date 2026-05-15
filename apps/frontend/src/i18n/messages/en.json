@@ -1,0 +1,537 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "loading": "Loading...",
+    "unknown": "Unknown",
+    "notAssigned": "No parent",
+    "actions": "Actions",
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "resigned": "Resigned",
+      "pending": "Pending",
+      "indexed": "Indexed",
+      "failed": "Failed",
+      "new": "New",
+      "reviewed": "Reviewed",
+      "ignored": "Ignored",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "entry": "Entry",
+      "exit": "Exit",
+      "unknown": "Unknown"
+    }
+  },
+  "language": {
+    "label": "Language",
+    "vi": "Vietnamese",
+    "en": "English"
+  },
+  "notifications": {
+    "open": "Open notifications",
+    "title": "Notifications",
+    "markAllAsRead": "Mark all as read",
+    "empty": "No realtime alerts yet.",
+    "close": "Close notification",
+    "kind": {
+      "unknown": "Unknown",
+      "spoof": "Spoof"
+    },
+    "connection": {
+      "connected": "Realtime connected",
+      "connecting": "Connecting to realtime feed...",
+      "error": "Realtime connection error",
+      "disconnected": "Realtime disconnected"
+    },
+    "item": {
+      "unknownTitle": "Unknown person detected",
+      "spoofTitle": "Spoof alert detected",
+      "cameraEvent": "Camera event",
+      "track": "Track {id}"
+    }
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "persons": "People",
+    "attendance": "Attendance",
+    "events": "Events",
+    "departments": "Departments"
+  },
+  "layout": {
+    "appName": "Face Recognition",
+    "appSubtitle": "Attendance Admin",
+    "adminSession": "Admin session",
+    "toggleSidebar": "Toggle sidebar",
+    "signOut": "Sign out",
+    "signingOut": "Signing out...",
+    "changePassword": "Change password",
+    "sessionExpiredTitle": "Session expired",
+    "changePasswordDescription": "After a successful password change, you will need to sign in again.",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmNewPassword": "Confirm new password",
+    "showCurrentPassword": "Show current password",
+    "hideCurrentPassword": "Hide current password",
+    "showNewPassword": "Show new password",
+    "hideNewPassword": "Hide new password",
+    "showPasswordConfirmation": "Show password confirmation",
+    "hidePasswordConfirmation": "Hide password confirmation",
+    "updatePassword": "Update password",
+    "updatingPassword": "Updating...",
+    "passwordRequired": "Please fill in all required fields.",
+    "passwordConfirmationMismatch": "Password confirmation does not match."
+  },
+  "auth": {
+    "loginTitle": "Sign in",
+    "loginDescription": "Use your admin account to access the dashboard.",
+    "securityPanel": "Secure control panel",
+    "heroTitle": "Manage attendance with face recognition.",
+    "heroDescription": "Sign in to monitor cameras, recognition events, attendance, and personnel records from one dashboard.",
+    "username": "Username",
+    "password": "Password",
+    "passwordPlaceholder": "Enter password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "submit": "Sign in",
+    "submitting": "Signing in..."
+  },
+  "errors": {
+    "auth": {
+      "invalidCredentials": "Username or password is incorrect.",
+      "invalidRefreshToken": "Your session is invalid. Please sign in again.",
+      "invalidAccessTokenSubject": "Your session is invalid. Please sign in again.",
+      "userNotFound": "Account not found.",
+      "currentPasswordIncorrect": "Current password is incorrect.",
+      "newPasswordSameAsCurrent": "New password must be different from the current password.",
+      "newPasswordTooShort": "New password must be at least 8 characters.",
+      "missingBearerToken": "Your session has expired. Please sign in again.",
+      "invalidJwtPayload": "Your session is invalid. Please sign in again.",
+      "invalidJwtFormat": "Your session is invalid. Please sign in again.",
+      "invalidJwtSignature": "Your session is invalid. Please sign in again.",
+      "invalidJwtIssuer": "Your session is invalid. Please sign in again.",
+      "invalidJwtAudience": "Your session is invalid. Please sign in again.",
+      "invalidJwtExpiration": "Your session is invalid. Please sign in again.",
+      "jwtExpired": "Your session has expired. Please sign in again.",
+      "unsupportedJwtAlgorithm": "Authentication configuration is not supported.",
+      "invalidJwtSubject": "Your session is invalid. Please sign in again.",
+      "adminNotConfigured": "Admin account is not configured.",
+      "adminAccessRequired": "Admin access is required for this action.",
+      "sessionExpired": "Your session has expired. Please sign in again."
+    },
+    "system": {
+      "validationError": "The submitted data is invalid.",
+      "notFound": "The requested data was not found.",
+      "conflict": "The data conflicts with an existing record.",
+      "infrastructureError": "The system is temporarily unavailable.",
+      "internalError": "An internal system error occurred.",
+      "requestFailed": "The request could not be completed. Please try again."
+    }
+  },
+  "persons": {
+    "page": {
+      "title": "People",
+      "description": "Manage personnel profiles and face registration status.",
+      "addAction": "Add person",
+      "loading": "Loading personnel data..."
+    },
+    "table": {
+      "searchPlaceholder": "Search by name or employee code",
+      "selectedNone": "No people selected",
+      "selectedCount": "{count} selected",
+      "bulkDelete": "Delete",
+      "selectAll": "Select all people",
+      "selectOne": "Select {name}",
+      "index": "No.",
+      "fullName": "Full name",
+      "department": "Department",
+      "title": "Title",
+      "contact": "Contact",
+      "status": "Status",
+      "joinedAt": "Joined date",
+      "empty": "No matching people found.",
+      "showing": "Showing {from}-{to}/{total} people - {selected}",
+      "firstPage": "Go to first page",
+      "previousPage": "Go to previous page",
+      "nextPage": "Go to next page",
+      "lastPage": "Go to last page",
+      "goToPage": "Go to page {page}",
+      "departmentSearchPlaceholder": "Search departments",
+      "allDepartments": "All departments",
+      "noDepartmentSelected": "No department selected",
+      "allStatuses": "All statuses",
+      "viewDetails": "View details",
+      "addFace": "Add face",
+      "edit": "Edit details",
+      "delete": "Delete",
+      "openActions": "Open actions for {name}"
+    },
+    "editDialog": {
+      "title": "Edit person",
+      "description": "Only fields stored in the persons table can be changed here; face registrations are excluded.",
+      "employeeCode": "Employee code",
+      "employeeCodeHint": "Employee code cannot be changed from this screen.",
+      "fullName": "Full name",
+      "department": "Department",
+      "title": "Title",
+      "email": "Email",
+      "phone": "Phone",
+      "joinedAt": "Joined date",
+      "notes": "Notes",
+      "save": "Save changes",
+      "saving": "Saving...",
+      "close": "Close person dialog"
+    },
+    "datePicker": {
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
+      "weekdays": {
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat",
+        "sun": "Sun"
+      }
+    },
+    "deleteDialog": {
+      "singleTitle": "Delete person?",
+      "singleDescription": "Are you sure you want to delete {name}? This action will delete the person on the backend.",
+      "bulkTitle": "Delete selected people?",
+      "bulkDescription": "Are you sure you want to delete {count} selected people? This action will delete data on the backend.",
+      "confirm": "Confirm delete",
+      "deleting": "Deleting..."
+    },
+    "toast": {
+      "invalidTitle": "Invalid data",
+      "updateSuccessTitle": "Update successful",
+      "updateSuccessDescription": "Personnel record for {name} has been updated.",
+      "updateFailedTitle": "Update failed",
+      "deleteSuccessTitle": "Delete successful",
+      "deleteSingleSuccessDescription": "The person has been removed from the system.",
+      "deleteBulkSuccessDescription": "{count} people have been removed from the system.",
+      "deleteFailedTitle": "Delete failed",
+      "close": "Close notification"
+    },
+    "fieldErrors": {
+      "duplicateEmail": "This email is already used by another person.",
+      "duplicatePhone": "This phone number is already used by another person."
+    },
+    "messages": {
+      "duplicateEmail": "Email already exists. Please check again.",
+      "duplicatePhone": "Phone number already exists. Please check again."
+    },
+    "validation": {
+      "invalidEmail": "Email format is invalid.",
+      "invalidPhone": "Phone number is invalid. Please enter 8-15 digits and optional +, spaces, dashes, or parentheses.",
+      "futureJoinedAt": "Joined date cannot be in the future."
+    }
+  },
+  "departments": {
+    "page": {
+      "title": "Departments",
+      "description": "Manage departments and reporting relationships.",
+      "loading": "Loading departments...",
+      "backToList": "Back to departments",
+      "detailLoading": "Loading department data...",
+      "detailLoadingDescription": "Loading department data."
+    },
+    "list": {
+      "summaryTitle": "Department list",
+      "summaryDescription": "{total} departments - {active} active",
+      "addAction": "Add department",
+      "tableTitle": "Departments",
+      "index": "No.",
+      "code": "Code",
+      "name": "Department name",
+      "parent": "Reports to",
+      "status": "Status",
+      "view": "View {name}",
+      "edit": "Edit {name}",
+      "deactivate": "Deactivate {name}",
+      "deactivated": "Department is already inactive"
+    },
+    "detail": {
+      "infoTitle": "Department info",
+      "treeTitle": "Hierarchy",
+      "personsTitle": "People in this department and descendants",
+      "code": "Code",
+      "name": "Name",
+      "parent": "Reports to",
+      "status": "Status",
+      "children": "Child departments",
+      "persons": "People",
+      "person": "Person",
+      "position": "Title",
+      "editAction": "Edit department",
+      "emptyChildren": "There are no child departments.",
+      "emptyPersons": "There are no people in this department or its descendants yet.",
+      "doubleClickHint": "Double click to open this department",
+      "expand": "Expand {name}",
+      "collapse": "Collapse {name}"
+    },
+    "form": {
+      "createTitle": "Add department",
+      "editTitle": "Edit department",
+      "createDescription": "Data will be saved directly to the backend.",
+      "editDescription": "Update department information directly from the detail page.",
+      "code": "Department code",
+      "name": "Department name",
+      "parent": "Reports to",
+      "status": "Status",
+      "codePlaceholder": "ENG",
+      "namePlaceholder": "Engineering",
+      "searchPlaceholder": "Search departments",
+      "noParent": "No parent",
+      "save": "Save",
+      "saveChanges": "Save changes",
+      "saving": "Saving...",
+      "close": "Close department dialog",
+      "invalidParentHint": "You cannot select this department itself or one of its descendants as the parent.",
+      "codeRequired": "Department code is required.",
+      "nameRequired": "Department name is required."
+    },
+    "deleteDialog": {
+      "title": "Deactivate department?",
+      "description": "Are you sure you want to deactivate {name}? This action changes the department to inactive and does not delete data.",
+      "confirm": "Deactivate",
+      "processing": "Processing..."
+    },
+    "personActions": {
+      "open": "Open actions for {name}",
+      "viewDetails": "View details",
+      "delete": "Delete",
+      "deleteTitle": "Delete person?",
+      "deleteDescription": "Are you sure you want to delete {name}? This action will call the backend delete API.",
+      "confirmDelete": "Confirm delete",
+      "deleting": "Deleting...",
+      "close": "Close delete confirmation"
+    },
+    "toast": {
+      "invalidTitle": "Invalid data",
+      "createSuccessTitle": "Department created",
+      "createSuccessDescription": "Department {name} has been created.",
+      "createFailedTitle": "Department creation failed",
+      "updateSuccessTitle": "Update successful",
+      "updateSuccessDescription": "Department {name} has been updated.",
+      "updateFailedTitle": "Update failed",
+      "deactivateSuccessTitle": "Department deactivated",
+      "deactivateSuccessDescription": "Department {name} has been moved to inactive.",
+      "deactivateFailedTitle": "Deactivate failed",
+      "personDeleteSuccessTitle": "Person deleted",
+      "personDeleteSuccessDescription": "The person has been hidden from the current list.",
+      "personDeleteFailedTitle": "Person delete failed",
+      "close": "Close notification"
+    },
+    "fieldErrors": {
+      "invalidCode": "Department code already exists or is invalid.",
+      "invalidParent": "The selected parent department is invalid."
+    },
+    "messages": {
+      "duplicateCode": "Department code already exists. Please check again.",
+      "invalidParent": "The selected parent department is invalid. Please check again."
+    }
+  },
+  "attendance": {
+    "page": {
+      "title": "Attendance",
+      "description": "Check-in only / daily presence for the 1-camera system.",
+      "loading": "Loading attendance data...",
+      "missingFilterPolicy": "Unable to load filter policy."
+    },
+    "summary": {
+      "present": "Present",
+      "late": "Late",
+      "absent": "Not recorded",
+      "recognitions": "Recognitions"
+    },
+    "filters": {
+      "generateReport": "Generate report",
+      "personSearchPlaceholder": "Search by employee name",
+      "retentionHint": "Only the last {days} days of data are available.",
+      "allStatuses": "All statuses",
+      "allDepartments": "All departments",
+      "departmentSearchPlaceholder": "Search departments",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
+      "weekdays": {
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat",
+        "sun": "Sun"
+      }
+    },
+    "table": {
+      "title": "Daily presence",
+      "loading": "Loading attendance events...",
+      "empty": "No records match the current filters.",
+      "index": "No.",
+      "person": "Person",
+      "department": "Department",
+      "firstSeen": "First seen",
+      "lastSeen": "Last seen",
+      "recognitionCount": "Count",
+      "status": "Status",
+      "action": "Action",
+      "view": "View",
+      "na": "N/A",
+      "pageSummary": "Page {page}/{totalPages} - {records} records",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "dialog": {
+      "heading": "Attendance details",
+      "description": "Appearance details for {date}.",
+      "close": "Close",
+      "closeDetails": "Close attendance details",
+      "firstSnapshot": "First appearance snapshot",
+      "lastSnapshot": "Last appearance snapshot",
+      "department": "Department",
+      "position": "Title",
+      "email": "Email",
+      "phone": "Phone",
+      "firstSeen": "First seen",
+      "lastSeen": "Last seen",
+      "recognitionCount": "Recognition count",
+      "statusHint": "Status is calculated from the first appearance against the {time} threshold.",
+      "loadingImage": "Loading image...",
+      "imageLoadFailed": "Unable to load image.",
+      "noSnapshot": "There is no snapshot for this appearance."
+    },
+    "report": {
+      "title": "Generate attendance report",
+      "description": "Summarize employees matching the current search and the selected department in the report. Child departments are always included.",
+      "close": "Close report",
+      "fromDate": "Start date",
+      "toDate": "End date",
+      "department": "Department",
+      "generate": "Generate report",
+      "generating": "Generating...",
+      "print": "Print report",
+      "cancel": "Close",
+      "resultTitle": "Report results",
+      "empty": "No report data yet.",
+      "printTitle": "Attendance report",
+      "printRange": "Date range",
+      "printDepartment": "Department",
+      "printHeadcount": "Employee count",
+      "index": "No.",
+      "person": "Person",
+      "departmentColumn": "Department",
+      "presentDays": "Present",
+      "lateDays": "Late",
+      "absentDays": "Absent",
+      "recognitions": "Recognitions"
+    },
+    "status": {
+      "present": "Present",
+      "late": "Late",
+      "absent": "Absent"
+    }
+  },
+  "events": {
+    "page": {
+      "title": "Events",
+      "description": "Review recognition, unknown, and spoof alerts from one backend-driven feed.",
+      "loadingPolicy": "Loading filter policy..."
+    },
+    "summary": {
+      "recognition": "Recognition",
+      "unknown": "Unknown",
+      "spoof": "Spoof alerts",
+      "needsReview": "Needs review"
+    },
+    "filters": {
+      "all": "All",
+      "recognition": "Recognition",
+      "unknown": "Unknown",
+      "spoof": "Spoof",
+      "searchLabel": "Search",
+      "searchPlaceholder": "Search event id, person, source",
+      "from": "From",
+      "to": "To",
+      "retentionHint": "Only the last {days} days of data are available. The maximum end time is now + 1 hour.",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
+      "time": "Time",
+      "weekdays": {
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat",
+        "sun": "Sun"
+      }
+    },
+    "table": {
+      "loading": "Loading events...",
+      "empty": "No events match the current filters.",
+      "index": "No.",
+      "type": "Type",
+      "occurredAt": "Occurred at",
+      "person": "Person",
+      "status": "Status",
+      "score": "Score",
+      "action": "Action",
+      "unknownPerson": "Unknown",
+      "review": "Review",
+      "reviewed": "Reviewed",
+      "view": "View",
+      "reviewAllPending": "Review all pending ({count})",
+      "showing": "Showing {from}-{to}/{total} events",
+      "firstPage": "Go to first page",
+      "previousPage": "Go to previous page",
+      "nextPage": "Go to next page",
+      "lastPage": "Go to last page",
+      "goToPage": "Go to page {page}"
+    },
+    "review": {
+      "successTitle": "Review successful",
+      "successDescription": "Event {id} has been marked as reviewed.",
+      "bulkSuccessTitle": "Review successful",
+      "bulkSuccessDescription": "Reviewed {count} event{suffix}.",
+      "partialTitle": "Review partially completed",
+      "failedTitle": "Review failed",
+      "failedDescription": "Failed to review event."
+    },
+    "detail": {
+      "title": "Event details",
+      "close": "Close",
+      "closeAria": "Close event details",
+      "mediaTitle": "Media snapshot",
+      "occurredAt": "Occurred at",
+      "source": "Source",
+      "person": "Person",
+      "status": "Status",
+      "score": "Score",
+      "spoofScore": "Spoof score",
+      "openPersonProfile": "Open person profile"
+    },
+    "status": {
+      "new": "New",
+      "reviewed": "Reviewed",
+      "ignored": "Ignored",
+      "valid": "Valid",
+      "invalid": "Invalid",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "media": {
+      "loading": "Loading media...",
+      "loadFailed": "Failed to load media.",
+      "contentLoadFailed": "Failed to load media content.",
+      "previewFallback": "Snapshot preview",
+      "noPreview": "No media preview is available for this event.",
+      "noSnapshot": "This event does not have a linked snapshot.",
+      "bucket": "bucket",
+      "object": "object"
+    }
+  }
+}

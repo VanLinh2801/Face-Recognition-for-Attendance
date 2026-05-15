@@ -117,6 +117,8 @@ export const dailySummary: DailySummary = {
   unique_persons: 74,
   total_entries: 68,
   total_exits: 60,
+  unknown_count: 3,
+  spoof_alert_count: 2,
 };
 
 export const hourlyStats = [

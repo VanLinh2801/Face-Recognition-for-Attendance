@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.application.use_cases.auth import (
+    ChangePasswordCommand,
+    ChangePasswordUseCase,
     LoginCommand,
     LoginUseCase,
     LogoutUseCase,
@@ -13,6 +15,7 @@ from app.application.use_cases.auth import (
 )
 from app.core.dependencies import (
     get_admin_user,
+    get_change_password_use_case,
     get_login_use_case,
     get_logout_use_case,
     get_refresh_access_token_use_case,
@@ -20,6 +23,7 @@ from app.core.dependencies import (
 from app.domain.auth.entities import User
 from app.presentation.schemas.auth import (
     AuthTokenResponse,
+    ChangePasswordRequest,
     CurrentUserResponse,
     LoginRequest,
     LogoutRequest,
@@ -64,6 +68,22 @@ def logout(
     use_case: LogoutUseCase = Depends(get_logout_use_case),
 ) -> dict[str, str]:
     use_case.execute(payload.refresh_token)
+    return {"status": "ok"}
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    admin_user: User = Depends(get_admin_user),
+    use_case: ChangePasswordUseCase = Depends(get_change_password_use_case),
+) -> dict[str, str]:
+    use_case.execute(
+        ChangePasswordCommand(
+            user_id=admin_user.id,
+            current_password=payload.current_password,
+            new_password=payload.new_password,
+        )
+    )
     return {"status": "ok"}
 
 

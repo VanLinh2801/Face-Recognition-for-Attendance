@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { buildRealtimeWebSocketUrl } from "@/lib/realtime-websocket";
 import type { FrameOverlayEvent, WebSocketConnectionStatus } from "@/lib/types";
 
 interface UseRealtimeOverlayOptions {
@@ -22,13 +23,6 @@ const RECONNECT_DELAY_BASE = 1000;
 const RECONNECT_DELAY_MAX = 30000;
 const MAX_STORED_OVERLAYS = 20;
 
-function getSameOriginWsUrl(path: string): string {
-  if (typeof window === "undefined") return path;
-
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}${path}`;
-}
-
 export function useRealtimeOverlay({
   token,
   streamId = "default",
@@ -45,6 +39,7 @@ export function useRealtimeOverlay({
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
   const isMountedRef = useRef(true);
+  const connectRef = useRef<(() => void) | null>(null);
 
   const clearTimers = useCallback(() => {
     if (heartbeatTimerRef.current) {
@@ -102,9 +97,7 @@ export function useRealtimeOverlay({
     if (!isMountedRef.current || !enabled) return;
 
     const channels = ["stream.overlay"];
-    const wsUrl = getSameOriginWsUrl(
-      `/api/ws/v1/realtime?token=${encodeURIComponent(token)}&channels=${channels.join(",")}`,
-    );
+    const wsUrl = buildRealtimeWebSocketUrl({ token, channels });
 
     setStatus("connecting");
     onStatusChange?.("connecting");
@@ -144,7 +137,9 @@ export function useRealtimeOverlay({
             RECONNECT_DELAY_MAX
           );
           reconnectAttemptRef.current += 1;
-          reconnectTimerRef.current = setTimeout(connect, delay);
+          reconnectTimerRef.current = setTimeout(() => {
+            connectRef.current?.();
+          }, delay);
         }
       };
     } catch {
@@ -154,14 +149,24 @@ export function useRealtimeOverlay({
   }, [token, enabled, handleMessage, startHeartbeat, clearTimers, onStatusChange]);
 
   useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+
+  useEffect(() => {
     isMountedRef.current = true;
+    let connectTimer: ReturnType<typeof setTimeout> | null = null;
 
     if (enabled && token) {
-      connect();
+      connectTimer = setTimeout(() => {
+        connect();
+      }, 0);
     }
 
     return () => {
       isMountedRef.current = false;
+      if (connectTimer) {
+        clearTimeout(connectTimer);
+      }
       clearTimers();
       if (wsRef.current) {
         wsRef.current.close();

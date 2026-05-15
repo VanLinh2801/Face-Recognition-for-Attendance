@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
 
-const backendTarget = process.env.BACKEND_PROXY_TARGET ?? "http://backend:8000";
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
+const backendTarget =
+  process.env.BACKEND_PROXY_TARGET ??
+  process.env.NEXT_PUBLIC_BACKEND_URL ??
+  "http://localhost:8000";
 
 const nextConfig: NextConfig = {
   async rewrites() {
@@ -13,8 +19,12 @@ const nextConfig: NextConfig = {
         source: "/api/ws/:path*",
         destination: `${backendTarget}/api/ws/:path*`,
       },
+      {
+        source: "/api/ws/v1/:path*",
+        destination: `${backendTarget}/api/ws/v1/:path*`,
+      },
     ];
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

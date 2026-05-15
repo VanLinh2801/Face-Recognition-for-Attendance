@@ -1,5 +1,5 @@
 import importlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -125,6 +125,10 @@ def _build_admin_user() -> User:
 def test_events_api_endpoints(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("ENABLE_EVENT_CONSUMER", "false")
+    monkeypatch.setenv("FILTER_RETENTION_DAYS", "14")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
     import app.main as app_main
 
     importlib.reload(app_main)
@@ -144,11 +148,43 @@ def test_events_api_endpoints(monkeypatch):
     asset_id = uuid4()
 
     with TestClient(app_main.app) as client:
+        policy_response = client.get("/api/v1/system/filter-policy")
+        assert policy_response.status_code == 200
+        policy_payload = policy_response.json()
+        assert policy_payload["retention_days"] == 14
+        assert policy_payload["events"]["max_future_hours"] == 1
+        assert policy_payload["attendance"]["max_future_days"] == 0
+
+        app_main.app.state.container.dashboard_health_state.record_stream_health(
+            payload={
+                "status": "ok",
+                "fps": 30,
+                "latency_ms": 42,
+                "stream_id": "cam-01",
+                "camera_name": "Main Gate",
+                "source_online": True,
+            },
+            occurred_at=datetime.now(timezone.utc),
+        )
+        dashboard_health_response = client.get("/api/v1/system/dashboard-health")
+        assert dashboard_health_response.status_code == 200
+        dashboard_health_payload = dashboard_health_response.json()
+        assert dashboard_health_payload["backend"]["status"] == "healthy"
+        assert dashboard_health_payload["stream"]["details"]["fps"] == 30.0
+        assert dashboard_health_payload["camera_source"]["label"] == "online"
+
         feed_response = client.get("/api/v1/events?type=all&page=1&page_size=20")
         assert feed_response.status_code == 200
         feed_payload = feed_response.json()
         assert feed_payload["items"][0]["type"] == "recognition"
         assert feed_payload["items"][0]["person_name"] == "Nguyen Van A"
+
+        too_old = (datetime.now(timezone.utc) - timedelta(days=15)).isoformat()
+        too_future = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+        invalid_from = client.get(f"/api/v1/events?from_at={too_old}")
+        assert invalid_from.status_code == 422
+        invalid_to = client.get(f"/api/v1/events?to_at={too_future}")
+        assert invalid_to.status_code == 422
 
         unknown_response = client.patch(
             f"/api/v1/unknown-events/{unknown_id}",

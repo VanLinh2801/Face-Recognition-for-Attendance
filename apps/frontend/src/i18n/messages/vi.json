@@ -1,0 +1,537 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Hủy",
+    "loading": "Đang tải...",
+    "unknown": "Không xác định",
+    "notAssigned": "Không trực thuộc",
+    "actions": "Thao tác",
+    "status": {
+      "active": "Đang hoạt động",
+      "inactive": "Ngừng hoạt động",
+      "resigned": "Đã nghỉ việc",
+      "pending": "Đang chờ",
+      "indexed": "Đã lập chỉ mục",
+      "failed": "Thất bại",
+      "new": "Mới",
+      "reviewed": "Đã review",
+      "ignored": "Đã bỏ qua",
+      "high": "Cao",
+      "medium": "Trung bình",
+      "low": "Thấp",
+      "entry": "Vào",
+      "exit": "Ra",
+      "unknown": "Không xác định"
+    }
+  },
+  "language": {
+    "label": "Ngôn ngữ",
+    "vi": "Tiếng Việt",
+    "en": "English"
+  },
+  "notifications": {
+    "open": "Mở thông báo",
+    "title": "Thông báo",
+    "markAllAsRead": "Đánh dấu tất cả đã đọc",
+    "empty": "Chưa có cảnh báo realtime nào.",
+    "close": "Đóng thông báo",
+    "kind": {
+      "unknown": "Không xác định",
+      "spoof": "Giả mạo"
+    },
+    "connection": {
+      "connected": "Đã kết nối realtime",
+      "connecting": "Đang kết nối tới luồng realtime...",
+      "error": "Lỗi kết nối realtime",
+      "disconnected": "Đã ngắt kết nối realtime"
+    },
+    "item": {
+      "unknownTitle": "Phát hiện người lạ",
+      "spoofTitle": "Phát hiện cảnh báo giả mạo",
+      "cameraEvent": "Sự kiện camera",
+      "track": "Track {id}"
+    }
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "persons": "Nhân sự",
+    "attendance": "Chấm công",
+    "events": "Sự kiện",
+    "departments": "Phòng ban"
+  },
+  "layout": {
+    "appName": "Face Recognition",
+    "appSubtitle": "Attendance Admin",
+    "adminSession": "Phiên admin",
+    "toggleSidebar": "Thu gọn/mở rộng sidebar",
+    "signOut": "Đăng xuất",
+    "signingOut": "Đang đăng xuất...",
+    "changePassword": "Đổi mật khẩu",
+    "sessionExpiredTitle": "Phiên đăng nhập đã hết hạn",
+    "changePasswordDescription": "Sau khi đổi mật khẩu thành công, bạn cần đăng nhập lại.",
+    "currentPassword": "Mật khẩu hiện tại",
+    "newPassword": "Mật khẩu mới",
+    "confirmNewPassword": "Xác nhận mật khẩu mới",
+    "showCurrentPassword": "Hiện mật khẩu hiện tại",
+    "hideCurrentPassword": "Ẩn mật khẩu hiện tại",
+    "showNewPassword": "Hiện mật khẩu mới",
+    "hideNewPassword": "Ẩn mật khẩu mới",
+    "showPasswordConfirmation": "Hiện xác nhận mật khẩu",
+    "hidePasswordConfirmation": "Ẩn xác nhận mật khẩu",
+    "updatePassword": "Cập nhật mật khẩu",
+    "updatingPassword": "Đang cập nhật...",
+    "passwordRequired": "Vui lòng nhập đầy đủ các trường bắt buộc.",
+    "passwordConfirmationMismatch": "Xác nhận mật khẩu không khớp."
+  },
+  "auth": {
+    "loginTitle": "Đăng nhập",
+    "loginDescription": "Sử dụng tài khoản admin để vào dashboard.",
+    "securityPanel": "Bảng điều khiển bảo mật",
+    "heroTitle": "Quản lý điểm danh bằng nhận diện khuôn mặt.",
+    "heroDescription": "Đăng nhập để theo dõi camera, sự kiện nhận diện, chấm công và hồ sơ nhân sự trong cùng một dashboard.",
+    "username": "Username",
+    "password": "Mật khẩu",
+    "passwordPlaceholder": "Nhập mật khẩu",
+    "showPassword": "Hiện mật khẩu",
+    "hidePassword": "Ẩn mật khẩu",
+    "submit": "Đăng nhập",
+    "submitting": "Đang đăng nhập..."
+  },
+  "errors": {
+    "auth": {
+      "invalidCredentials": "Username hoặc mật khẩu không đúng.",
+      "invalidRefreshToken": "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+      "invalidAccessTokenSubject": "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+      "userNotFound": "Tài khoản không tồn tại.",
+      "currentPasswordIncorrect": "Mật khẩu hiện tại không đúng.",
+      "newPasswordSameAsCurrent": "Mật khẩu mới phải khác mật khẩu hiện tại.",
+      "newPasswordTooShort": "Mật khẩu mới phải có ít nhất 8 ký tự.",
+      "missingBearerToken": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+      "invalidJwtPayload": "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+      "invalidJwtFormat": "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+      "invalidJwtSignature": "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+      "invalidJwtIssuer": "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+      "invalidJwtAudience": "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+      "invalidJwtExpiration": "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+      "jwtExpired": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+      "unsupportedJwtAlgorithm": "Cấu hình xác thực không được hỗ trợ.",
+      "invalidJwtSubject": "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+      "adminNotConfigured": "Tài khoản admin chưa được cấu hình.",
+      "adminAccessRequired": "Cần quyền admin để thực hiện thao tác này.",
+      "sessionExpired": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+    },
+    "system": {
+      "validationError": "Dữ liệu không hợp lệ.",
+      "notFound": "Không tìm thấy dữ liệu.",
+      "conflict": "Dữ liệu bị xung đột.",
+      "infrastructureError": "Hệ thống đang gặp sự cố.",
+      "internalError": "Đã xảy ra lỗi hệ thống.",
+      "requestFailed": "Không thể xử lý yêu cầu. Vui lòng thử lại."
+    }
+  },
+  "persons": {
+    "page": {
+      "title": "Nhân sự",
+      "description": "Quản lý hồ sơ nhân sự và trạng thái đăng ký khuôn mặt.",
+      "addAction": "Thêm nhân sự",
+      "loading": "Đang tải dữ liệu nhân sự..."
+    },
+    "table": {
+      "searchPlaceholder": "Tìm theo tên hoặc mã nhân viên",
+      "selectedNone": "Chưa chọn nhân sự",
+      "selectedCount": "{count} đã chọn",
+      "bulkDelete": "Xóa",
+      "selectAll": "Chọn tất cả nhân sự",
+      "selectOne": "Chọn {name}",
+      "index": "STT",
+      "fullName": "Họ tên",
+      "department": "Phòng ban",
+      "title": "Chức danh",
+      "contact": "Liên hệ",
+      "status": "Trạng thái",
+      "joinedAt": "Ngày vào",
+      "empty": "Không tìm thấy nhân sự phù hợp.",
+      "showing": "Hiển thị {from}-{to}/{total} nhân sự - {selected}",
+      "firstPage": "Về trang đầu",
+      "previousPage": "Về trang trước",
+      "nextPage": "Sang trang sau",
+      "lastPage": "Về trang cuối",
+      "goToPage": "Đi tới trang {page}",
+      "departmentSearchPlaceholder": "Tìm phòng ban",
+      "allDepartments": "Tất cả phòng ban",
+      "noDepartmentSelected": "Chưa chọn phòng ban",
+      "allStatuses": "Tất cả trạng thái",
+      "viewDetails": "Xem chi tiết",
+      "addFace": "Thêm face",
+      "edit": "Sửa thông tin",
+      "delete": "Xóa",
+      "openActions": "Mở thao tác cho {name}"
+    },
+    "editDialog": {
+      "title": "Sửa nhân sự",
+      "description": "Chỉ chỉnh thông tin lưu trong bảng persons, không bao gồm face registration.",
+      "employeeCode": "Mã nhân viên",
+      "employeeCodeHint": "Mã nhân viên không được chỉnh sửa từ màn hình này.",
+      "fullName": "Họ tên",
+      "department": "Phòng ban",
+      "title": "Chức danh",
+      "email": "Email",
+      "phone": "Số điện thoại",
+      "joinedAt": "Ngày vào làm",
+      "notes": "Ghi chú",
+      "save": "Lưu thay đổi",
+      "saving": "Đang lưu...",
+      "close": "Đóng dialog nhân sự"
+    },
+    "datePicker": {
+      "previousMonth": "Tháng trước",
+      "nextMonth": "Tháng sau",
+      "weekdays": {
+        "mon": "T2",
+        "tue": "T3",
+        "wed": "T4",
+        "thu": "T5",
+        "fri": "T6",
+        "sat": "T7",
+        "sun": "CN"
+      }
+    },
+    "deleteDialog": {
+      "singleTitle": "Xóa nhân viên?",
+      "singleDescription": "Bạn có chắc muốn xóa {name}? Thao tác này sẽ xóa nhân viên trên backend.",
+      "bulkTitle": "Xóa nhân viên đã chọn?",
+      "bulkDescription": "Bạn có chắc muốn xóa {count} nhân viên đã chọn? Thao tác này sẽ xóa dữ liệu trên backend.",
+      "confirm": "Xác nhận xóa",
+      "deleting": "Đang xóa..."
+    },
+    "toast": {
+      "invalidTitle": "Dữ liệu chưa hợp lệ",
+      "updateSuccessTitle": "Cập nhật thành công",
+      "updateSuccessDescription": "Thông tin nhân viên {name} đã được cập nhật.",
+      "updateFailedTitle": "Cập nhật thất bại",
+      "deleteSuccessTitle": "Xóa thành công",
+      "deleteSingleSuccessDescription": "Nhân viên đã được xóa khỏi hệ thống.",
+      "deleteBulkSuccessDescription": "{count} nhân viên đã được xóa khỏi hệ thống.",
+      "deleteFailedTitle": "Xóa thất bại",
+      "close": "Đóng thông báo"
+    },
+    "fieldErrors": {
+      "duplicateEmail": "Email đã được sử dụng bởi nhân viên khác.",
+      "duplicatePhone": "Số điện thoại đã được sử dụng bởi nhân viên khác."
+    },
+    "messages": {
+      "duplicateEmail": "Email đã tồn tại. Vui lòng kiểm tra lại.",
+      "duplicatePhone": "Số điện thoại đã tồn tại. Vui lòng kiểm tra lại."
+    },
+    "validation": {
+      "invalidEmail": "Email không đúng định dạng.",
+      "invalidPhone": "Số điện thoại không hợp lệ. Vui lòng nhập 8-15 chữ số, có thể kèm dấu +, khoảng trắng, dấu gạch ngang hoặc ngoặc.",
+      "futureJoinedAt": "Ngày vào làm không được là ngày trong tương lai."
+    }
+  },
+  "departments": {
+    "page": {
+      "title": "Phòng ban",
+      "description": "Quản lý danh sách phòng ban và quan hệ trực thuộc.",
+      "loading": "Đang tải phòng ban...",
+      "backToList": "Quay lại danh sách phòng ban",
+      "detailLoading": "Đang tải dữ liệu phòng ban...",
+      "detailLoadingDescription": "Đang tải dữ liệu phòng ban."
+    },
+    "list": {
+      "summaryTitle": "Danh sách phòng ban",
+      "summaryDescription": "{total} phòng ban - {active} đang hoạt động",
+      "addAction": "Thêm phòng ban",
+      "tableTitle": "Phòng ban",
+      "index": "STT",
+      "code": "Mã",
+      "name": "Tên phòng ban",
+      "parent": "Trực thuộc",
+      "status": "Trạng thái",
+      "view": "Xem {name}",
+      "edit": "Sửa {name}",
+      "deactivate": "Ngừng hoạt động {name}",
+      "deactivated": "Phòng ban đã ngừng hoạt động"
+    },
+    "detail": {
+      "infoTitle": "Thông tin phòng ban",
+      "treeTitle": "Cây trực thuộc",
+      "personsTitle": "Nhân viên thuộc phòng ban và cấp dưới",
+      "code": "Mã",
+      "name": "Tên",
+      "parent": "Trực thuộc",
+      "status": "Trạng thái",
+      "children": "Phòng ban con",
+      "persons": "Nhân viên",
+      "person": "Nhân viên",
+      "position": "Chức danh",
+      "editAction": "Sửa phòng ban",
+      "emptyChildren": "Không có phòng ban trực thuộc.",
+      "emptyPersons": "Chưa có nhân viên thuộc phòng ban này hoặc các phòng ban cấp dưới.",
+      "doubleClickHint": "Double click để xem chi tiết phòng ban này",
+      "expand": "Mở rộng {name}",
+      "collapse": "Thu gọn {name}"
+    },
+    "form": {
+      "createTitle": "Thêm phòng ban",
+      "editTitle": "Sửa phòng ban",
+      "createDescription": "Dữ liệu sẽ được lưu trực tiếp vào backend.",
+      "editDescription": "Cập nhật thông tin phòng ban trực tiếp từ trang chi tiết.",
+      "code": "Mã phòng ban",
+      "name": "Tên phòng ban",
+      "parent": "Trực thuộc",
+      "status": "Trạng thái",
+      "codePlaceholder": "ENG",
+      "namePlaceholder": "Engineering",
+      "searchPlaceholder": "Tìm phòng ban",
+      "noParent": "Không trực thuộc",
+      "save": "Lưu",
+      "saveChanges": "Lưu thay đổi",
+      "saving": "Đang lưu...",
+      "close": "Đóng dialog phòng ban",
+      "invalidParentHint": "Không thể chọn chính phòng ban này hoặc phòng ban con/cháu làm trực thuộc.",
+      "codeRequired": "Mã phòng ban không được để trống.",
+      "nameRequired": "Tên phòng ban không được để trống."
+    },
+    "deleteDialog": {
+      "title": "Ngừng hoạt động phòng ban?",
+      "description": "Bạn có chắc muốn ngừng hoạt động {name}? Thao tác này sẽ chuyển phòng ban sang trạng thái inactive, không xóa dữ liệu.",
+      "confirm": "Ngừng hoạt động",
+      "processing": "Đang xử lý..."
+    },
+    "personActions": {
+      "open": "Mở thao tác cho {name}",
+      "viewDetails": "Xem chi tiết",
+      "delete": "Xóa",
+      "deleteTitle": "Xóa nhân viên?",
+      "deleteDescription": "Bạn có chắc muốn xóa {name}? Thao tác này sẽ gọi API xóa nhân viên ở backend.",
+      "confirmDelete": "Xác nhận xóa",
+      "deleting": "Đang xóa...",
+      "close": "Đóng xác nhận xóa"
+    },
+    "toast": {
+      "invalidTitle": "Dữ liệu chưa hợp lệ",
+      "createSuccessTitle": "Tạo phòng ban thành công",
+      "createSuccessDescription": "Phòng ban {name} đã được tạo.",
+      "createFailedTitle": "Tạo phòng ban thất bại",
+      "updateSuccessTitle": "Cập nhật thành công",
+      "updateSuccessDescription": "Phòng ban {name} đã được cập nhật.",
+      "updateFailedTitle": "Cập nhật thất bại",
+      "deactivateSuccessTitle": "Ngừng hoạt động thành công",
+      "deactivateSuccessDescription": "Phòng ban {name} đã được chuyển sang inactive.",
+      "deactivateFailedTitle": "Ngừng hoạt động thất bại",
+      "personDeleteSuccessTitle": "Xóa nhân viên thành công",
+      "personDeleteSuccessDescription": "Nhân viên đã được ẩn khỏi danh sách hiện tại.",
+      "personDeleteFailedTitle": "Xóa nhân viên thất bại",
+      "close": "Đóng thông báo"
+    },
+    "fieldErrors": {
+      "invalidCode": "Mã phòng ban đã tồn tại hoặc chưa hợp lệ.",
+      "invalidParent": "Phòng ban trực thuộc không hợp lệ."
+    },
+    "messages": {
+      "duplicateCode": "Mã phòng ban đã tồn tại. Vui lòng kiểm tra lại.",
+      "invalidParent": "Phòng ban trực thuộc không hợp lệ. Vui lòng kiểm tra lại."
+    }
+  },
+  "attendance": {
+    "page": {
+      "title": "Chấm công",
+      "description": "Check-in only / daily presence cho hệ thống 1 camera.",
+      "loading": "Đang tải dữ liệu chấm công...",
+      "missingFilterPolicy": "Không thể tải chính sách bộ lọc."
+    },
+    "summary": {
+      "present": "Có mặt",
+      "late": "Đi muộn",
+      "absent": "Chưa ghi nhận",
+      "recognitions": "Lượt nhận diện"
+    },
+    "filters": {
+      "generateReport": "Tạo report",
+      "personSearchPlaceholder": "Tìm theo tên nhân viên",
+      "retentionHint": "Chỉ xem được dữ liệu trong {days} ngày gần nhất.",
+      "allStatuses": "Tất cả trạng thái",
+      "allDepartments": "Tất cả phòng ban",
+      "departmentSearchPlaceholder": "Tìm phòng ban",
+      "previousMonth": "Tháng trước",
+      "nextMonth": "Tháng sau",
+      "weekdays": {
+        "mon": "T2",
+        "tue": "T3",
+        "wed": "T4",
+        "thu": "T5",
+        "fri": "T6",
+        "sat": "T7",
+        "sun": "CN"
+      }
+    },
+    "table": {
+      "title": "Daily presence",
+      "loading": "Đang tải sự kiện chấm công...",
+      "empty": "Không có bản ghi phù hợp với bộ lọc hiện tại.",
+      "index": "STT",
+      "person": "Nhân viên",
+      "department": "Phòng ban",
+      "firstSeen": "First seen",
+      "lastSeen": "Last seen",
+      "recognitionCount": "Số lần",
+      "status": "Trạng thái",
+      "action": "Thao tác",
+      "view": "Xem",
+      "na": "N/A",
+      "pageSummary": "Page {page}/{totalPages} - {records} records",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "dialog": {
+      "heading": "Chi tiết chấm công",
+      "description": "Thông tin xuất hiện trong ngày {date}.",
+      "close": "Đóng",
+      "closeDetails": "Đóng chi tiết chấm công",
+      "firstSnapshot": "Ảnh lần đầu xuất hiện",
+      "lastSnapshot": "Ảnh lần cuối xuất hiện",
+      "department": "Phòng ban",
+      "position": "Chức danh",
+      "email": "Email",
+      "phone": "Số điện thoại",
+      "firstSeen": "Lần đầu xuất hiện",
+      "lastSeen": "Lần cuối xuất hiện",
+      "recognitionCount": "Số lần nhận diện",
+      "statusHint": "Trạng thái được tính theo lần đầu xuất hiện so với mốc {time}.",
+      "loadingImage": "Đang tải ảnh...",
+      "imageLoadFailed": "Không tải được ảnh.",
+      "noSnapshot": "Chưa có snapshot cho lần xuất hiện này."
+    },
+    "report": {
+      "title": "Tạo report chấm công",
+      "description": "Thống kê theo tên nhân viên đang tìm kiếm và phòng ban được chọn trong report. Phòng ban con luôn được bao gồm.",
+      "close": "Đóng report",
+      "fromDate": "Ngày bắt đầu",
+      "toDate": "Ngày kết thúc",
+      "department": "Phòng ban",
+      "generate": "Tạo report",
+      "generating": "Đang tạo...",
+      "print": "In report",
+      "cancel": "Đóng",
+      "resultTitle": "Kết quả report",
+      "empty": "Chưa có dữ liệu report.",
+      "printTitle": "Report chấm công",
+      "printRange": "Khoảng thời gian",
+      "printDepartment": "Phòng ban",
+      "printHeadcount": "Số nhân viên",
+      "index": "STT",
+      "person": "Nhân viên",
+      "departmentColumn": "Phòng ban",
+      "presentDays": "Đi làm",
+      "lateDays": "Đi muộn",
+      "absentDays": "Vắng mặt",
+      "recognitions": "Nhận diện"
+    },
+    "status": {
+      "present": "Có mặt",
+      "late": "Đi muộn",
+      "absent": "Vắng mặt"
+    }
+  },
+  "events": {
+    "page": {
+      "title": "Sự kiện",
+      "description": "Review sự kiện nhận diện, không xác định và cảnh báo giả mạo từ một feed do backend cấp.",
+      "loadingPolicy": "Đang tải chính sách bộ lọc..."
+    },
+    "summary": {
+      "recognition": "Nhận diện",
+      "unknown": "Không xác định",
+      "spoof": "Cảnh báo giả mạo",
+      "needsReview": "Cần duyệt"
+    },
+    "filters": {
+      "all": "Tất cả",
+      "recognition": "Nhận diện",
+      "unknown": "Không xác định",
+      "spoof": "Giả mạo",
+      "searchLabel": "Tìm kiếm",
+      "searchPlaceholder": "Tìm theo mã sự kiện, nhân sự, nguồn",
+      "from": "Từ",
+      "to": "Đến",
+      "retentionHint": "Chỉ xem được dữ liệu trong {days} ngày gần nhất. Thời gian kết thúc tối đa là hiện tại + 1 giờ.",
+      "previousMonth": "Tháng trước",
+      "nextMonth": "Tháng sau",
+      "time": "Giờ",
+      "weekdays": {
+        "mon": "T2",
+        "tue": "T3",
+        "wed": "T4",
+        "thu": "T5",
+        "fri": "T6",
+        "sat": "T7",
+        "sun": "CN"
+      }
+    },
+    "table": {
+      "loading": "Đang tải sự kiện...",
+      "empty": "Không có sự kiện phù hợp với bộ lọc hiện tại.",
+      "index": "STT",
+      "type": "Loại",
+      "occurredAt": "Thời điểm",
+      "person": "Nhân sự",
+      "status": "Trạng thái",
+      "score": "Điểm",
+      "action": "Thao tác",
+      "unknownPerson": "Không xác định",
+      "review": "Duyệt",
+      "reviewed": "Đã duyệt",
+      "view": "Xem",
+      "reviewAllPending": "Duyệt tất cả mục đang chờ ({count})",
+      "showing": "Hiển thị {from}-{to}/{total} sự kiện",
+      "firstPage": "Về trang đầu",
+      "previousPage": "Lùi một trang",
+      "nextPage": "Tiến một trang",
+      "lastPage": "Tới trang cuối",
+      "goToPage": "Đi tới trang {page}"
+    },
+    "review": {
+      "successTitle": "Duyệt thành công",
+      "successDescription": "Sự kiện {id} đã được đánh dấu đã review.",
+      "bulkSuccessTitle": "Duyệt thành công",
+      "bulkSuccessDescription": "Đã review {count} sự kiện{suffix}.",
+      "partialTitle": "Duyệt một phần",
+      "failedTitle": "Duyệt thất bại",
+      "failedDescription": "Không thể review sự kiện."
+    },
+    "detail": {
+      "title": "Chi tiết sự kiện",
+      "close": "Đóng",
+      "closeAria": "Đóng chi tiết sự kiện",
+      "mediaTitle": "Snapshot",
+      "occurredAt": "Thời điểm",
+      "source": "Nguồn",
+      "person": "Nhân sự",
+      "status": "Trạng thái",
+      "score": "Điểm",
+      "spoofScore": "Điểm giả mạo",
+      "openPersonProfile": "Mở hồ sơ nhân sự"
+    },
+    "status": {
+      "new": "Mới",
+      "reviewed": "Đã review",
+      "ignored": "Bỏ qua",
+      "valid": "Hợp lệ",
+      "invalid": "Không hợp lệ",
+      "high": "Cao",
+      "medium": "Trung bình",
+      "low": "Thấp"
+    },
+    "media": {
+      "loading": "Đang tải media...",
+      "loadFailed": "Không thể tải media.",
+      "contentLoadFailed": "Không thể tải nội dung media.",
+      "previewFallback": "Xem trước snapshot",
+      "noPreview": "Không có preview media cho sự kiện này.",
+      "noSnapshot": "Sự kiện này chưa có snapshot liên kết.",
+      "bucket": "bucket",
+      "object": "object"
+    }
+  }
+}

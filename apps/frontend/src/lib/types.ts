@@ -158,6 +158,17 @@ export type EventFeedItem = {
 
 export type EventFeedListResponse = PageResult<EventFeedItem>;
 
+export type FilterPolicy = {
+  server_now: string;
+  retention_days: number;
+  events: {
+    max_future_hours: number;
+  };
+  attendance: {
+    max_future_days: number;
+  };
+};
+
 export type UpdateEventReviewRequest = {
   review_status?: ReviewStatus | null;
   notes?: string | null;
@@ -174,11 +185,13 @@ export type RealtimeEvent = {
     | "frame_analysis.updated"
     | "stream.health.updated";
   occurred_at: string;
-  correlation_id: string;
+  correlation_id: string | null;
   dedupe_key: string | null;
   payload: Record<string, unknown>;
   metadata: Record<string, unknown>;
 };
+
+export type NotificationKind = "unknown" | "spoof";
 
 export type DailySummary = {
   work_date: string;
@@ -186,6 +199,71 @@ export type DailySummary = {
   unique_persons: number;
   total_entries: number;
   total_exits: number;
+  unknown_count: number;
+  spoof_alert_count: number;
+};
+
+export type AttendanceHourlyStatItem = {
+  hour: string;
+  events: number;
+  entries: number;
+  exits: number;
+  alerts: number;
+};
+
+export type AttendanceHourlyStatsResponse = {
+  work_date: string;
+  items: AttendanceHourlyStatItem[];
+};
+
+export type DashboardHealthComponent = {
+  status: "healthy" | "degraded" | "offline" | "unknown";
+  label: string;
+  last_updated_at: string | null;
+  details: {
+    fps?: number | null;
+    latency_ms?: number | null;
+    stream_id?: string | null;
+    camera_name?: string | null;
+    source_online?: boolean | null;
+    database_ready?: boolean | null;
+    active_connections?: number | null;
+    sent_messages?: number | null;
+    dropped_messages?: number | null;
+    disconnect_slow_client?: number | null;
+  };
+};
+
+export type DashboardHealthResponse = {
+  backend: DashboardHealthComponent;
+  realtime_ws: DashboardHealthComponent;
+  stream: DashboardHealthComponent;
+  camera_source: DashboardHealthComponent;
+};
+
+export type CurrentUser = {
+  id: string;
+  username: string;
+  is_active: boolean;
+  last_login_at: string | null;
+};
+
+export type DashboardLatestEventFilter = "all" | "recognition" | "unknown" | "spoof";
+
+export type DashboardLatestEventItem = {
+  id: string;
+  filterType: Exclude<DashboardLatestEventFilter, "all">;
+  eventType:
+    | "recognition_event.detected"
+    | "unknown_event.detected"
+    | "spoof_alert.detected"
+    | "registration_processing.completed";
+  occurredAt: string;
+  title: string;
+  subject: string;
+  score: number | null;
+  channel: "events.business";
+  dedupeKey: string | null;
 };
 
 // Overlay types for realtime bounding box
@@ -264,39 +342,90 @@ export type RealtimeRecognitionPayload = {
   employee_code: string | null;
 };
 
-export type RealtimeUnknownPayload = {
-  stream_id: string;
-  frame_id: string;
-  frame_sequence: number;
-  track_id: string;
+export type RealtimeUnknownDetectedPayload = {
+  id: string;
   detected_at: string;
   event_direction: "entry" | "exit" | "unknown";
   match_score: number | null;
-  spoof_score: number;
+  spoof_score: number | null;
   event_source: string;
-  dedupe_key: string;
   review_status: ReviewStatus;
   notes: string | null;
-  snapshot_media_asset: Record<string, unknown> | null;
-  bbox: BoundingBox | null;
+  snapshot_media_asset_id: string | null;
+  track_id: string | null;
+  dedupe_key: string | null;
+};
+
+export type RealtimeSpoofDetectedPayload = {
+  id: string;
+  person_id: string | null;
+  person_name: string | null;
+  detected_at: string;
+  spoof_score: number;
+  severity: Severity;
+  event_source: string;
+  review_status: ReviewStatus;
+  notes: string | null;
+  snapshot_media_asset_id: string | null;
+  track_id: string | null;
+  dedupe_key: string | null;
 };
 
 export type RecognitionOverlayEvent = {
   channel: "events.business";
   event_type: "recognition_event.detected";
   occurred_at: string;
-  correlation_id: string;
+  correlation_id: string | null;
   dedupe_key: string | null;
   payload: RealtimeRecognitionPayload;
   metadata: Record<string, unknown>;
 };
 
-export type UnknownOverlayEvent = {
+export type RealtimeUnknownDetectedEvent = {
   channel: "events.business";
   event_type: "unknown_event.detected";
   occurred_at: string;
-  correlation_id: string;
+  correlation_id: string | null;
   dedupe_key: string | null;
-  payload: RealtimeUnknownPayload;
+  payload: RealtimeUnknownDetectedPayload;
   metadata: Record<string, unknown>;
+};
+
+export type RealtimeSpoofDetectedEvent = {
+  channel: "events.business";
+  event_type: "spoof_alert.detected";
+  occurred_at: string;
+  correlation_id: string | null;
+  dedupe_key: string | null;
+  payload: RealtimeSpoofDetectedPayload;
+  metadata: Record<string, unknown>;
+};
+
+export type RealtimeRecognitionBusinessEvent = {
+  channel: "events.business";
+  event_type: "recognition_event.detected";
+  occurred_at: string;
+  correlation_id: string | null;
+  dedupe_key: string | null;
+  payload: RealtimeRecognitionPayload;
+  metadata: Record<string, unknown>;
+};
+
+export type RealtimeBusinessEvent =
+  | RealtimeRecognitionBusinessEvent
+  | RealtimeUnknownDetectedEvent
+  | RealtimeSpoofDetectedEvent;
+
+export type NotificationItem = {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  message: string;
+  occurredAt: string;
+  severity: Severity | null;
+  score: number | null;
+  snapshotMediaAssetId: string | null;
+  eventId: string;
+  read: boolean;
+  sourceEvent: RealtimeBusinessEvent;
 };

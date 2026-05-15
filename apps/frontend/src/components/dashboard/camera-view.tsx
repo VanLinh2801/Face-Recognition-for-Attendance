@@ -1,42 +1,41 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
-import { Badge } from "@/components/ui/badge";
-import { WebRTCPlayer, type VideoDimensions } from "./webrtc-player";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getAccessToken } from "@/lib/auth-client";
 import { CameraOverlay } from "./camera-overlay";
+import { Badge } from "@/components/ui/badge";
 import { transformRecognitionToRenderBox, type RecognitionBoxSource } from "@/lib/overlay-utils";
+import { buildRealtimeWebSocketUrl } from "@/lib/realtime-websocket";
 import type { OverlayRenderBox } from "@/lib/types";
+import { WebRTCPlayer, type VideoDimensions } from "./webrtc-player";
 
 // Which stream IDs to display overlays for. Empty array = show all.
 const ALLOWED_STREAM_IDS: string[] = [];
-
 const OVERLAY_TTL_MS = 1000;
 
-function getSameOriginWsUrl(path: string): string {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}${path}`;
-}
+type RecognitionRealtimeMessage = {
+  channel: "events.business";
+  event_type: "recognition_event.detected" | "unknown_event.detected";
+  payload: Record<string, unknown>;
+};
 
 export function CameraView() {
   const [videoDimensions, setVideoDimensions] = useState<VideoDimensions | null>(null);
   const [renderBoxes, setRenderBoxes] = useState<OverlayRenderBox[]>([]);
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("disconnected");
 
-  // Queue events that arrive before video is ready
-  const pendingEventsRef = useRef<any[]>([]);
+  const pendingEventsRef = useRef<RecognitionRealtimeMessage[]>([]);
 
-  // ── Thêm recognition box mới ──────────────────────────────────────────────
-  const addRecognitionBox = useCallback((data: { payload: Record<string, unknown>; event_type: string }) => {
+  const addRecognitionBox = useCallback((data: RecognitionRealtimeMessage) => {
     const payload = data.payload;
     const trackId = payload.track_id as string;
     const streamId = (payload.stream_id as string) || "";
 
-    if (ALLOWED_STREAM_IDS.length > 0 && !ALLOWED_STREAM_IDS.some((s) => streamId.includes(s))) {
+    if (ALLOWED_STREAM_IDS.length > 0 && !ALLOWED_STREAM_IDS.some((value) => streamId.includes(value))) {
       return;
     }
 
     if (!videoDimensions) {
-      // Queue the event if video is not ready
       pendingEventsRef.current.push(data);
       return;
     }
@@ -59,16 +58,15 @@ export function CameraView() {
     if (!newBox) return;
 
     const expiresAt = Date.now() + OVERLAY_TTL_MS;
-    setRenderBoxes((prev) => {
-      const existing = prev.find((b) => b.track_id === trackId);
+    setRenderBoxes((previousBoxes) => {
+      const existing = previousBoxes.find((box) => box.track_id === trackId);
       if (existing) {
-        return prev.map((b) => b.track_id === trackId ? { ...b, expiresAt } : b);
+        return previousBoxes.map((box) => (box.track_id === trackId ? { ...box, expiresAt } : box));
       }
-      return [...prev, { ...newBox, expiresAt }];
+      return [...previousBoxes, { ...newBox, expiresAt }];
     });
   }, [videoDimensions]);
 
-  // Process queued events when videoDimensions becomes available
   useEffect(() => {
     if (videoDimensions && pendingEventsRef.current.length > 0) {
       pendingEventsRef.current.forEach((data) => {
@@ -78,7 +76,6 @@ export function CameraView() {
     }
   }, [videoDimensions, addRecognitionBox]);
 
-  // ── WebSocket connection ───────────────────────────────────────────────────
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -86,35 +83,45 @@ export function CameraView() {
 
     const connect = () => {
       if (!isMounted) return;
+
+      const token = getAccessToken();
+      if (!token) {
+        setWsStatus("disconnected");
+        return;
+      }
+
       setWsStatus("connecting");
-      ws = new WebSocket(getSameOriginWsUrl("/api/ws/v1/realtime"));
+      ws = new WebSocket(
+        buildRealtimeWebSocketUrl({
+          token,
+          channels: ["events.business"],
+        }),
+      );
 
       ws.onopen = () => {
-        if (!isMounted) { ws?.close(); return; }
+        if (!isMounted) {
+          ws?.close();
+          return;
+        }
         setWsStatus("connected");
       };
 
       ws.onmessage = (event) => {
         if (!isMounted) return;
         try {
-          const data = JSON.parse(event.data as string);
-          console.debug("[WS] Received event:", data.event_type, "channel:", data.channel);
+          const data = JSON.parse(event.data as string) as { event_type?: string };
           if (data.event_type === "heartbeat") return;
+
+          const businessEvent = data as RecognitionRealtimeMessage;
           if (
-            data.channel === "events.business" &&
-            (data.event_type === "recognition_event.detected" || data.event_type === "unknown_event.detected")
+            businessEvent.channel === "events.business" &&
+            (businessEvent.event_type === "recognition_event.detected" ||
+              businessEvent.event_type === "unknown_event.detected")
           ) {
-            console.debug("[WS] → calling addRecognitionBox", {
-              track_id: data.payload?.track_id,
-              bbox: data.payload?.bbox,
-              frame_width: data.payload?.frame_width,
-              frame_height: data.payload?.frame_height,
-              videoDimensions,
-            });
-            addRecognitionBox(data);
+            addRecognitionBox(businessEvent);
           }
-        } catch (e) {
-          console.error("[WS] Parse error:", e);
+        } catch (error) {
+          console.error("[WS] Parse error:", error);
         }
       };
 
@@ -126,7 +133,9 @@ export function CameraView() {
       ws.onclose = () => {
         if (!isMounted) return;
         setWsStatus("disconnected");
-        reconnectTimer = setTimeout(connect, 3000);
+        reconnectTimer = setTimeout(() => {
+          connect();
+        }, 3000);
       };
     };
 
@@ -177,7 +186,7 @@ export function CameraView() {
         <div className="absolute bottom-5 left-5 max-w-md">
           <h1 className="text-2xl font-semibold">Realtime recognition monitor</h1>
           <p className="mt-2 text-sm text-slate-300">
-            Bounding box hiển thị ở lần nhận diện đầu tiên của mỗi người.
+            Bounding boxes only appear on the first recognition moment for each detected person.
           </p>
         </div>
       </div>

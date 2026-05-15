@@ -1,74 +1,84 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { AttendancePresenceView } from "@/components/attendance/attendance-presence-view";
 import { PageHeader } from "@/components/data/page-header";
 import { ApiError, apiFetch } from "@/lib/api-client";
-import type { Department, PageResult, Person } from "@/lib/types";
+import { getFilterPolicy } from "@/lib/filter-policy";
+import { getTranslatedBackendError } from "@/lib/translated-backend-error";
+import type { Department, FilterPolicy, PageResult, Person } from "@/lib/types";
 
 type PersonWithDepartment = Person & { department_name: string };
 
 export default function AttendancePage() {
+  const t = useTranslations();
   const [persons, setPersons] = useState<PersonWithDepartment[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [filterPolicy, setFilterPolicy] = useState<FilterPolicy | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let mounted = true;
+
     async function loadData() {
       setLoading(true);
       setError("");
       try {
-        const [personsResponse, departmentsResponse] = await Promise.all([
+        const [personsResponse, departmentsResponse, policy] = await Promise.all([
           apiFetch<PageResult<Person>>("/persons?page=1&page_size=100", { withAuth: true }),
           apiFetch<PageResult<Department>>("/departments?page=1&page_size=100", { withAuth: true }),
+          getFilterPolicy(),
         ]);
         if (!mounted) return;
+
         setPersons(
           personsResponse.items
             .filter((person) => person.status === "active")
             .map((person) => {
-              const department = departmentsResponse.items.find((d) => d.id === person.department_id);
-              return { ...person, department_name: department?.name ?? "N/A" };
+              const department = departmentsResponse.items.find((item) => item.id === person.department_id);
+              return { ...person, department_name: department?.name ?? t("common.notAssigned") };
             }),
         );
         setDepartments(departmentsResponse.items);
+        setFilterPolicy(policy);
       } catch (err) {
         if (!mounted) return;
-        setError(err instanceof ApiError ? err.message : "Failed to load data");
+        setError(err instanceof ApiError ? getTranslatedBackendError(t, err, "attendance") : t("errors.system.requestFailed"));
       } finally {
         if (mounted) setLoading(false);
       }
     }
-    loadData();
+
+    void loadData();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [t]);
 
   if (loading) {
     return (
       <div>
-        <PageHeader title="Chấm công" description="Check-in only / daily presence cho hệ thống 1 camera." />
-        <div className="flex items-center justify-center p-12 text-slate-500">Đang tải dữ liệu...</div>
+        <PageHeader title={t("attendance.page.title")} description={t("attendance.page.description")} />
+        <div className="flex items-center justify-center p-12 text-slate-500">{t("attendance.page.loading")}</div>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !filterPolicy) {
     return (
       <div>
-        <PageHeader title="Chấm công" description="Check-in only / daily presence cho hệ thống 1 camera." />
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>
+        <PageHeader title={t("attendance.page.title")} description={t("attendance.page.description")} />
+        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-red-700">{error || t("attendance.page.missingFilterPolicy")}</div>
       </div>
     );
   }
 
   return (
     <div>
-      <PageHeader title="Chấm công" description="Check-in only / daily presence cho hệ thống 1 camera." />
-      <AttendancePresenceView persons={persons} departments={departments} />
+      <PageHeader title={t("attendance.page.title")} description={t("attendance.page.description")} />
+      <AttendancePresenceView persons={persons} departments={departments} filterPolicy={filterPolicy} />
     </div>
   );
 }

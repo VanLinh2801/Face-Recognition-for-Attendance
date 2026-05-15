@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import BinaryIO
 from typing import Protocol
+
+
+@dataclass(slots=True)
+class ObjectStorageStat:
+    size: int
+    content_type: str | None = None
 
 
 class ObjectStorageGateway(Protocol):
@@ -19,6 +26,7 @@ class ObjectStorageGateway(Protocol):
     ) -> None: ...
 
     def download_bytes(self, *, bucket_name: str, object_key: str) -> bytes: ...
+    def stat_object(self, *, bucket_name: str, object_key: str) -> ObjectStorageStat: ...
 
     def upload_bytes(
         self,

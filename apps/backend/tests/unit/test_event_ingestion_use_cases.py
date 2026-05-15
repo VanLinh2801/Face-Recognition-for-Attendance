@@ -47,6 +47,7 @@ class _FakeRecognitionRepo:
         self.latest_by_person: dict[UUID, datetime] = {}
         self.create_calls = 0
         self.last_create_kwargs: dict | None = None
+        self.linked_snapshot_media_asset_id = None
 
     def list_recognition_events(self, **_kwargs):
         return ([], 0)
@@ -58,7 +59,12 @@ class _FakeRecognitionRepo:
         self.create_calls += 1
         self.by_dedupe.add(dedupe_key)
         self.last_create_kwargs = _kwargs
-        return object()
+        return SimpleNamespace(id=uuid4())
+
+    def create_media_asset_and_link_snapshot(self, *, recognition_id, **_kwargs):
+        _ = recognition_id
+        self.linked_snapshot_media_asset_id = True
+        return None
 
     def get_latest_recognition_time(self, *, person_id: UUID) -> datetime | None:
         return self.latest_by_person.get(person_id)
@@ -68,6 +74,7 @@ class _FakeUnknownRepo:
     def __init__(self) -> None:
         self.by_dedupe: set[str] = set()
         self.last_create_kwargs: dict | None = None
+        self.linked_snapshot_media_asset_id = None
 
     def list_unknown_events(self, **_kwargs):
         return ([], 0)
@@ -78,7 +85,12 @@ class _FakeUnknownRepo:
     def create_unknown_event(self, *, dedupe_key: str, **_kwargs):
         self.by_dedupe.add(dedupe_key)
         self.last_create_kwargs = _kwargs
-        return object()
+        return SimpleNamespace(id=uuid4())
+
+    def create_media_asset_and_link_snapshot(self, *, unknown_event_id, **_kwargs):
+        _ = unknown_event_id
+        self.linked_snapshot_media_asset_id = True
+        return None
 
 
 class _FakeSpoofRepo:
@@ -87,6 +99,7 @@ class _FakeSpoofRepo:
         self.latest_by_person: dict[UUID, datetime] = {}
         self.create_calls = 0
         self.last_create_kwargs: dict | None = None
+        self.linked_snapshot_media_asset_id = None
 
     def list_spoof_alert_events(self, **_kwargs):
         return ([], 0)
@@ -98,7 +111,12 @@ class _FakeSpoofRepo:
         self.create_calls += 1
         self.by_dedupe.add(dedupe_key)
         self.last_create_kwargs = _kwargs
-        return object()
+        return SimpleNamespace(id=uuid4())
+
+    def create_media_asset_and_link_snapshot(self, *, spoof_event_id, **_kwargs):
+        _ = spoof_event_id
+        self.linked_snapshot_media_asset_id = True
+        return None
 
     def get_latest_spoof_time(self, *, person_id: UUID) -> datetime | None:
         return self.latest_by_person.get(person_id)

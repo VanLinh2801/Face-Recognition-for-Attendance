@@ -10,10 +10,12 @@ from sqlalchemy.orm import Session
 from app.application.use_cases.attendance import (
     GetAttendanceDailySummaryUseCase,
     GetAttendanceEventUseCase,
+    GetAttendanceHourlyStatsUseCase,
     ListAttendanceEventsUseCase,
     ListPersonAttendanceHistoryUseCase,
 )
 from app.application.use_cases.auth import (
+    ChangePasswordUseCase,
     GetCurrentUserUseCase,
     LoginUseCase,
     LogoutUseCase,
@@ -66,6 +68,7 @@ from app.application.use_cases.spoof_alert_events import (
     ListSpoofAlertEventsUseCase,
     UpdateSpoofAlertEventReviewUseCase,
 )
+from app.application.use_cases.system import GetDashboardHealthUseCase
 from app.application.use_cases.unknown_events import (
     GetUnknownEventUseCase,
     ListUnknownEventsUseCase,
@@ -358,6 +361,13 @@ def get_get_attendance_daily_summary_use_case(
     return container.build_get_attendance_daily_summary_use_case(session)
 
 
+def get_get_attendance_hourly_stats_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> GetAttendanceHourlyStatsUseCase:
+    return container.build_get_attendance_hourly_stats_use_case(session)
+
+
 def get_create_attendance_exception_use_case(
     session: Session = Depends(get_db_session),
     container: Container = Depends(get_container),
@@ -444,11 +454,24 @@ def get_logout_use_case(
     return container.build_logout_use_case(session)
 
 
+def get_change_password_use_case(
+    session: Session = Depends(get_db_session),
+    container: Container = Depends(get_container),
+) -> ChangePasswordUseCase:
+    return container.build_change_password_use_case(session)
+
+
 def get_current_user_use_case(
     session: Session = Depends(get_db_session),
     container: Container = Depends(get_container),
 ) -> GetCurrentUserUseCase:
     return container.build_get_current_user_use_case(session)
+
+
+def get_dashboard_health_use_case(
+    container: Container = Depends(get_container),
+) -> GetDashboardHealthUseCase:
+    return container.build_get_dashboard_health_use_case()
 
 
 def get_admin_user(

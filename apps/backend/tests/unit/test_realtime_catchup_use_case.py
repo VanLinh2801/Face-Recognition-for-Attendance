@@ -104,8 +104,13 @@ class _FakeFaceRepo:
         ]
 
 
+class _FakePersonRepo:
+    def get_person(self, _person_id):
+        return None
+
+
 def test_catchup_business_sorted_and_limited() -> None:
-    use_case = GetRealtimeCatchupUseCase(_FakeRecognitionRepo(), _FakeUnknownRepo(), _FakeSpoofRepo(), _FakeFaceRepo())
+    use_case = GetRealtimeCatchupUseCase(_FakeRecognitionRepo(), _FakeUnknownRepo(), _FakeSpoofRepo(), _FakeFaceRepo(), _FakePersonRepo())
     result = use_case.execute(
         RealtimeCatchupQuery(
             channel=RealtimeChannel.EVENTS_BUSINESS,
@@ -119,10 +124,37 @@ def test_catchup_business_sorted_and_limited() -> None:
         "registration_processing.completed",
         "recognition_event.detected",
     ]
+    assert result[0].payload == {
+        "id": str(result[0].payload["id"]),
+        "person_id": None,
+        "person_name": None,
+        "detected_at": result[0].payload["detected_at"],
+        "spoof_score": 0.95,
+        "severity": "high",
+        "event_source": "pipeline",
+        "review_status": "new",
+        "notes": None,
+        "snapshot_media_asset_id": None,
+        "track_id": None,
+        "dedupe_key": "sk",
+    }
+    assert result[1].payload == {
+        "id": str(result[1].payload["id"]),
+        "detected_at": result[1].payload["detected_at"],
+        "event_direction": "unknown",
+        "match_score": None,
+        "spoof_score": 0.2,
+        "event_source": "ai_service",
+        "review_status": "new",
+        "notes": None,
+        "snapshot_media_asset_id": None,
+        "track_id": None,
+        "dedupe_key": "uk",
+    }
 
 
 def test_catchup_non_business_returns_empty() -> None:
-    use_case = GetRealtimeCatchupUseCase(_FakeRecognitionRepo(), _FakeUnknownRepo(), _FakeSpoofRepo(), _FakeFaceRepo())
+    use_case = GetRealtimeCatchupUseCase(_FakeRecognitionRepo(), _FakeUnknownRepo(), _FakeSpoofRepo(), _FakeFaceRepo(), _FakePersonRepo())
     result = use_case.execute(
         RealtimeCatchupQuery(
             channel=RealtimeChannel.STREAM_OVERLAY,

@@ -1,5 +1,5 @@
 import importlib
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -20,6 +20,7 @@ class _FakeAttendanceEvent:
         self.id = uuid4()
         self.person_id = uuid4()
         self.person_full_name = "Tester"
+        self.snapshot_media_asset_id = None
         self.recognized_at = datetime.now(timezone.utc)
         self.event_direction = EventDirection.ENTRY
         self.match_score = 0.91
@@ -35,6 +36,23 @@ class _FakeSummary:
         self.unique_persons = 2
         self.total_entries = 3
         self.total_exits = 2
+        self.unknown_count = 1
+        self.spoof_alert_count = 1
+
+
+class _FakeHourlyStat:
+    def __init__(self, hour: str, events: int, entries: int, exits: int, alerts: int):
+        self.hour = hour
+        self.events = events
+        self.entries = entries
+        self.exits = exits
+        self.alerts = alerts
+
+
+class _FakeHourlyStats:
+    def __init__(self):
+        self.work_date = date.today()
+        self.items = [_FakeHourlyStat("08:00", 4, 3, 1, 2)]
 
 
 class _FakeAttendanceListUseCase:
@@ -55,6 +73,11 @@ class _FakeAttendanceHistoryUseCase:
 class _FakeAttendanceSummaryUseCase:
     def execute(self, _work_date):
         return _FakeSummary()
+
+
+class _FakeAttendanceHourlyStatsUseCase:
+    def execute(self, _work_date):
+        return _FakeHourlyStats()
 
 
 class _FakeAttendanceExceptionUseCases:
@@ -114,6 +137,10 @@ def _build_admin_user() -> User:
 def test_attendance_and_exceptions_api(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("ENABLE_EVENT_CONSUMER", "false")
+    monkeypatch.setenv("FILTER_RETENTION_DAYS", "7")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
     import app.main as app_main
 
     importlib.reload(app_main)
@@ -126,6 +153,7 @@ def test_attendance_and_exceptions_api(monkeypatch):
     app_main.app.dependency_overrides[dependencies.get_get_attendance_event_use_case] = lambda: _FakeAttendanceGetUseCase()
     app_main.app.dependency_overrides[dependencies.get_list_person_attendance_history_use_case] = lambda: _FakeAttendanceHistoryUseCase()
     app_main.app.dependency_overrides[dependencies.get_get_attendance_daily_summary_use_case] = lambda: _FakeAttendanceSummaryUseCase()
+    app_main.app.dependency_overrides[dependencies.get_get_attendance_hourly_stats_use_case] = lambda: _FakeAttendanceHourlyStatsUseCase()
     app_main.app.dependency_overrides[dependencies.get_create_attendance_exception_use_case] = lambda: type(
         "UC", (), {"execute": attendance_ex.create}
     )()
@@ -150,6 +178,15 @@ def test_attendance_and_exceptions_api(monkeypatch):
         assert client.get(f"/api/v1/attendance/events/{uuid4()}").status_code == 200
         assert client.get(f"/api/v1/attendance/persons/{uuid4()}/history").status_code == 200
         assert client.get(f"/api/v1/attendance/summary/daily?work_date={date.today().isoformat()}").status_code == 200
+        hourly_response = client.get(f"/api/v1/attendance/hourly-stats?work_date={date.today().isoformat()}")
+        assert hourly_response.status_code == 200
+        assert hourly_response.json()["items"][0]["alerts"] == 2
+
+        too_old = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+        too_future = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+        assert client.get(f"/api/v1/attendance/events?from_at={too_old}").status_code == 422
+        assert client.get(f"/api/v1/attendance/events?to_at={too_future}").status_code == 422
+        assert client.get(f"/api/v1/attendance/persons/{uuid4()}/history?to_at={too_future}").status_code == 422
 
         create_resp = client.post(
             "/api/v1/attendance-exceptions",

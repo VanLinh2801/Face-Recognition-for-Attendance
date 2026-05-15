@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Fingerprint, LockKeyhole, LogIn, ShieldCheck, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { saveAuthTokens } from "@/lib/auth-client";
+import { getTranslatedBackendError } from "@/lib/translated-backend-error";
 
 type LoginResponse = {
   access_token: string;
@@ -17,6 +19,7 @@ type LoginResponse = {
 };
 
 export default function LoginPage() {
+  const t = useTranslations();
   const router = useRouter();
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
@@ -43,9 +46,9 @@ export default function LoginPage() {
       router.push("/");
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(getLoginErrorMessage(err));
+        setError(getTranslatedBackendError(t, err, "auth"));
       } else {
-        setError(err instanceof Error ? err.message : "Không thể đăng nhập. Vui lòng thử lại.");
+        setError(err instanceof Error ? err.message : t("errors.system.requestFailed"));
       }
     } finally {
       setSubmitting(false);
@@ -62,19 +65,19 @@ export default function LoginPage() {
               <Fingerprint className="h-6 w-6" />
             </div>
             <div>
-              <div className="text-sm font-semibold">Face Recognition</div>
-              <div className="text-xs text-slate-300">Attendance Admin</div>
+              <div className="text-sm font-semibold">{t("layout.appName")}</div>
+              <div className="text-xs text-slate-300">{t("layout.appSubtitle")}</div>
             </div>
           </div>
 
           <div className="max-w-xl">
             <div className="mb-6 inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/10 px-3 py-2 text-sm text-slate-100">
               <ShieldCheck className="h-4 w-4" />
-              Bảng điều khiển bảo mật
+              {t("auth.securityPanel")}
             </div>
-            <h1 className="text-4xl font-semibold tracking-normal">Quản lý điểm danh bằng nhận diện khuôn mặt.</h1>
+            <h1 className="text-4xl font-semibold tracking-normal">{t("auth.heroTitle")}</h1>
             <p className="mt-4 max-w-lg text-sm leading-6 text-slate-300">
-              Đăng nhập để theo dõi camera, sự kiện nhận diện, chấm công và hồ sơ nhân sự trong cùng một dashboard.
+              {t("auth.heroDescription")}
             </p>
           </div>
 
@@ -100,8 +103,8 @@ export default function LoginPage() {
               <Fingerprint className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-sm font-semibold">Face Recognition</div>
-              <div className="text-xs text-slate-500">Attendance Admin</div>
+              <div className="text-sm font-semibold">{t("layout.appName")}</div>
+              <div className="text-xs text-slate-500">{t("layout.appSubtitle")}</div>
             </div>
           </div>
 
@@ -112,15 +115,15 @@ export default function LoginPage() {
                   <LockKeyhole className="h-5 w-5" />
                 </div>
                 <div>
-                  <CardTitle>Đăng nhập</CardTitle>
-                  <CardDescription>Sử dụng tài khoản admin để vào dashboard.</CardDescription>
+                  <CardTitle>{t("auth.loginTitle")}</CardTitle>
+                  <CardDescription>{t("auth.loginDescription")}</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <form className="space-y-5" onSubmit={handleSubmit}>
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium">Username</span>
+                  <span className="text-sm font-medium">{t("auth.username")}</span>
                   <div className="relative">
                     <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <Input
@@ -135,7 +138,7 @@ export default function LoginPage() {
                 </label>
 
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium">Mật khẩu</span>
+                  <span className="text-sm font-medium">{t("auth.password")}</span>
                   <div className="relative">
                     <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <Input
@@ -144,14 +147,14 @@ export default function LoginPage() {
                       type={showPassword ? "text" : "password"}
                       autoComplete="current-password"
                       className="pl-9 pr-10"
-                      placeholder="Nhập mật khẩu"
+                      placeholder={t("auth.passwordPlaceholder")}
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((value) => !value)}
                       className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                      aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                      aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -164,7 +167,7 @@ export default function LoginPage() {
 
                 <Button type="submit" className="w-full" disabled={submitting}>
                   <LogIn className="h-4 w-4" />
-                  {submitting ? "Đang đăng nhập..." : "Đăng nhập"}
+                  {submitting ? t("auth.submitting") : t("auth.submit")}
                 </Button>
               </form>
             </CardContent>
@@ -173,88 +176,4 @@ export default function LoginPage() {
       </section>
     </main>
   );
-}
-
-function getLoginErrorMessage(error: ApiError) {
-  const backendMessage = String(error.message ?? "");
-  const detailsText = getDetailsText(error.details);
-  const source = normalizeErrorText(`${error.code ?? ""} ${backendMessage} ${detailsText}`);
-
-  if (
-    hasAny(source, [
-      "user_not_found",
-      "account_not_found",
-      "username_not_found",
-      "tai khoan khong ton tai",
-      "tài khoản không tồn tại",
-    ])
-  ) {
-    return "Tài khoản không tồn tại.";
-  }
-
-  if (
-    hasAny(source, [
-      "wrong_password",
-      "invalid_password",
-      "password_incorrect",
-      "sai mat khau",
-      "sai mật khẩu",
-      "mat khau khong dung",
-      "mật khẩu không đúng",
-    ])
-  ) {
-    return "Mật khẩu không đúng.";
-  }
-
-  if (
-    hasAny(source, [
-      "inactive",
-      "disabled",
-      "locked",
-      "blocked",
-      "tam khoa",
-      "tạm khóa",
-      "vo hieu hoa",
-      "vô hiệu hóa",
-    ])
-  ) {
-    return "Tài khoản đã bị khóa hoặc chưa được kích hoạt.";
-  }
-
-  if (hasAny(source, ["invalid_credentials", "invalid credentials"])) {
-    return "Username hoặc mật khẩu không đúng.";
-  }
-
-  if (backendMessage.trim().length > 0 && !backendMessage.startsWith("Request failed")) {
-    return backendMessage;
-  }
-
-  if (error.status === 401 || error.status === 403 || error.status === 422) {
-    return "Username hoặc mật khẩu không đúng.";
-  }
-
-  return "Không thể đăng nhập. Vui lòng thử lại.";
-}
-
-function getDetailsText(details: unknown): string {
-  if (details == null) return "";
-  if (typeof details === "string") return details;
-  if (typeof details === "number" || typeof details === "boolean") return String(details);
-
-  try {
-    return JSON.stringify(details);
-  } catch {
-    return "";
-  }
-}
-
-function normalizeErrorText(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-function hasAny(value: string, patterns: string[]) {
-  return patterns.some((pattern) => value.includes(normalizeErrorText(pattern)));
 }

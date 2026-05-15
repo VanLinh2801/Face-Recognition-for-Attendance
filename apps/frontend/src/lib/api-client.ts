@@ -1,6 +1,7 @@
 "use client";
 
 import { clearAuthTokens, getAccessToken, getAccessTokenExpiresAt, getRefreshToken, saveAuthTokens } from "@/lib/auth-client";
+import { normalizeBackendError, type BackendErrorKey } from "@/lib/backend-error-normalizer";
 
 export const SESSION_EXPIRED_EVENT = "auth:session-expired";
 const SESSION_EXPIRED_MESSAGE = "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
@@ -8,20 +9,34 @@ const SESSION_EXPIRED_MESSAGE = "Phiên đăng nhập đã hết hạn. Vui lòn
 type ApiErrorPayload = {
   code?: string;
   message?: string;
+  detail?: string;
   details?: unknown;
 };
 
 export class ApiError extends Error {
   status: number;
   code?: string;
+  detail?: string;
   details?: unknown;
+  payload?: unknown;
+  normalizedKey: BackendErrorKey;
 
-  constructor(message: string, status: number, code?: string, details?: unknown) {
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+    details?: unknown,
+    detail?: string,
+    payload?: unknown,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.detail = detail;
     this.details = details;
+    this.payload = payload;
+    this.normalizedKey = normalizeBackendError(this).key;
   }
 }
 
@@ -43,7 +58,8 @@ async function apiFetchWithRetry<T>(path: string, options: ApiFetchOptions, allo
     }
   }
 
-  const response = await fetch(`/api/v1${path}`, {
+  const requestPath = path.startsWith("/api/") ? path : `/api/v1${path}`;
+  const response = await fetch(requestPath, {
     ...rest,
     headers: buildHeaders(headers, rest.body, withAuth),
   });
@@ -106,18 +122,25 @@ function buildHeaders(headers: HeadersInit | undefined, body: BodyInit | null | 
 async function readApiError(response: Response) {
   let errorMessage = `Request failed (${response.status})`;
   let errorCode: string | undefined;
+  let errorDetail: string | undefined;
   let errorDetails: unknown;
+  let errorPayload: unknown;
 
   try {
     const payload = (await response.json()) as ApiErrorPayload;
+    errorPayload = payload;
     errorMessage = payload.message ?? errorMessage;
+    if (typeof payload.detail === "string") {
+      errorDetail = payload.detail;
+      errorMessage = payload.message ?? payload.detail;
+    }
     errorCode = payload.code;
     errorDetails = payload.details;
   } catch {
     // Keep fallback message when response is not JSON.
   }
 
-  return new ApiError(errorMessage, response.status, errorCode, errorDetails);
+  return new ApiError(errorMessage, response.status, errorCode, errorDetails, errorDetail, errorPayload);
 }
 
 function shouldRefreshAccessToken(error: ApiError) {
@@ -167,5 +190,9 @@ async function refreshAccessToken() {
 
 function notifySessionExpired() {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { message: SESSION_EXPIRED_MESSAGE } }));
+  window.dispatchEvent(
+    new CustomEvent(SESSION_EXPIRED_EVENT, {
+      detail: { code: "session_expired", message: SESSION_EXPIRED_MESSAGE },
+    }),
+  );
 }

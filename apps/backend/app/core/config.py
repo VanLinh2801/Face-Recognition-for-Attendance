@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     # Used by ingestion layer to throttle repeated business events for the same person.
     throttle_business_seconds: int = Field(default=30, alias="THROTTLE_BUSINESS_SECONDS")
 
+    filter_retention_days: int = Field(default=30, alias="FILTER_RETENTION_DAYS")
     media_retention_days_recognition: int = Field(default=30, alias="MEDIA_RETENTION_DAYS_RECOGNITION")
     media_retention_days_unknown: int = Field(default=30, alias="MEDIA_RETENTION_DAYS_UNKNOWN")
     media_retention_days_spoof: int = Field(default=30, alias="MEDIA_RETENTION_DAYS_SPOOF")

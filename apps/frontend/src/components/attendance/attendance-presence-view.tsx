@@ -1,21 +1,41 @@
 "use client";
 
-import { Building2, CalendarSearch, ChevronLeft, ChevronRight, Clock, Eye, ImageIcon, Loader2, Printer, Search, Users, UserX, X } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import {
+  Building2,
+  CalendarSearch,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Eye,
+  ImageIcon,
+  Loader2,
+  Printer,
+  Search,
+  Users,
+  UserX,
+  X,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { AttendanceEvent, Department, PageResult, Person } from "@/lib/types";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { getAccessToken } from "@/lib/auth-client";
+import {
+  buildAttendanceApiRange,
+  getAttendanceBoundaryValues,
+  getDefaultAttendanceRange,
+  normalizeAttendanceDate,
+  normalizeAttendanceRange,
+} from "@/lib/filter-policy";
+import { getTranslatedBackendError } from "@/lib/translated-backend-error";
+import type { AttendanceEvent, Department, FilterPolicy, PageResult, Person } from "@/lib/types";
 import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { useOutsideClick } from "@/lib/use-outside-click";
-import { formatTime } from "@/lib/utils";
 
-const getDefaultWorkDate = () => new Date().toISOString().slice(0, 10);
-const WORK_DATE = getDefaultWorkDate();
 const LATE_AFTER_HOUR = 8;
 const LATE_AFTER_MINUTE = 15;
 
@@ -42,95 +62,113 @@ type PresenceRow = {
 export function AttendancePresenceView({
   persons,
   departments,
+  filterPolicy,
 }: {
   persons: PersonWithDepartment[];
   departments: Department[];
+  filterPolicy: FilterPolicy;
 }) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const defaultRange = useMemo(() => getDefaultAttendanceRange(filterPolicy), [filterPolicy]);
+  const attendanceBoundaries = useMemo(() => getAttendanceBoundaryValues(filterPolicy), [filterPolicy]);
   const [departmentId, setDepartmentId] = useState("all");
   const [statusFilter, setStatusFilter] = useState<PresenceStatusFilter>("all");
   const [personSearch, setPersonSearch] = useState("");
-  const [workDate, setWorkDate] = useState(WORK_DATE);
+  const [workDate, setWorkDate] = useState(defaultRange.workDate);
   const [events, setEvents] = useState<AttendanceEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState("");
   const [page, setPage] = useState(1);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
-  const [reportFromDate, setReportFromDate] = useState("2026-05-01");
-  const [reportToDate, setReportToDate] = useState(WORK_DATE);
+  const [reportFromDate, setReportFromDate] = useState(defaultRange.reportFromDate);
+  const [reportToDate, setReportToDate] = useState(defaultRange.reportToDate);
   const [reportDepartmentId, setReportDepartmentId] = useState("all");
   const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
   const [reportRows, setReportRows] = useState<PresenceReportRow[] | null>(null);
   const [selectedPresenceRow, setSelectedPresenceRow] = useState<PresenceRow | null>(null);
   const reportDialog = useDialogTransition(reportDialogOpen ? true : null);
   const presenceDialog = useDialogTransition(selectedPresenceRow);
   const visiblePresenceRow = presenceDialog.value;
   const pageSize = 5;
+  const normalizedReportRange = useMemo(
+    () => normalizeAttendanceRange({ fromDate: reportFromDate, toDate: reportToDate }, filterPolicy, "from"),
+    [filterPolicy, reportFromDate, reportToDate],
+  );
 
   useEffect(() => {
     let mounted = true;
+
     async function loadEvents() {
       setEventsLoading(true);
       setEventsError("");
       try {
-        const startOfDay = `${workDate}T00:00:00`;
-        const endOfDay = `${workDate}T23:59:59`;
+        const apiRange = buildAttendanceApiRange(filterPolicy, { fromDate: workDate, toDate: workDate });
+        if (!apiRange) return;
         const response = await apiFetch<PageResult<AttendanceEvent>>(
-          `/attendance/events?page=1&page_size=100&from_at=${encodeURIComponent(startOfDay)}&to_at=${encodeURIComponent(endOfDay)}`,
+          `/attendance/events?page=1&page_size=100&from_at=${encodeURIComponent(apiRange.fromAt)}&to_at=${encodeURIComponent(apiRange.toAt)}`,
           { withAuth: true },
         );
         if (!mounted) return;
         setEvents(response.items.filter((event) => event.is_valid));
       } catch (err) {
         if (!mounted) return;
-        setEventsError(err instanceof ApiError ? err.message : "Failed to load events");
+        setEventsError(err instanceof ApiError ? getTranslatedBackendError(t, err, "attendance") : t("errors.system.requestFailed"));
       } finally {
         if (mounted) setEventsLoading(false);
       }
     }
-    loadEvents();
+
+    void loadEvents();
     return () => {
       mounted = false;
     };
-  }, [workDate]);
+  }, [filterPolicy, t, workDate]);
 
   const departmentScopeIds = useMemo(() => getDepartmentScopeIds(departmentId, departments), [departmentId, departments]);
   const reportDepartmentScopeIds = useMemo(() => getDepartmentScopeIds(reportDepartmentId, departments), [reportDepartmentId, departments]);
+  const normalizedSearch = personSearch.trim().toLowerCase();
 
   const scopedPersons = persons.filter((person) => {
     const departmentMatches = !departmentScopeIds || (person.department_id ? departmentScopeIds.has(person.department_id) : false);
-    const searchMatches = person.full_name.toLowerCase().includes(personSearch.trim().toLowerCase());
+    const searchMatches = person.full_name.toLowerCase().includes(normalizedSearch);
     return departmentMatches && searchMatches;
   });
 
   const reportScopedPersons = persons.filter((person) => {
     const departmentMatches = !reportDepartmentScopeIds || (person.department_id ? reportDepartmentScopeIds.has(person.department_id) : false);
-    const searchMatches = person.full_name.toLowerCase().includes(personSearch.trim().toLowerCase());
+    const searchMatches = person.full_name.toLowerCase().includes(normalizedSearch);
     return departmentMatches && searchMatches;
   });
 
-  const presenceRows: PresenceRow[] = scopedPersons.map((person) => {
-    const personEvents = events
-      .filter((event) => event.person_id === person.id && event.recognized_at.slice(0, 10) === workDate)
-      .sort((a, b) => new Date(a.recognized_at).getTime() - new Date(b.recognized_at).getTime());
-    const firstEvent = personEvents[0] ?? null;
-    const lastEvent = personEvents.at(-1) ?? null;
-    const lateThreshold = new Date(`${workDate}T${String(LATE_AFTER_HOUR).padStart(2, "0")}:${String(LATE_AFTER_MINUTE).padStart(2, "0")}:00Z`);
-    const status: PresenceStatus = !firstEvent
-      ? "absent"
-      : new Date(firstEvent.recognized_at).getTime() > lateThreshold.getTime()
-        ? "late"
-        : "present";
+  const presenceRows: PresenceRow[] = scopedPersons
+    .map((person) => {
+      const personEvents = events
+        .filter((event) => event.person_id === person.id && event.recognized_at.slice(0, 10) === workDate)
+        .sort((a, b) => new Date(a.recognized_at).getTime() - new Date(b.recognized_at).getTime());
+      const firstEvent = personEvents[0] ?? null;
+      const lastEvent = personEvents.at(-1) ?? null;
+      const lateThreshold = new Date(
+        `${workDate}T${String(LATE_AFTER_HOUR).padStart(2, "0")}:${String(LATE_AFTER_MINUTE).padStart(2, "0")}:00Z`,
+      );
+      const status: PresenceStatus = !firstEvent
+        ? "absent"
+        : new Date(firstEvent.recognized_at).getTime() > lateThreshold.getTime()
+          ? "late"
+          : "present";
 
-    return {
-      person,
-      first_event: firstEvent,
-      last_event: lastEvent,
-      first_seen_at: firstEvent?.recognized_at ?? null,
-      last_seen_at: lastEvent?.recognized_at ?? null,
-      recognition_count: personEvents.length,
-      status,
-    };
-  }).filter((row) => statusFilter === "all" || row.status === statusFilter);
+      return {
+        person,
+        first_event: firstEvent,
+        last_event: lastEvent,
+        first_seen_at: firstEvent?.recognized_at ?? null,
+        last_seen_at: lastEvent?.recognized_at ?? null,
+        recognition_count: personEvents.length,
+        status,
+      };
+    })
+    .filter((row) => statusFilter === "all" || row.status === statusFilter);
 
   const presentCount = presenceRows.filter((row) => row.status === "present" || row.status === "late").length;
   const lateCount = presenceRows.filter((row) => row.status === "late").length;
@@ -141,45 +179,48 @@ export function AttendancePresenceView({
   const pagedRows = presenceRows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const summaryCards: Array<{ label: string; value: number; icon: LucideIcon }> = [
-    { label: "Có mặt", value: presentCount, icon: Users },
-    { label: "Đi muộn", value: lateCount, icon: Clock },
-    { label: "Chưa ghi nhận", value: absentCount, icon: UserX },
-    { label: "Lượt nhận diện", value: totalRecognitions, icon: Eye },
+    { label: t("attendance.summary.present"), value: presentCount, icon: Users },
+    { label: t("attendance.summary.late"), value: lateCount, icon: Clock },
+    { label: t("attendance.summary.absent"), value: absentCount, icon: UserX },
+    { label: t("attendance.summary.recognitions"), value: totalRecognitions, icon: Eye },
   ];
 
-  function handleGenerateReport() {
+  async function handleGenerateReport() {
+    if (!normalizedReportRange) return;
     setReportLoading(true);
+    setReportError("");
     setReportRows(null);
 
-    (async () => {
-      try {
-        const startOfDay = `${reportFromDate}T00:00:00`;
-        const endOfDay = `${reportToDate}T23:59:59`;
-        const response = await apiFetch<PageResult<AttendanceEvent>>(
-          `/attendance/events?page=1&page_size=100&from_at=${encodeURIComponent(startOfDay)}&to_at=${encodeURIComponent(endOfDay)}`,
-          { withAuth: true },
-        );
-        setReportRows(buildPresenceReport(reportScopedPersons, response.items, reportFromDate, reportToDate));
-      } catch {
-        setReportRows(buildPresenceReport(reportScopedPersons, [], reportFromDate, reportToDate));
-      } finally {
-        setReportLoading(false);
-      }
-    })();
+    try {
+      const apiRange = buildAttendanceApiRange(filterPolicy, normalizedReportRange);
+      if (!apiRange) return;
+      const response = await apiFetch<PageResult<AttendanceEvent>>(
+        `/attendance/events?page=1&page_size=100&from_at=${encodeURIComponent(apiRange.fromAt)}&to_at=${encodeURIComponent(apiRange.toAt)}`,
+        { withAuth: true },
+      );
+      setReportRows(buildPresenceReport(reportScopedPersons, response.items, apiRange.fromDate, apiRange.toDate));
+    } catch (err) {
+      setReportError(err instanceof ApiError ? getTranslatedBackendError(t, err, "attendance") : t("errors.system.requestFailed"));
+      setReportRows(buildPresenceReport(reportScopedPersons, [], normalizedReportRange.fromDate, normalizedReportRange.toDate));
+    } finally {
+      setReportLoading(false);
+    }
   }
 
   function handlePrintReport() {
     if (!reportRows) return;
-
     const selectedDepartment = departments.find((department) => department.id === reportDepartmentId);
-    const departmentLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : "Tất cả phòng ban";
+    const departmentLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : t("attendance.filters.allDepartments");
+    const printWindow = window.open("", "_blank", "width=1100,height=800");
+    if (!printWindow) return;
+
     const rowsHtml = reportRows
       .map(
         (row, index) => `
           <tr>
             <td>${index + 1}</td>
             <td>${escapeHtml(row.person.full_name)}</td>
-            <td>${escapeHtml(row.person.department_name)}</td>
+            <td>${escapeHtml(row.person.department_name || t("common.notAssigned"))}</td>
             <td>${row.present_days}</td>
             <td>${row.late_days}</td>
             <td>${row.absent_days}</td>
@@ -189,14 +230,11 @@ export function AttendancePresenceView({
       )
       .join("");
 
-    const printWindow = window.open("", "_blank", "width=1100,height=800");
-    if (!printWindow) return;
-
     printWindow.document.write(`
       <!doctype html>
       <html>
         <head>
-          <title>Report chấm công</title>
+          <title>${escapeHtml(t("attendance.report.printTitle"))}</title>
           <style>
             body { font-family: Arial, sans-serif; color: #0f172a; margin: 32px; }
             h1 { margin: 0 0 8px; font-size: 24px; }
@@ -208,22 +246,22 @@ export function AttendancePresenceView({
           </style>
         </head>
         <body>
-          <h1>Report chấm công</h1>
+          <h1>${escapeHtml(t("attendance.report.printTitle"))}</h1>
           <div class="meta">
-            Khoảng thời gian: ${escapeHtml(reportFromDate)} đến ${escapeHtml(reportToDate)}<br />
-            Phòng ban: ${escapeHtml(departmentLabel)}<br />
-            Số nhân viên: ${reportRows.length}
+            ${escapeHtml(t("attendance.report.printRange"))}: ${escapeHtml(reportFromDate)} - ${escapeHtml(reportToDate)}<br />
+            ${escapeHtml(t("attendance.report.printDepartment"))}: ${escapeHtml(departmentLabel)}<br />
+            ${escapeHtml(t("attendance.report.printHeadcount"))}: ${reportRows.length}
           </div>
           <table>
             <thead>
               <tr>
-                <th>STT</th>
-                <th>Nhân viên</th>
-                <th>Phòng ban</th>
-                <th>Đi làm</th>
-                <th>Đi muộn</th>
-                <th>Vắng mặt</th>
-                <th>Nhận diện</th>
+                <th>${escapeHtml(t("attendance.report.index"))}</th>
+                <th>${escapeHtml(t("attendance.report.person"))}</th>
+                <th>${escapeHtml(t("attendance.report.departmentColumn"))}</th>
+                <th>${escapeHtml(t("attendance.report.presentDays"))}</th>
+                <th>${escapeHtml(t("attendance.report.lateDays"))}</th>
+                <th>${escapeHtml(t("attendance.report.absentDays"))}</th>
+                <th>${escapeHtml(t("attendance.report.recognitions"))}</th>
               </tr>
             </thead>
             <tbody>${rowsHtml}</tbody>
@@ -241,7 +279,7 @@ export function AttendancePresenceView({
       <div className="flex justify-end">
         <Button onClick={() => setReportDialogOpen(true)}>
           <CalendarSearch className="h-4 w-4" />
-          Tạo report
+          {t("attendance.filters.generateReport")}
         </Button>
       </div>
 
@@ -270,23 +308,21 @@ export function AttendancePresenceView({
                 setPersonSearch(event.target.value);
                 setPage(1);
               }}
-              placeholder="Tìm theo tên nhân viên"
+              placeholder={t("attendance.filters.personSearchPlaceholder")}
             />
             <DatePicker
               value={workDate}
+              minDate={attendanceBoundaries.minAttendanceDate}
+              maxDate={attendanceBoundaries.maxAttendanceDate}
               onChange={(value) => {
-                setWorkDate(value);
+                setWorkDate(normalizeAttendanceDate(value, filterPolicy));
                 setPage(1);
               }}
             />
-            <DepartmentTreeSelect
-              departments={departments}
-              value={departmentId}
-              onChange={(value) => {
-                setDepartmentId(value);
-                setPage(1);
-              }}
-            />
+            <DepartmentTreeSelect departments={departments} value={departmentId} onChange={(value) => {
+              setDepartmentId(value);
+              setPage(1);
+            }} />
             <StatusFilterSelect
               value={statusFilter}
               onChange={(value) => {
@@ -295,24 +331,35 @@ export function AttendancePresenceView({
               }}
             />
           </div>
+          <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            {t("attendance.filters.retentionHint", { days: filterPolicy.retention_days })}
+          </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Daily presence</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>{t("attendance.table.title")}</CardTitle>
+        </CardHeader>
         <CardContent>
+          {eventsLoading ? (
+            <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">{t("attendance.table.loading")}</div>
+          ) : null}
+          {eventsError ? (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{eventsError}</div>
+          ) : null}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] table-fixed text-left text-sm">
               <thead className="text-xs uppercase text-slate-500">
                 <tr className="border-b border-slate-200">
-                  <th className="w-14 py-3">STT</th>
-                  <th>Nhân viên</th>
-                  <th className="w-44">Phòng ban</th>
-                  <th className="w-40">First seen</th>
-                  <th className="w-40">Last seen</th>
-                  <th className="w-32">Số lần</th>
-                  <th className="w-28">Trạng thái</th>
-                  <th className="w-28 text-right">Action</th>
+                  <th className="w-14 py-3">{t("attendance.table.index")}</th>
+                  <th>{t("attendance.table.person")}</th>
+                  <th className="w-44">{t("attendance.table.department")}</th>
+                  <th className="w-40">{t("attendance.table.firstSeen")}</th>
+                  <th className="w-40">{t("attendance.table.lastSeen")}</th>
+                  <th className="w-32">{t("attendance.table.recognitionCount")}</th>
+                  <th className="w-28">{t("attendance.table.status")}</th>
+                  <th className="w-28 text-right">{t("attendance.table.action")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -320,15 +367,15 @@ export function AttendancePresenceView({
                   <tr key={row.person.id} className="border-b border-slate-100">
                     <td className="py-3 font-mono text-xs text-slate-500">{(safePage - 1) * pageSize + index + 1}</td>
                     <td className="truncate pr-4 font-medium">{row.person.full_name}</td>
-                    <td className="truncate pr-4">{row.person.department_name}</td>
-                    <td className="font-mono text-xs text-slate-500">{row.first_seen_at ? formatTime(row.first_seen_at) : "N/A"}</td>
-                    <td className="font-mono text-xs text-slate-500">{row.last_seen_at ? formatTime(row.last_seen_at) : "N/A"}</td>
+                    <td className="truncate pr-4">{row.person.department_name || t("common.notAssigned")}</td>
+                    <td className="font-mono text-xs text-slate-500">{row.first_seen_at ? formatTimeLocalized(row.first_seen_at, locale) : t("attendance.table.na")}</td>
+                    <td className="font-mono text-xs text-slate-500">{row.last_seen_at ? formatTimeLocalized(row.last_seen_at, locale) : t("attendance.table.na")}</td>
                     <td>{row.recognition_count}</td>
                     <td><PresenceStatusBadge status={row.status} /></td>
                     <td className="text-right">
                       <Button variant="outline" size="sm" onClick={() => setSelectedPresenceRow(row)}>
                         <Eye className="h-4 w-4" />
-                        Xem
+                        {t("attendance.table.view")}
                       </Button>
                     </td>
                   </tr>
@@ -336,10 +383,13 @@ export function AttendancePresenceView({
               </tbody>
             </table>
           </div>
+          {!eventsLoading && !eventsError && pagedRows.length === 0 ? (
+            <div className="mt-4 rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+              {t("attendance.table.empty")}
+            </div>
+          ) : null}
           <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-            <span>
-              Page {safePage}/{totalPages} · {presenceRows.length} records
-            </span>
+            <span>{t("attendance.table.pageSummary", { page: safePage, totalPages, records: presenceRows.length })}</span>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -347,7 +397,7 @@ export function AttendancePresenceView({
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
                 className="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Previous
+                {t("attendance.table.previous")}
               </button>
               <button
                 type="button"
@@ -355,7 +405,7 @@ export function AttendancePresenceView({
                 onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                 className="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Next
+                {t("attendance.table.next")}
               </button>
             </div>
           </div>
@@ -373,16 +423,14 @@ export function AttendancePresenceView({
           >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
               <div>
-                <h2 className="text-xl font-semibold text-slate-950">Tạo report chấm công</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Thống kê theo tên nhân viên đang tìm kiếm và phòng ban được chọn trong report. Phòng ban con luôn được bao gồm.
-                </p>
+                <h2 className="text-xl font-semibold text-slate-950">{t("attendance.report.title")}</h2>
+                <p className="mt-1 text-sm text-slate-500">{t("attendance.report.description")}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setReportDialogOpen(false)}
                 className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                aria-label="Đóng report"
+                aria-label={t("attendance.report.close")}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -391,94 +439,102 @@ export function AttendancePresenceView({
             <div className="space-y-4 p-5">
               <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.25fr_auto] md:items-end">
                 <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                  Ngày bắt đầu
-                  <DatePicker value={reportFromDate} onChange={setReportFromDate} />
+                  {t("attendance.report.fromDate")}
+                  <DatePicker
+                    value={reportFromDate}
+                    minDate={attendanceBoundaries.minAttendanceDate}
+                    maxDate={attendanceBoundaries.maxAttendanceDate}
+                    onChange={(value) => {
+                      const nextRange = normalizeAttendanceRange({ fromDate: value, toDate: reportToDate }, filterPolicy, "from");
+                      if (!nextRange) return;
+                      setReportFromDate(nextRange.fromDate);
+                      setReportToDate(nextRange.toDate);
+                    }}
+                  />
                 </label>
                 <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                  Ngày kết thúc
-                  <DatePicker value={reportToDate} onChange={setReportToDate} />
+                  {t("attendance.report.toDate")}
+                  <DatePicker
+                    value={reportToDate}
+                    minDate={attendanceBoundaries.minAttendanceDate}
+                    maxDate={attendanceBoundaries.maxAttendanceDate}
+                    onChange={(value) => {
+                      const nextRange = normalizeAttendanceRange({ fromDate: reportFromDate, toDate: value }, filterPolicy, "to");
+                      if (!nextRange) return;
+                      setReportFromDate(nextRange.fromDate);
+                      setReportToDate(nextRange.toDate);
+                    }}
+                  />
                 </label>
                 <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                  Phòng ban
+                  {t("attendance.report.department")}
                   <DepartmentTreeSelect departments={departments} value={reportDepartmentId} onChange={setReportDepartmentId} />
                 </label>
-                <Button onClick={handleGenerateReport} disabled={reportLoading || reportFromDate > reportToDate}>
+                <Button onClick={() => void handleGenerateReport()} disabled={reportLoading}>
                   {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarSearch className="h-4 w-4" />}
-                  Thống kê
+                  {reportLoading ? t("attendance.report.generating") : t("attendance.report.generate")}
                 </Button>
               </div>
 
-              {reportRows ? (
-                <div className="flex justify-end">
-                  <Button variant="outline" onClick={handlePrintReport}>
+              {reportError ? (
+                <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{reportError}</div>
+              ) : null}
+
+              <div className="rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                  <div className="font-medium text-slate-950">{t("attendance.report.resultTitle")}</div>
+                  <Button variant="outline" size="sm" onClick={handlePrintReport} disabled={!reportRows || reportRows.length === 0}>
                     <Printer className="h-4 w-4" />
-                    In report
+                    {t("attendance.report.print")}
                   </Button>
                 </div>
-              ) : null}
-
-              {reportFromDate > reportToDate ? (
-                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc.
-                </div>
-              ) : null}
-
-              <div className="max-h-[58vh] overflow-y-auto rounded-md border border-slate-200">
-                <table className="w-full min-w-[760px] table-fixed text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
-                    <tr className="border-b border-slate-200">
-                      <th className="w-14 px-4 py-3">STT</th>
-                      <th>Nhân viên</th>
-                      <th className="w-44">Phòng ban</th>
-                      <th className="w-28">Đi làm</th>
-                      <th className="w-28">Đi muộn</th>
-                      <th className="w-28">Vắng mặt</th>
-                      <th className="w-32">Nhận diện</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reportLoading ? (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
-                          Đang query dữ liệu thống kê...
-                        </td>
-                      </tr>
-                    ) : reportRows ? (
-                      reportRows.map((row, index) => (
-                        <tr key={row.person.id} className="border-b border-slate-100 last:border-0">
-                          <td className="px-4 py-3 font-mono text-xs text-slate-500">{index + 1}</td>
-                          <td className="truncate pr-4 font-medium">{row.person.full_name}</td>
-                          <td className="truncate pr-4">{row.person.department_name}</td>
-                          <td className="font-semibold text-emerald-700">{row.present_days}</td>
-                          <td className="font-semibold text-amber-700">{row.late_days}</td>
-                          <td className="font-semibold text-slate-700">{row.absent_days}</td>
-                          <td>{row.total_recognitions}</td>
+                <div className="overflow-x-auto">
+                  {reportRows && reportRows.length > 0 ? (
+                    <table className="w-full min-w-[760px] table-fixed text-left text-sm">
+                      <thead className="text-xs uppercase text-slate-500">
+                        <tr className="border-b border-slate-200">
+                          <th className="w-12 py-3">{t("attendance.report.index")}</th>
+                          <th>{t("attendance.report.person")}</th>
+                          <th className="w-40">{t("attendance.report.departmentColumn")}</th>
+                          <th className="w-24">{t("attendance.report.presentDays")}</th>
+                          <th className="w-24">{t("attendance.report.lateDays")}</th>
+                          <th className="w-24">{t("attendance.report.absentDays")}</th>
+                          <th className="w-28">{t("attendance.report.recognitions")}</th>
                         </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
-                          Chọn khoảng ngày rồi bấm Thống kê để xem kết quả.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {reportRows.map((row, index) => (
+                          <tr key={row.person.id} className="border-b border-slate-100">
+                            <td className="py-3 font-mono text-xs text-slate-500">{index + 1}</td>
+                            <td className="truncate pr-4 font-medium">{row.person.full_name}</td>
+                            <td className="truncate pr-4">{row.person.department_name || t("common.notAssigned")}</td>
+                            <td>{row.present_days}</td>
+                            <td>{row.late_days}</td>
+                            <td>{row.absent_days}</td>
+                            <td>{row.total_recognitions}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="p-6 text-center text-sm text-slate-500">{t("attendance.report.empty")}</div>
+                  )}
+                </div>
               </div>
+            </div>
+
+            <div className="flex justify-end border-t border-slate-200 p-5">
+              <Button variant="outline" onClick={() => setReportDialogOpen(false)}>
+                {t("attendance.report.cancel")}
+              </Button>
             </div>
           </div>
         </div>
       ) : null}
 
       {visiblePresenceRow ? (
-        <PresenceDetailDialog
-          row={visiblePresenceRow}
-          workDate={workDate}
-          visible={presenceDialog.visible}
-          onClose={() => setSelectedPresenceRow(null)}
-        />
+        <PresenceDetailDialog row={visiblePresenceRow} workDate={workDate} visible={presenceDialog.visible} onClose={() => setSelectedPresenceRow(null)} />
       ) : null}
-
     </div>
   );
 }
@@ -494,13 +550,13 @@ function PresenceDetailDialog({
   visible: boolean;
   onClose: () => void;
 }) {
+  const t = useTranslations();
+  const locale = useLocale();
   const person = row.person;
+  const threshold = `${String(LATE_AFTER_HOUR).padStart(2, "0")}:${String(LATE_AFTER_MINUTE).padStart(2, "0")}`;
 
   return (
-    <div
-      className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`}
-      onMouseDown={onClose}
-    >
+    <div className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
       <div
         className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(visible)}`}
         onMouseDown={(event) => event.stopPropagation()}
@@ -508,20 +564,20 @@ function PresenceDetailDialog({
         <div className="flex items-start justify-between border-b border-slate-200 p-5">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-slate-950">Chi tiết chấm công</h2>
+              <h2 className="text-lg font-semibold text-slate-950">{t("attendance.dialog.heading")}</h2>
               <PresenceStatusBadge status={row.status} />
             </div>
-            <p className="mt-1 text-sm text-slate-500">Thông tin xuất hiện trong ngày {workDate}.</p>
+            <p className="mt-1 text-sm text-slate-500">{t("attendance.dialog.description", { date: formatDateLocalized(workDate, locale) })}</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Đóng chi tiết chấm công">
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("attendance.dialog.closeDetails")}>
             <X className="h-4 w-4" />
           </Button>
         </div>
 
         <div className="thin-scrollbar flex-1 space-y-5 overflow-y-auto p-5">
           <section className="grid gap-4 md:grid-cols-2">
-            <SnapshotPanel title="Ảnh lần đầu xuất hiện" event={row.first_event} />
-            <SnapshotPanel title="Ảnh lần cuối xuất hiện" event={row.last_event} />
+            <SnapshotPanel title={t("attendance.dialog.firstSnapshot")} event={row.first_event} />
+            <SnapshotPanel title={t("attendance.dialog.lastSnapshot")} event={row.last_event} />
           </section>
 
           <div className="space-y-4">
@@ -531,26 +587,26 @@ function PresenceDetailDialog({
             </div>
 
             <section className="grid gap-3 sm:grid-cols-2">
-              <DetailItem label="Phòng ban" value={person.department_name} />
-              <DetailItem label="Chức danh" value={person.title} />
-              <DetailItem label="Email" value={person.email} />
-              <DetailItem label="Số điện thoại" value={person.phone} />
+              <DetailItem label={t("attendance.dialog.department")} value={person.department_name || t("common.notAssigned")} />
+              <DetailItem label={t("attendance.dialog.position")} value={person.title || t("common.unknown")} />
+              <DetailItem label={t("attendance.dialog.email")} value={person.email || t("common.unknown")} />
+              <DetailItem label={t("attendance.dialog.phone")} value={person.phone || t("common.unknown")} />
             </section>
 
             <section className="grid gap-3 sm:grid-cols-3">
-              <DetailItem label="Lần đầu xuất hiện" value={row.first_seen_at ? formatTime(row.first_seen_at) : "N/A"} />
-              <DetailItem label="Lần cuối xuất hiện" value={row.last_seen_at ? formatTime(row.last_seen_at) : "N/A"} />
-              <DetailItem label="Số lần nhận diện" value={String(row.recognition_count)} />
+              <DetailItem label={t("attendance.dialog.firstSeen")} value={row.first_seen_at ? formatTimeLocalized(row.first_seen_at, locale) : t("attendance.table.na")} />
+              <DetailItem label={t("attendance.dialog.lastSeen")} value={row.last_seen_at ? formatTimeLocalized(row.last_seen_at, locale) : t("attendance.table.na")} />
+              <DetailItem label={t("attendance.dialog.recognitionCount")} value={String(row.recognition_count)} />
             </section>
 
             <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-              Trạng thái được tính theo lần đầu xuất hiện so với mốc {String(LATE_AFTER_HOUR).padStart(2, "0")}:{String(LATE_AFTER_MINUTE).padStart(2, "0")}.
+              {t("attendance.dialog.statusHint", { time: threshold })}
             </div>
           </div>
         </div>
 
         <div className="flex justify-end border-t border-slate-200 p-5">
-          <Button onClick={onClose}>Đóng</Button>
+          <Button onClick={onClose}>{t("attendance.dialog.close")}</Button>
         </div>
       </div>
     </div>
@@ -564,9 +620,10 @@ function SnapshotPanel({
   title: string;
   event: AttendanceEvent | null;
 }) {
+  const t = useTranslations();
+  const locale = useLocale();
   const assetId = event?.snapshot_media_asset_id ?? null;
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(Boolean(assetId));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -575,9 +632,8 @@ function SnapshotPanel({
   }, [previewUrl]);
 
   useEffect(() => {
-    if (!assetId) return;
     const token = getAccessToken();
-    if (!token) return;
+    if (!assetId || !token) return;
 
     const controller = new AbortController();
 
@@ -596,15 +652,13 @@ function SnapshotPanel({
         });
       } catch (err) {
         if (controller.signal.aborted) return;
-        setError(err instanceof Error ? err.message : "Không tải được ảnh.");
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        setError(err instanceof Error ? err.message : t("attendance.dialog.imageLoadFailed"));
       }
     }
 
     void load();
     return () => controller.abort();
-  }, [assetId]);
+  }, [assetId, t]);
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
@@ -613,39 +667,35 @@ function SnapshotPanel({
           <ImageIcon className="h-4 w-4 text-slate-500" />
           {title}
         </div>
-        <span className="font-mono text-xs text-slate-500">{event ? formatTime(event.recognized_at) : "N/A"}</span>
+        <span className="font-mono text-xs text-slate-500">{event ? formatTimeLocalized(event.recognized_at, locale) : t("attendance.table.na")}</span>
       </div>
 
-      {loading ? (
+      {assetId && !previewUrl && !error ? (
         <div className="grid aspect-video place-items-center p-6 text-center text-sm text-slate-500">
           <div className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Đang tải ảnh...
+            {t("attendance.dialog.loadingImage")}
           </div>
         </div>
       ) : previewUrl ? (
-        <div>
-          <div className="relative aspect-video bg-slate-100">
-            <img
-              src={previewUrl}
-              alt={title}
-              className="h-full w-full object-cover"
-            />
-          </div>
+        <div className="relative aspect-video bg-slate-100">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={previewUrl} alt={title} className="h-full w-full object-cover" />
         </div>
       ) : (
         <div className="grid aspect-video place-items-center p-6 text-center text-sm text-slate-500">
-          {error ?? (assetId ? "Không tải được ảnh." : "Chưa có snapshot cho lần xuất hiện này.")}
+          {error ?? (assetId ? t("attendance.dialog.imageLoadFailed") : t("attendance.dialog.noSnapshot"))}
         </div>
       )}
     </div>
   );
 }
 
-function PresenceStatusBadge({ status }: { status: string }) {
-  if (status === "present") return <Badge variant="success">present</Badge>;
-  if (status === "late") return <Badge variant="warning">late</Badge>;
-  return <Badge variant="default">absent</Badge>;
+function PresenceStatusBadge({ status }: { status: PresenceStatus }) {
+  const t = useTranslations("attendance.status");
+  if (status === "present") return <Badge variant="success">{t("present")}</Badge>;
+  if (status === "late") return <Badge variant="warning">{t("late")}</Badge>;
+  return <Badge variant="default">{t("absent")}</Badge>;
 }
 
 function StatusFilterSelect({
@@ -655,13 +705,14 @@ function StatusFilterSelect({
   value: PresenceStatusFilter;
   onChange: (value: PresenceStatusFilter) => void;
 }) {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const options: Array<{ value: PresenceStatusFilter; label: string }> = [
-    { value: "all", label: "Tất cả" },
-    { value: "present", label: "present" },
-    { value: "late", label: "late" },
-    { value: "absent", label: "absent" },
+    { value: "all", label: t("attendance.filters.allStatuses") },
+    { value: "present", label: t("attendance.status.present") },
+    { value: "late", label: t("attendance.status.late") },
+    { value: "absent", label: t("attendance.status.absent") },
   ];
   const selectedOption = options.find((option) => option.value === value) ?? options[0];
 
@@ -675,11 +726,7 @@ function StatusFilterSelect({
         className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
       >
         <span className="flex min-w-0 items-center gap-2">
-          {selectedOption.value === "all" ? (
-            <span className="truncate font-medium text-slate-700">{selectedOption.label}</span>
-          ) : (
-            <PresenceStatusBadge status={selectedOption.value} />
-          )}
+          {selectedOption.value === "all" ? <span className="truncate font-medium text-slate-700">{selectedOption.label}</span> : <PresenceStatusBadge status={selectedOption.value} />}
         </span>
         <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
       </button>
@@ -696,11 +743,7 @@ function StatusFilterSelect({
               }}
               className={value === option.value ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
             >
-              {option.value === "all" ? (
-                <span>Tất cả trạng thái</span>
-              ) : (
-                <PresenceStatusBadge status={option.value} />
-              )}
+              {option.value === "all" ? <span>{t("attendance.filters.allStatuses")}</span> : <PresenceStatusBadge status={option.value} />}
             </button>
           ))}
         </div>
@@ -736,7 +779,9 @@ function buildPresenceReport(
         return { status: "absent" as PresenceStatus, recognition_count: 0 };
       }
 
-      const lateThreshold = new Date(`${date}T${String(LATE_AFTER_HOUR).padStart(2, "0")}:${String(LATE_AFTER_MINUTE).padStart(2, "0")}:00Z`);
+      const lateThreshold = new Date(
+        `${date}T${String(LATE_AFTER_HOUR).padStart(2, "0")}:${String(LATE_AFTER_MINUTE).padStart(2, "0")}:00Z`,
+      );
       const status = new Date(personEvents[0].recognized_at).getTime() > lateThreshold.getTime() ? "late" : "present";
 
       return { status: status as PresenceStatus, recognition_count: personEvents.length };
@@ -781,27 +826,29 @@ function getDepartmentScopeIds(departmentId: string, departments: Department[]) 
 }
 
 function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 function DatePicker({
   value,
   onChange,
+  minDate,
+  maxDate,
 }: {
   value: string;
   onChange: (value: string) => void;
+  minDate?: string;
+  maxDate?: string;
 }) {
+  const t = useTranslations("attendance.filters");
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleMonth, setVisibleMonth] = useState(() => monthStart(value));
   const selectedDate = parseDate(value);
   const days = calendarDays(visibleMonth);
-  const monthLabel = visibleMonth.toLocaleDateString("vi-VN", { month: "long", year: "numeric", timeZone: "UTC" });
+  const monthLabel = visibleMonth.toLocaleDateString(locale, { month: "long", year: "numeric", timeZone: "UTC" });
+  const weekdayKeys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
   useOutsideClick(containerRef, open, () => setOpen(false));
 
@@ -818,7 +865,7 @@ function DatePicker({
       >
         <span className="flex min-w-0 items-center gap-2">
           <CalendarSearch className="h-4 w-4 shrink-0 text-slate-500" />
-          <span className="truncate font-medium text-slate-800">{formatDateLabel(value)}</span>
+          <span className="truncate font-medium text-slate-800">{formatDateLocalized(value, locale)}</span>
         </span>
         <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
       </button>
@@ -826,51 +873,43 @@ function DatePicker({
       {open ? (
         <div className="absolute left-0 top-11 z-30 w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
-            <button
-              type="button"
-              onClick={() => shiftMonth(-1)}
-              className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              aria-label="Tháng trước"
-            >
+            <button type="button" onClick={() => shiftMonth(-1)} className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label={t("previousMonth")}>
               <ChevronLeft className="h-4 w-4" />
             </button>
             <div className="text-sm font-semibold capitalize text-slate-950">{monthLabel}</div>
-            <button
-              type="button"
-              onClick={() => shiftMonth(1)}
-              className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              aria-label="Tháng sau"
-            >
+            <button type="button" onClick={() => shiftMonth(1)} className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label={t("nextMonth")}>
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
 
           <div className="p-3">
             <div className="grid grid-cols-7 gap-1 pb-2 text-center text-[11px] font-semibold uppercase text-slate-400">
-              {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((day) => (
-                <div key={day}>{day}</div>
-              ))}
+              {weekdayKeys.map((day) => <div key={day}>{t(`weekdays.${day}`)}</div>)}
             </div>
             <div className="grid grid-cols-7 gap-1">
               {days.map((day) => {
                 const dateValue = toDateValue(day);
                 const inMonth = day.getUTCMonth() === visibleMonth.getUTCMonth();
                 const selected = sameDay(day, selectedDate);
+                const disabled = (minDate && dateValue < minDate) || (maxDate && dateValue > maxDate);
 
                 return (
                   <button
                     key={dateValue}
                     type="button"
+                    disabled={Boolean(disabled)}
                     onClick={() => {
                       onChange(dateValue);
                       setOpen(false);
                     }}
                     className={
-                      selected
-                        ? "grid h-9 place-items-center rounded-md bg-slate-950 text-sm font-semibold text-white"
-                        : inMonth
-                          ? "grid h-9 place-items-center rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100"
-                          : "grid h-9 place-items-center rounded-md text-sm text-slate-300 hover:bg-slate-50"
+                      disabled
+                        ? "grid h-9 place-items-center rounded-md text-sm text-slate-300"
+                        : selected
+                          ? "grid h-9 place-items-center rounded-md bg-slate-950 text-sm font-semibold text-white"
+                          : inMonth
+                            ? "grid h-9 place-items-center rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100"
+                            : "grid h-9 place-items-center rounded-md text-sm text-slate-300 hover:bg-slate-50"
                     }
                   >
                     {day.getUTCDate()}
@@ -915,13 +954,20 @@ function sameDay(a: Date, b: Date) {
   return toDateValue(a) === toDateValue(b);
 }
 
-function formatDateLabel(value: string) {
-  return parseDate(value).toLocaleDateString("vi-VN", {
+function formatDateLocalized(value: string, locale: string) {
+  return parseDate(value).toLocaleDateString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     timeZone: "UTC",
   });
+}
+
+function formatTimeLocalized(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function DepartmentTreeSelect({
@@ -933,6 +979,7 @@ function DepartmentTreeSelect({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const t = useTranslations("attendance.filters");
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
@@ -941,7 +988,7 @@ function DepartmentTreeSelect({
   );
 
   const selectedDepartment = departments.find((department) => department.id === value);
-  const selectedLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : "Tất cả phòng ban";
+  const selectedLabel = selectedDepartment ? `${selectedDepartment.code} · ${selectedDepartment.name}` : t("allDepartments");
   const normalizedQuery = query.trim().toLowerCase();
 
   useOutsideClick(containerRef, open, () => setOpen(false));
@@ -974,7 +1021,7 @@ function DepartmentTreeSelect({
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Tìm phòng ban"
+                placeholder={t("departmentSearchPlaceholder")}
                 className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm focus:border-transparent focus:ring-0"
               />
             </div>
@@ -990,7 +1037,7 @@ function DepartmentTreeSelect({
               className={value === "all" ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
             >
               <Building2 className="h-4 w-4" />
-              Tất cả phòng ban
+              {t("allDepartments")}
             </button>
 
             <div className="mt-1 space-y-1">
@@ -1064,7 +1111,7 @@ function DepartmentTreeOption({
             onToggle(department.id);
           }}
           className="grid h-5 w-5 shrink-0 place-items-center rounded hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-transparent"
-          aria-label={expanded ? `Thu gọn ${department.name}` : `Mở rộng ${department.name}`}
+          aria-label={expanded ? `Collapse ${department.name}` : `Expand ${department.name}`}
         >
           <ChevronRight className={expanded ? "h-4 w-4 rotate-90 transition-transform" : "h-4 w-4 transition-transform"} />
         </button>

@@ -13,6 +13,8 @@ from app.application.interfaces.repositories.attendance_repository import Attend
 from app.domain.shared.enums import EventDirection
 from app.infrastructure.persistence.models.person_model import PersonModel
 from app.infrastructure.persistence.models.recognition_event_model import RecognitionEventModel
+from app.infrastructure.persistence.models.spoof_alert_event_model import SpoofAlertEventModel
+from app.infrastructure.persistence.models.unknown_event_model import UnknownEventModel
 
 
 @dataclass(slots=True)
@@ -36,6 +38,17 @@ class AttendanceSummaryView:
     unique_persons: int
     total_entries: int
     total_exits: int
+    unknown_count: int
+    spoof_alert_count: int
+
+
+@dataclass(slots=True)
+class AttendanceHourlyStatView:
+    hour: str
+    events: int
+    entries: int
+    exits: int
+    alerts: int
 
 
 class SqlAlchemyAttendanceRepository(AttendanceRepository):
@@ -148,6 +161,16 @@ class SqlAlchemyAttendanceRepository(AttendanceRepository):
         )
 
     def get_daily_summary(self, work_date: date) -> AttendanceSummaryView:
+        unknown_count_subquery = (
+            select(func.count(UnknownEventModel.id))
+            .where(cast(UnknownEventModel.detected_at, Date) == work_date)
+            .scalar_subquery()
+        )
+        spoof_count_subquery = (
+            select(func.count(SpoofAlertEventModel.id))
+            .where(cast(SpoofAlertEventModel.detected_at, Date) == work_date)
+            .scalar_subquery()
+        )
         stmt = select(
             func.count(RecognitionEventModel.id).label("total_events"),
             func.count(distinct(RecognitionEventModel.person_id)).label("unique_persons"),
@@ -163,6 +186,8 @@ class SqlAlchemyAttendanceRepository(AttendanceRepository):
                 ),
                 0,
             ).label("total_exits"),
+            func.coalesce(unknown_count_subquery, 0).label("unknown_count"),
+            func.coalesce(spoof_count_subquery, 0).label("spoof_alert_count"),
         ).where(cast(RecognitionEventModel.recognized_at, Date) == work_date)
         row = self._session.execute(stmt).one()
         return AttendanceSummaryView(
@@ -171,4 +196,74 @@ class SqlAlchemyAttendanceRepository(AttendanceRepository):
             unique_persons=int(row.unique_persons or 0),
             total_entries=int(row.total_entries or 0),
             total_exits=int(row.total_exits or 0),
+            unknown_count=int(row.unknown_count or 0),
+            spoof_alert_count=int(row.spoof_alert_count or 0),
         )
+
+    def get_hourly_stats(self, work_date: date) -> list[AttendanceHourlyStatView]:
+        recognition_stmt = (
+            select(
+                func.extract("hour", RecognitionEventModel.recognized_at).label("hour"),
+                func.count(RecognitionEventModel.id).label("events"),
+                func.coalesce(
+                    func.sum(case((RecognitionEventModel.event_direction == EventDirection.ENTRY, 1), else_=0)),
+                    0,
+                ).label("entries"),
+                func.coalesce(
+                    func.sum(case((RecognitionEventModel.event_direction == EventDirection.EXIT, 1), else_=0)),
+                    0,
+                ).label("exits"),
+            )
+            .where(
+                cast(RecognitionEventModel.recognized_at, Date) == work_date,
+                RecognitionEventModel.is_valid.is_(True),
+            )
+            .group_by(func.extract("hour", RecognitionEventModel.recognized_at))
+        )
+        unknown_stmt = (
+            select(
+                func.extract("hour", UnknownEventModel.detected_at).label("hour"),
+                func.count(UnknownEventModel.id).label("alerts"),
+            )
+            .where(cast(UnknownEventModel.detected_at, Date) == work_date)
+            .group_by(func.extract("hour", UnknownEventModel.detected_at))
+        )
+        spoof_stmt = (
+            select(
+                func.extract("hour", SpoofAlertEventModel.detected_at).label("hour"),
+                func.count(SpoofAlertEventModel.id).label("alerts"),
+            )
+            .where(cast(SpoofAlertEventModel.detected_at, Date) == work_date)
+            .group_by(func.extract("hour", SpoofAlertEventModel.detected_at))
+        )
+
+        recognition_rows = self._session.execute(recognition_stmt).all()
+        unknown_rows = self._session.execute(unknown_stmt).all()
+        spoof_rows = self._session.execute(spoof_stmt).all()
+
+        buckets = {
+            hour: AttendanceHourlyStatView(
+                hour=f"{hour:02d}:00",
+                events=0,
+                entries=0,
+                exits=0,
+                alerts=0,
+            )
+            for hour in range(24)
+        }
+
+        for row in recognition_rows:
+            hour = int(row.hour)
+            buckets[hour].events = int(row.events or 0)
+            buckets[hour].entries = int(row.entries or 0)
+            buckets[hour].exits = int(row.exits or 0)
+
+        for row in unknown_rows:
+            hour = int(row.hour)
+            buckets[hour].alerts += int(row.alerts or 0)
+
+        for row in spoof_rows:
+            hour = int(row.hour)
+            buckets[hour].alerts += int(row.alerts or 0)
+
+        return [buckets[hour] for hour in range(24)]

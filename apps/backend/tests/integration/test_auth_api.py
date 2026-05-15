@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.application.use_cases.auth import (
+    ChangePasswordUseCase,
     GetCurrentUserUseCase,
     LoginUseCase,
     LogoutUseCase,
@@ -41,6 +42,10 @@ class _UserRepo:
     def create_user(self, *, username: str, password_hash: str, is_active: bool = True):
         _ = username, password_hash, is_active
         return self.user
+
+    def update_password(self, user_id, password_hash):
+        _ = user_id
+        self.user = replace(self.user, password_hash=password_hash)
 
     def update_last_login(self, user_id, last_login_at):
         _ = user_id
@@ -77,6 +82,14 @@ class _RefreshRepo:
         self.items[token_hash] = replace(item, revoked_at=revoked_at)
         return True
 
+    def revoke_all_for_user(self, user_id, revoked_at):
+        revoked = 0
+        for token_hash, item in list(self.items.items()):
+            if item.user_id == user_id and item.revoked_at is None:
+                self.items[token_hash] = replace(item, revoked_at=revoked_at)
+                revoked += 1
+        return revoked
+
     def touch_last_used(self, token_hash: str, used_at):
         item = self.items.get(token_hash)
         if item is not None:
@@ -99,6 +112,7 @@ def _build_auth_services():
         RefreshAccessTokenUseCase(user_repository=user_repo, refresh_token_repository=refresh_repo, settings=settings),
         LogoutUseCase(refresh_repo),
         GetCurrentUserUseCase(user_repo, settings),
+        ChangePasswordUseCase(user_repository=user_repo, refresh_token_repository=refresh_repo, settings=settings),
     )
 
 
@@ -115,11 +129,12 @@ def test_auth_token_lifecycle_and_ws_connect(monkeypatch):
     import app.main as app_main
 
     importlib.reload(app_main)
-    login_uc, refresh_uc, logout_uc, me_uc = _build_auth_services()
+    login_uc, refresh_uc, logout_uc, me_uc, change_password_uc = _build_auth_services()
     app_main.app.dependency_overrides[dependencies.get_login_use_case] = lambda: login_uc
     app_main.app.dependency_overrides[dependencies.get_refresh_access_token_use_case] = lambda: refresh_uc
     app_main.app.dependency_overrides[dependencies.get_logout_use_case] = lambda: logout_uc
     app_main.app.dependency_overrides[dependencies.get_current_user_use_case] = lambda: me_uc
+    app_main.app.dependency_overrides[dependencies.get_change_password_use_case] = lambda: change_password_uc
 
     with TestClient(app_main.app) as client:
         login_resp = client.post("/api/v1/auth/login", json={"username": "admin", "password": "secret"})
@@ -148,3 +163,45 @@ def test_auth_token_lifecycle_and_ws_connect(monkeypatch):
         assert logout_resp.status_code == 200
         refresh_again = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
         assert refresh_again.status_code == 422
+
+
+def test_change_password_requires_current_password_and_invalidates_prior_tokens(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setenv("ENABLE_EVENT_CONSUMER", "false")
+    monkeypatch.setenv("JWT_SECRET_KEY", "secret")
+    monkeypatch.setenv("JWT_ISSUER", "issuer")
+    monkeypatch.setenv("JWT_AUDIENCE", "aud")
+    monkeypatch.setenv("AUTH_SEED_ADMIN_USERNAME", "admin")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    import app.main as app_main
+
+    importlib.reload(app_main)
+    login_uc, refresh_uc, logout_uc, me_uc, change_password_uc = _build_auth_services()
+    app_main.app.dependency_overrides[dependencies.get_login_use_case] = lambda: login_uc
+    app_main.app.dependency_overrides[dependencies.get_refresh_access_token_use_case] = lambda: refresh_uc
+    app_main.app.dependency_overrides[dependencies.get_logout_use_case] = lambda: logout_uc
+    app_main.app.dependency_overrides[dependencies.get_current_user_use_case] = lambda: me_uc
+    app_main.app.dependency_overrides[dependencies.get_change_password_use_case] = lambda: change_password_uc
+
+    with TestClient(app_main.app) as client:
+        login_resp = client.post("/api/v1/auth/login", json={"username": "admin", "password": "secret"})
+        assert login_resp.status_code == 200
+        tokens = login_resp.json()
+
+        change_resp = client.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "secret", "new_password": "secret-new"},
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert change_resp.status_code == 200
+
+        refresh_resp = client.post("/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+        assert refresh_resp.status_code == 422
+
+        old_login_resp = client.post("/api/v1/auth/login", json={"username": "admin", "password": "secret"})
+        assert old_login_resp.status_code == 422
+
+        next_login_resp = client.post("/api/v1/auth/login", json={"username": "admin", "password": "secret-new"})
+        assert next_login_resp.status_code == 200

@@ -14,3 +14,4 @@ def test_build_container_initializes_core_dependencies() -> None:
     assert container.engine is not None
     assert container.session_factory is not None
     assert container.session_provider is not None
+    assert container.dashboard_health_state is not None

@@ -34,3 +34,18 @@ class AttendanceDailySummaryResponse(BaseModel):
     unique_persons: int
     total_entries: int
     total_exits: int
+    unknown_count: int
+    spoof_alert_count: int
+
+
+class AttendanceHourlyStatItemResponse(BaseModel):
+    hour: str
+    events: int
+    entries: int
+    exits: int
+    alerts: int
+
+
+class AttendanceHourlyStatsResponse(BaseModel):
+    work_date: date
+    items: list[AttendanceHourlyStatItemResponse]

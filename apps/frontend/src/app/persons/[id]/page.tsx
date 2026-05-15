@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -57,6 +58,8 @@ export default function PersonDetailPage() {
   const [toastVisible, setToastVisible] = useState(false);
   const editDialog = useDialogTransition(editing && editForm ? editForm : null);
   const visibleEditForm = editDialog.value;
+  const profileImageAssetId = getLatestIndexedProfileAssetId(registrations);
+  const [profileImageFailed, setProfileImageFailed] = useState(false);
 
   useEffect(() => {
     if (!personId) return;
@@ -99,6 +102,10 @@ export default function PersonDetailPage() {
       window.clearTimeout(removeTimer);
     };
   }, [toast]);
+
+  useEffect(() => {
+    setProfileImageFailed(false);
+  }, [profileImageAssetId]);
 
   const departmentName = person?.department_id
     ? departments.find((department) => department.id === person.department_id)?.name ?? "Unknown"
@@ -229,8 +236,22 @@ export default function PersonDetailPage() {
         <Card>
           <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <div className="grid aspect-square place-items-center rounded-lg bg-slate-100 text-5xl font-semibold text-slate-400">
-              {person.full_name.split(" ").slice(-1)[0][0]}
+            <div className="grid aspect-square overflow-hidden rounded-lg bg-slate-100">
+              {profileImageAssetId && !profileImageFailed ? (
+                <Image
+                  src={`/api/v1/media-assets/${profileImageAssetId}/content`}
+                  alt={`Profile image of ${person.full_name}`}
+                  width={640}
+                  height={640}
+                  unoptimized
+                  className="h-full w-full object-cover"
+                  onError={() => setProfileImageFailed(true)}
+                />
+              ) : (
+                <div className="grid h-full w-full place-items-center text-5xl font-semibold text-slate-400">
+                  {person.full_name.split(" ").slice(-1)[0][0]}
+                </div>
+              )}
             </div>
             <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><PersonStatusBadge status={person.status} /></div>
             <div className="flex items-center justify-between"><span className="text-slate-500">Title</span><span>{person.title}</span></div>
@@ -462,4 +483,16 @@ function getErrorDetailsText(details: unknown) {
   } catch {
     return "";
   }
+}
+
+function getLatestIndexedProfileAssetId(registrations: FaceRegistration[]) {
+  return [...registrations]
+    .filter(
+      (registration) =>
+        registration.registration_status === "indexed" &&
+        registration.face_image_media_asset_id !== null &&
+        registration.indexed_at !== null,
+    )
+    .sort((left, right) => Date.parse(right.indexed_at ?? "") - Date.parse(left.indexed_at ?? ""))
+    .at(0)?.face_image_media_asset_id ?? null;
 }

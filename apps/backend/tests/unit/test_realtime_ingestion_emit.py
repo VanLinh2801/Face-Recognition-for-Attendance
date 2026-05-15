@@ -41,6 +41,7 @@ async def _run_handler_with_status(status: IngestStatus) -> int:
         session_factory=_FakeSessionFactory(),
         create_uow=lambda _session: object(),
         realtime_event_bus=bus,
+        create_person_repository=lambda _session: SimpleNamespace(exists=lambda _person_id: True, get_person=lambda _person_id: None),
         build_ingest_recognition_event_use_case=lambda _session, _uow: _FakeUseCase(status),
     )
     handler = BackendEventHandlers(container).handle_recognition_event

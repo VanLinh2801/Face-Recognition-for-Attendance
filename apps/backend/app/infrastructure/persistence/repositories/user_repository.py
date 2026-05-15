@@ -54,6 +54,14 @@ class SqlAlchemyUserRepository(UserRepository):
         self._session.flush()
         return _to_domain(item)
 
+    def update_password(self, user_id: UUID, password_hash: str) -> None:
+        item = self._session.get(UserModel, user_id)
+        if item is None:
+            return
+        item.password_hash = password_hash
+        item.updated_at = datetime.now(timezone.utc)
+        self._session.flush()
+
     def update_last_login(self, user_id: UUID, last_login_at: datetime) -> None:
         item = self._session.get(UserModel, user_id)
         if item is None:

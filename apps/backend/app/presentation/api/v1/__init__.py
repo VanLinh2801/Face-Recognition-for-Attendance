@@ -14,6 +14,7 @@ from app.presentation.api.v1 import (
     persons_registrations,
     recognition_events,
     spoof_alert_events,
+    system,
     unknown_events,
 )
 
@@ -29,6 +30,7 @@ router.include_router(events.router)
 router.include_router(recognition_events.router)
 router.include_router(unknown_events.router)
 router.include_router(spoof_alert_events.router)
+router.include_router(system.router)
 router.include_router(attendance_exceptions.router)
 router.include_router(media_assets.router)
 router.include_router(media_assets.internal_router)

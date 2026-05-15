@@ -37,15 +37,7 @@ def _parse_channels(raw_channels: str | None) -> set[RealtimeChannel]:
 async def realtime_events(websocket: WebSocket) -> None:
     container = get_container_from_websocket(websocket)
     try:
-        # DEV ONLY: Allow anonymous WebSocket connections for testing
-        # TODO: Re-enable auth in production
-        # principal = authenticate_websocket(websocket, container)
-        # Mock principal for dev
-        from app.core.security import AuthenticatedPrincipal
-        principal = AuthenticatedPrincipal(
-            subject="dev-user",
-            claims={"roles": ["admin"], "session_id": "dev-session"},
-        )
+        principal = authenticate_websocket(websocket, container)
         channels = _parse_channels(websocket.query_params.get("channels"))
     except (ValidationError, ValueError) as exc:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason=str(exc)) from exc

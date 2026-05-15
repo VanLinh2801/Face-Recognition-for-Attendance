@@ -4,6 +4,7 @@ import importlib
 import json
 import time
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import anyio
@@ -13,7 +14,8 @@ from app.application.use_cases.event_ingestion import IngestResult, IngestStatus
 from app.core import dependencies
 from app.domain.auth.entities import User
 from app.domain.face_registrations.entities import PersonFaceRegistration
-from app.domain.shared.enums import RegistrationStatus
+from app.domain.shared.enums import RegistrationStatus, SpoofReviewStatus, SpoofSeverity
+from app.domain.spoof_alert_events.entities import SpoofAlertEvent
 from app.infrastructure.integrations.contract_validator import ContractValidator
 from app.infrastructure.integrations.event_handlers import BackendEventHandlers, register_backend_event_handlers
 from app.infrastructure.integrations.redis_event_consumer import RedisEventConsumer
@@ -45,11 +47,12 @@ class _FakeRedisClient:
 
 
 class _StaticIngestUseCase:
-    def __init__(self, status: IngestStatus) -> None:
+    def __init__(self, status: IngestStatus, item=None) -> None:
         self._status = status
+        self._item = item
 
     def execute(self, _envelope):
-        return IngestResult(status=self._status)
+        return IngestResult(status=self._status, item=self._item)
 
 
 class _FakeCreateRegistrationUseCase:
@@ -452,6 +455,11 @@ def test_recognition_flow_processed_then_duplicate(monkeypatch):
 
     with TestClient(app_main.app) as client:
         container = app_main.app.state.container
+        monkeypatch.setattr(
+            type(container),
+            "create_person_repository",
+            lambda self, _session: SimpleNamespace(exists=lambda _person_id: True, get_person=lambda _person_id: None),
+        )
         consumer, fake_client = _build_consumer(container)
         metrics = container.websocket_hub.metrics
         with client.websocket_connect(f"/api/ws/v1/realtime?token={token}&channels=events.business") as ws:
@@ -482,12 +490,37 @@ def test_recognition_flow_processed_then_duplicate(monkeypatch):
 def test_spoof_flow_processed_emits_business_event(monkeypatch):
     app_main = _build_app(monkeypatch)
     token = _token()
+    person_id = uuid4()
+    event_id = uuid4()
+    snapshot_media_asset_id = uuid4()
 
     with TestClient(app_main.app) as client:
         monkeypatch.setattr(
             type(app_main.app.state.container),
+            "create_person_repository",
+            lambda self, _session: SimpleNamespace(get_person=lambda _person_id: SimpleNamespace(full_name="WebSocket Test Person")),
+        )
+        monkeypatch.setattr(
+            type(app_main.app.state.container),
             "build_ingest_spoof_alert_event_use_case",
-            lambda self, _session, _uow: _StaticIngestUseCase(IngestStatus.PROCESSED),
+            lambda self, _session, _uow: _StaticIngestUseCase(
+                IngestStatus.PROCESSED,
+                SpoofAlertEvent(
+                    id=event_id,
+                    person_id=person_id,
+                    snapshot_media_asset_id=snapshot_media_asset_id,
+                    detected_at=datetime(2026, 5, 6, tzinfo=timezone.utc),
+                    spoof_score=0.98,
+                    event_source="pipeline",
+                    dedupe_key="sk-1",
+                    raw_payload={"track_id": "track-2"},
+                    severity=SpoofSeverity.HIGH,
+                    review_status=SpoofReviewStatus.NEW,
+                    notes=None,
+                    created_at=datetime(2026, 5, 6, tzinfo=timezone.utc),
+                    updated_at=datetime(2026, 5, 6, tzinfo=timezone.utc),
+                ),
+            ),
         )
         consumer, fake_client = _build_consumer(app_main.app.state.container)
         with client.websocket_connect(f"/api/ws/v1/realtime?token={token}&channels=events.business") as ws:
@@ -495,6 +528,20 @@ def test_spoof_flow_processed_emits_business_event(monkeypatch):
             message = ws.receive_json()
             assert message["event_type"] == "spoof_alert.detected"
             assert message["channel"] == "events.business"
+            assert message["payload"] == {
+                "id": str(event_id),
+                "person_id": str(person_id),
+                "person_name": "WebSocket Test Person",
+                "detected_at": "2026-05-06T00:00:00+00:00",
+                "spoof_score": 0.98,
+                "severity": "high",
+                "event_source": "pipeline",
+                "review_status": "new",
+                "notes": None,
+                "snapshot_media_asset_id": str(snapshot_media_asset_id),
+                "track_id": "track-2",
+                "dedupe_key": "sk-1",
+            }
 
     assert fake_client.acked == [("pipeline.backend.events", "backend-consumers", "401-0")]
 

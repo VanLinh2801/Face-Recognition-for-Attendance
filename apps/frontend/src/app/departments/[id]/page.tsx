@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -8,11 +9,13 @@ import { DepartmentDetailView } from "@/components/departments/department-detail
 import { PageHeader } from "@/components/data/page-header";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { getAccessToken } from "@/lib/auth-client";
+import { getTranslatedBackendError } from "@/lib/translated-backend-error";
 import type { Department, PageResult, Person } from "@/lib/types";
 
 type DepartmentPerson = Person & { department_name: string };
 
 export default function DepartmentDetailPage() {
+  const t = useTranslations();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const departmentId = params.id;
@@ -53,12 +56,12 @@ export default function DepartmentDetailPage() {
         setPersons(
           personsPage.items.map((person) => ({
             ...person,
-            department_name: person.department_id ? departmentMap.get(person.department_id) ?? "Không xác định" : "Không trực thuộc",
+            department_name: person.department_id ? departmentMap.get(person.department_id) ?? t("common.unknown") : t("common.notAssigned"),
           })),
         );
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : "Không thể tải dữ liệu phòng ban.");
+        setError(err instanceof ApiError ? getTranslatedBackendError(t, err, "departments") : t("errors.system.requestFailed"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -69,27 +72,27 @@ export default function DepartmentDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [departmentId, router]);
+  }, [departmentId, router, t]);
 
   const parentName = useMemo(() => {
-    if (!department?.parent_id) return "Không trực thuộc";
-    return departments.find((item) => item.id === department.parent_id)?.name ?? "Không xác định";
-  }, [department, departments]);
+    if (!department?.parent_id) return t("common.notAssigned");
+    return departments.find((item) => item.id === department.parent_id)?.name ?? t("common.unknown");
+  }, [department, departments, t]);
 
   return (
     <div>
       <PageHeader
-        title={department?.name ?? "Phòng ban"}
-        description={department ? `${department.code} · Trực thuộc: ${parentName}` : "Đang tải dữ liệu phòng ban."}
+        title={department?.name ?? t("departments.page.title")}
+        description={department ? `${department.code} · ${t("departments.list.parent")}: ${parentName}` : t("departments.page.detailLoadingDescription")}
       />
       <div className="space-y-4 p-6">
         <Link href="/departments" className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-950">
           <ArrowLeft className="h-4 w-4" />
-          Quay lại danh sách phòng ban
+          {t("departments.page.backToList")}
         </Link>
 
         {loading ? (
-          <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">Đang tải dữ liệu phòng ban...</div>
+          <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">{t("departments.page.detailLoading")}</div>
         ) : null}
 
         {!loading && error ? (
