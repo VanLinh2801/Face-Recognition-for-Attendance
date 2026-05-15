@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from dataclasses import dataclass, field
 from uuid import uuid4
 
@@ -80,6 +81,10 @@ class WebSocketHub:
 
     async def publish(self, envelope: RealtimeEnvelope) -> None:
         message = envelope.to_message()
+
+        # Gán timestamp trước khi gửi để đo display latency
+        message["time_sent"] = int(time.time() * 1000)
+
         logger.debug(
             "[WS_HUB] publish channel=%s event_type=%s dedupe_key=%s connections=%d",
             envelope.channel.value,

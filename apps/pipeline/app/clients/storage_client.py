@@ -1,8 +1,10 @@
 from minio import Minio
 from app.core.config import settings
 from app.utils.logger import logger
+from app.utils.metrics_collector import metrics_collector
 from typing import Optional
 import io
+import time
 
 class StorageClient:
     def __init__(self):
@@ -30,6 +32,7 @@ class StorageClient:
         bucket_name: Optional[str] = None,
     ):
         bucket = bucket_name or settings.MINIO_BUCKET_NAME
+        start_time = time.perf_counter()
         try:
             data = io.BytesIO(content)
             self.client.put_object(
@@ -39,7 +42,10 @@ class StorageClient:
                 len(content),
                 content_type=content_type
             )
-            logger.info(f"[MINIO] ✓ Uploaded {len(content)//1024}KB → {object_key}")
+            end_time = time.perf_counter()
+            upload_latency_ms = (end_time - start_time) * 1000
+            metrics_collector.record_upload_complete(upload_latency_ms)
+            logger.info(f"[MINIO] ✓ Uploaded {len(content)//1024}KB → {object_key} ({upload_latency_ms:.2f}ms)")
             return True
         except Exception as e:
             logger.error(f"[MINIO] ✗ Upload failed: {e}")

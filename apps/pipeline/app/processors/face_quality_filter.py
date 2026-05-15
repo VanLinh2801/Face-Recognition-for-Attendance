@@ -1,8 +1,10 @@
 import cv2
 import numpy as np
+import time
 from app.core.config import settings
 from app.processors.base import BaseProcessor
 from app.utils.logger import logger
+from app.utils.metrics_collector import metrics_collector
 
 
 class FaceQualityFilter(BaseProcessor):
@@ -28,6 +30,8 @@ class FaceQualityFilter(BaseProcessor):
         self.min_brightness = settings.MIN_FACE_BRIGHTNESS
 
     def process(self, context: dict):
+        start_time = time.perf_counter()
+
         faces = context.get("faces_to_emit", [])
         if not faces:
             context["filtered_faces"] = []
@@ -50,6 +54,25 @@ class FaceQualityFilter(BaseProcessor):
         # Feedback cho tracker: track_id → frame_sequence của các face đã pass
         passed_track_ids = {f["track_id"]: context.get("frame_sequence") for f in filtered}
         context["_filter_passed_track_ids"] = passed_track_ids
+
+        # Measure filter latency and record metrics
+        end_time = time.perf_counter()
+        filter_latency_ms = (end_time - start_time) * 1000
+
+        total = len(faces)
+        passed = len(filtered)
+        rejected = total - passed
+
+        metrics_collector.record_detection(
+            passed=passed,
+            rejected=rejected,
+            filter_latency_ms=filter_latency_ms
+        )
+
+        logger.info(
+            f"[QUALITY] {passed}/{total} faces passed | rejected={rejected} | "
+            f"filter_latency={filter_latency_ms:.2f}ms"
+        )
 
         return context
 

@@ -102,5 +102,5 @@ Chạy file script đã chuẩn bị sẵn ở thư mục gốc:
 
 ### 6. Kiểm tra ảnh từ pipeline gửi đến ai_service
 ```bash
-python debug_face_image.py listen
+python scripts/collect_debug_images.py
 ```

@@ -16,6 +16,7 @@ from app.processors.face_cropper import FaceCropper
 from app.processors.face_quality_filter import FaceQualityFilter
 from app.core.config import settings
 from app.utils.logger import logger
+from app.utils.metrics_collector import metrics_collector
 
 class PipelineService:
     def __init__(self):
@@ -31,6 +32,9 @@ class PipelineService:
     async def handle_realtime_frame(self, source_id: str, frame):
         self.frame_count += 1
         h, w = frame.shape[:2]
+
+        # Record input frame
+        metrics_collector.record_input_frame()
 
         if self.frame_count % 100 == 0:
             logger.info(f"[PIPELINE] ♥ Heartbeat frame={self.frame_count} res={w}x{h}")
@@ -90,7 +94,33 @@ class PipelineService:
         for face in processed_faces:
             cached_ref = self.track_frame_refs.get(face['track_id'])
             context['full_frame_ref'] = cached_ref
+
+            # Record payload size
+            if face.get('image_b64'):
+                payload_size_kb = len(face['image_b64'].encode('utf-8')) / 1024
+                metrics_collector.record_payload_size(payload_size_kb)
+
+            # Record aspect ratio distortion if available
+            distortion = face.get('_metrics_aspect_ratio_distortion', 0)
+            if distortion > 0:
+                metrics_collector.record_aspect_ratio_distortion(distortion)
+
             await self._publish_to_ai_service(context, face)
+
+            # Record frame sent for detection-to-send latency
+            track_id = face.get('track_id')
+            if track_id:
+                metrics_collector.record_track_change()
+                completed = metrics_collector.record_frame_sent(track_id)
+                if completed:
+                    logger.debug(f"[DETECTION_LATENCY] track={track_id} completed_5_frames")
+
+        # Record processed frame
+        if processed_faces:
+            metrics_collector.record_processed_frame()
+
+        # Log metrics summary periodically
+        metrics_collector.log_summary()
 
     async def handle_registration(self, envelope: dict):
         payload = envelope.get("payload", {})
@@ -324,7 +354,15 @@ class PipelineService:
         object_key = f"full_frames/{safe_source_id}/{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.jpg"
         _, buffer = cv2.imencode('.jpg', frame)
         image_bytes = buffer.tobytes()
-        asyncio.create_task(asyncio.to_thread(storage_client.upload_image, object_key, image_bytes))
+
+        # Measure dispatch time
+        dispatch_start = time.perf_counter()
+        task = asyncio.create_task(asyncio.to_thread(storage_client.upload_image, object_key, image_bytes))
+        dispatch_end = time.perf_counter()
+
+        dispatch_ms = (dispatch_end - dispatch_start) * 1000
+        metrics_collector.record_upload_dispatch(dispatch_ms)
+
         return {"bucket_name": settings.MINIO_BUCKET_NAME, "object_key": object_key}
 
     async def _publish_to_ai_service(self, context, face):

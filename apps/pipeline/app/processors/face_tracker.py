@@ -4,6 +4,7 @@ import numpy as np
 from app.core.config import settings
 from app.processors.base import BaseProcessor
 from app.utils.logger import logger
+from app.utils.metrics_collector import metrics_collector
 
 
 class FaceTracker(BaseProcessor):
@@ -16,6 +17,8 @@ class FaceTracker(BaseProcessor):
         self.max_initial = settings.MAX_INITIAL_SNAPSHOTS
         # {track_id: [frame_sequence_1, frame_sequence_2, ...]} — các frame đã pass quality
         self._filter_passed = {}
+        # Track IDs từ frame trước để detect ID switches
+        self._previous_track_ids: set = set()
 
     def process(self, context: dict):
         detections = context.get('detections', [])
@@ -23,6 +26,7 @@ class FaceTracker(BaseProcessor):
         current_time = time.time()
 
         faces_to_emit = []
+        current_track_ids = set()
 
         for det in detections:
             bbox = det.get('bbox')
@@ -46,6 +50,8 @@ class FaceTracker(BaseProcessor):
             else:
                 self.tracks[track_id]["last_seen"] = current_time
 
+            current_track_ids.add(track_id)
+
             track = self.tracks[track_id]
 
             face_type = None
@@ -58,12 +64,41 @@ class FaceTracker(BaseProcessor):
 
             if face_type:
                 faces_to_emit.append({
-                    "track_id": track_id, 
-                    "bbox": bbox, 
-                    "score": score, 
-                    "kpss": kpss, 
+                    "track_id": track_id,
+                    "bbox": bbox,
+                    "score": score,
+                    "kpss": kpss,
                     "type": face_type
                 })
+
+        # Detect ID switches: track mới xuất hiện khi có track cũ active
+        for new_tid in current_track_ids:
+            if new_tid not in self._previous_track_ids:
+                # Track mới - kiểm tra xem có phải switch hay là người mới hoàn toàn
+                for old_tid in self._previous_track_ids:
+                    if old_tid in self.tracks and old_tid not in current_track_ids:
+                        # Track cũ không còn trong frame hiện tại
+                        old_track = self.tracks[old_tid]
+                        if current_time - old_track.get('last_seen', 0) < self.max_age:
+                            # Track cũ vẫn active (chưa expire) nhưng xuất hiện track mới
+                            # Kiểm tra khoảng cách centroid
+                            if new_tid in self.tracks and old_tid in self.tracks:
+                                new_centroid = self.tracks[new_tid].get('centroid', (0, 0))
+                                old_centroid = old_track.get('centroid', (0, 0))
+                                dist = np.sqrt((new_centroid[0] - old_centroid[0])**2 + (new_centroid[1] - old_centroid[1])**2)
+                                if dist < 100:  # Cùng vị trí nhưng ID khác = switch
+                                    metrics_collector.record_id_switch()
+                                    logger.debug(f"[TRACKER] ID SWITCH: {old_tid} -> {new_tid} (dist={dist:.1f})")
+
+        # Check for expired tracks and record detection-to-send latency
+        for old_tid in self._previous_track_ids:
+            if old_tid not in current_track_ids and old_tid in self.tracks:
+                latency = metrics_collector.check_track_expired(old_tid)
+                if latency is not None:
+                    logger.debug(f"[DETECTION_LATENCY] track={old_tid} latency_ms={latency:.0f} expired")
+
+        # Update previous track IDs
+        self._previous_track_ids = current_track_ids
 
         # Dọn dẹp các track đã biến mất quá lâu
         self._cleanup_tracks(current_time)
