@@ -24,6 +24,8 @@ class FaceQualityFilter(BaseProcessor):
         self.overlap_iou_threshold = settings.FACE_OVERLAP_IOU_THRESHOLD
         self.max_yaw_deg = settings.MAX_FACE_YAW_DEG
         self.min_sharpness = settings.MIN_FACE_SHARPNESS
+        self.min_detection_confidence = settings.MIN_FACE_DETECTION_CONFIDENCE
+        self.min_brightness = settings.MIN_FACE_BRIGHTNESS
 
     def process(self, context: dict):
         faces = context.get("faces_to_emit", [])
@@ -62,17 +64,21 @@ class FaceQualityFilter(BaseProcessor):
         # Pre-filter: reject face nhỏ trước để giảm overlap check
         candidates = [f for f in faces if self._check_min_size(f)]
 
-        # Check 2: SHARPNESS — reject face bị mờ
+        # Check 2: DETECTION_CONFIDENCE — reject detector results with weak confidence
+        candidates = [f for f in candidates if self._check_detection_confidence(f)]
+
+        # Check 3: BRIGHTNESS + SHARPNESS — reject dark or blurry faces
         if frame is not None:
+            candidates = [f for f in candidates if self._check_brightness(f, frame)]
             candidates = [f for f in candidates if self._check_sharpness(f, frame)]
 
-        # Check 3: FULL_5_KPS — reject face thiếu/invalid 5 keypoints
+        # Check 4: FULL_5_KPS — reject face thiếu/invalid 5 keypoints
         candidates = [f for f in candidates if self._check_full_kps(f)]
 
-        # Check 4: FACE_COMPLETENESS — face không bị cắt bởi viền frame
+        # Check 5: FACE_COMPLETENESS — face không bị cắt bởi viền frame
         candidates = [f for f in candidates if self._check_face_completeness(f)]
 
-        # Check 5: FACE_ANGLE — góc nghiêng yaw <= 45°
+        # Check 6: FACE_ANGLE — góc nghiêng yaw <= configured threshold
         candidates = [f for f in candidates if self._check_face_angle(f)]
 
         # Overlap check: nếu 2 bbox IoU > threshold → reject face nhỏ hơn
@@ -127,6 +133,54 @@ class FaceQualityFilter(BaseProcessor):
     # ------------------------------------------------------------------ #
     # Check 1.5: SHARPNESS (Variance of Laplacian)                       #
     # ------------------------------------------------------------------ #
+
+    def _check_detection_confidence(self, face: dict) -> bool:
+        score = face.get("score")
+        try:
+            confidence = float(score)
+        except (TypeError, ValueError):
+            return False
+
+        face["_quality_detection_confidence"] = confidence
+        if confidence < self.min_detection_confidence:
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} low_confidence: "
+                f"score={confidence:.4f} < {self.min_detection_confidence:.4f}"
+            )
+            return False
+
+        return True
+
+    def _check_brightness(self, face: dict, frame) -> bool:
+        bbox = face.get("bbox")
+        if not bbox or frame is None:
+            return False
+
+        x1, y1, x2, y2 = [int(v) for v in bbox]
+        fh, fw = frame.shape[:2]
+
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(fw, x2), min(fh, y2)
+
+        if x2 <= x1 or y2 <= y1:
+            return False
+
+        crop = frame[y1:y2, x1:x2]
+        if crop.size == 0:
+            return False
+
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        brightness = float(gray.mean())
+        face["_quality_brightness"] = brightness
+
+        if brightness < self.min_brightness:
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} too_dark: "
+                f"brightness={brightness:.1f} < {self.min_brightness}"
+            )
+            return False
+
+        return True
 
     def _check_sharpness(self, face: dict, frame) -> bool:
         bbox = face.get("bbox")
@@ -468,6 +522,17 @@ class FaceQualityFilter(BaseProcessor):
         if side < self.min_face_size:
             reasons.append(f"min_size({side:.0f}px<{self.min_face_size}px)")
 
+        confidence = face.get("_quality_detection_confidence")
+        if confidence is None:
+            score = face.get("score")
+            try:
+                confidence = float(score)
+            except (TypeError, ValueError):
+                confidence = None
+        if confidence is None or confidence < self.min_detection_confidence:
+            shown = "missing" if confidence is None else f"{confidence:.4f}"
+            reasons.append(f"det_conf({shown}<{self.min_detection_confidence:.4f})")
+
         if not self._check_full_kps(face):
             reasons.append("missing_kps")
 
@@ -485,6 +550,10 @@ class FaceQualityFilter(BaseProcessor):
         sharpness = face.get("_quality_sharpness")
         if sharpness is not None and sharpness < self.min_sharpness:
             reasons.append(f"sharpness({sharpness:.1f}<{self.min_sharpness})")
+
+        brightness = face.get("_quality_brightness")
+        if brightness is not None and brightness < self.min_brightness:
+            reasons.append(f"brightness({brightness:.1f}<{self.min_brightness})")
 
         detail = self._format_quality_detail(face)
         if detail:
@@ -510,6 +579,14 @@ class FaceQualityFilter(BaseProcessor):
         sharpness = face.get("_quality_sharpness")
         if sharpness is not None:
             parts.append(f"sharpness={sharpness:.1f}")
+
+        brightness = face.get("_quality_brightness")
+        if brightness is not None:
+            parts.append(f"brightness={brightness:.1f}")
+
+        confidence = face.get("_quality_detection_confidence")
+        if confidence is not None:
+            parts.append(f"det_conf={confidence:.4f}")
 
         kpss = face.get("kpss")
         if kpss is not None:

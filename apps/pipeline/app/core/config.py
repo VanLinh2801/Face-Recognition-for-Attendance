@@ -44,8 +44,10 @@ class Settings(BaseSettings):
     REQUIRE_FULL_KPS: bool = True    # Yêu cầu đủ 5 keypoints
     MIN_KPS_DIST_PX: float = 2.0      # Khoảng cách tối thiểu giữa 2 keypoints (tránh trùng)
     FACE_OVERLAP_IOU_THRESHOLD: float = 0.5  # IoU > 0.5 → reject face nhỏ hơn
-    MAX_FACE_YAW_DEG: float = 45.0   # Góc nghiêng tối đa (3/4 face = 45°)
-    MIN_FACE_SHARPNESS: float = 100.0 # Ngưỡng phương sai Laplacian để lọc ảnh mờ
+    MAX_FACE_YAW_DEG: float = 45.0   # Góc nghiêng tối đa
+    MIN_FACE_SHARPNESS: float = 150.0 # Ngưỡng phương sai Laplacian để lọc ảnh mờ
+    MIN_FACE_DETECTION_CONFIDENCE: float = 0.70 # SCRFD confidence tối thiểu để gửi AI
+    MIN_FACE_BRIGHTNESS: float = 65.0 # Mean grayscale tối thiểu trên bbox mặt
 
     class Config:
         env_file = ".env"
