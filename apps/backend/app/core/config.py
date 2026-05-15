@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(default="change-me", alias="JWT_SECRET_KEY")
     jwt_issuer: str = Field(default="face-recognition-backend", alias="JWT_ISSUER")
     jwt_audience: str = Field(default="face-recognition-clients", alias="JWT_AUDIENCE")
-    jwt_access_expires_seconds: int = Field(default=900, alias="JWT_ACCESS_EXPIRES_SECONDS")
+    jwt_access_expires_seconds: int = Field(default=86400, alias="JWT_ACCESS_EXPIRES_SECONDS")
     jwt_refresh_expires_seconds: int = Field(default=604800, alias="JWT_REFRESH_EXPIRES_SECONDS")
     auth_bcrypt_rounds: int = Field(default=12, alias="AUTH_BCRYPT_ROUNDS")
     auth_seed_admin_username: str | None = Field(default=None, alias="AUTH_SEED_ADMIN_USERNAME")

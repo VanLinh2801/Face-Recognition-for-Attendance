@@ -160,6 +160,7 @@ services:
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       AUTH_SEED_ADMIN_USERNAME: ${AUTH_SEED_ADMIN_USERNAME:-admin}
       AUTH_SEED_ADMIN_PASSWORD: ${AUTH_SEED_ADMIN_PASSWORD:-admin123}
+      JWT_ACCESS_EXPIRES_SECONDS: ${JWT_ACCESS_EXPIRES_SECONDS:-86400}
       REDIS_STREAM_AI_EVENTS: ai_backend
       REDIS_STREAM_PIPELINE_EVENTS: pipeline.backend.events
       REDIS_STREAM_BACKEND_PIPELINE: pipeline_backend
@@ -205,23 +206,27 @@ services:
       REDIS_STREAM_AI_BACKEND: ai_backend
       # Qdrant
       QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-person_faces_antelopev2}
       # MinIO
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       MINIO_SECURE: "false"
       # AI Models — provider set auto by entrypoint.sh at runtime
+      INSIGHTFACE_MODEL_NAME: ${INSIGHTFACE_MODEL_NAME:-antelopev2}
       INSIGHTFACE_MODEL_DIR: /app/models/insightface
       INSIGHTFACE_CTX_ID: ${INSIGHTFACE_CTX_ID:-0}
       ANTI_SPOOF_MODEL_PATH: /app/models/anti_spoof/minifasnet.onnx
       # Thresholds
-      RECOGNITION_THRESHOLD: ${RECOGNITION_THRESHOLD:-0.45}
+      RECOGNITION_THRESHOLD: ${RECOGNITION_THRESHOLD:-0.70}
       SPOOF_THRESHOLD: ${SPOOF_THRESHOLD:-0.70}
+      RECOGNITION_BUFFER_EXPECTED_CANDIDATES: ${RECOGNITION_BUFFER_EXPECTED_CANDIDATES:-5}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "${AI_SERVICE_HOST_PORT:-8001}:8000"
     volumes:
       - ai_models:/app/models
+      - ./apps/ai_service/models/insightface:/app/models/insightface
     depends_on:
       redis:
         condition: service_healthy
@@ -262,6 +267,13 @@ services:
       FRAME_INTERVAL: ${FRAME_INTERVAL:-0.1}
       DEBUG: ${PIPELINE_DEBUG:-false}
       SCRFD_MODEL_PATH: /app/app/models/scrfd_2.5g_bnkps.onnx
+      MIN_FACE_SIZE_PX: ${MIN_FACE_SIZE_PX:-90}
+      REQUIRE_FULL_KPS: ${REQUIRE_FULL_KPS:-true}
+      MIN_KPS_DIST_PX: ${MIN_KPS_DIST_PX:-2.0}
+      FACE_OVERLAP_IOU_THRESHOLD: ${FACE_OVERLAP_IOU_THRESHOLD:-0.5}
+      MAX_FACE_YAW_DEG: ${MAX_FACE_YAW_DEG:-45.0}
+      MIN_FACE_SHARPNESS: ${MIN_FACE_SHARPNESS:-100.0}
+      MAX_INITIAL_SNAPSHOTS: ${MAX_INITIAL_SNAPSHOTS:-5}
     ports:
       - "${PIPELINE_HOST_PORT:-8002}:8000"
     volumes:

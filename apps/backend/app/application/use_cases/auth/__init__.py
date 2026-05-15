@@ -31,7 +31,7 @@ class LoginResult:
     access_token: str
     refresh_token: str
     token_type: str = "Bearer"
-    expires_in: int = 900
+    expires_in: int = 86400
 
 
 @dataclass(slots=True, kw_only=True)

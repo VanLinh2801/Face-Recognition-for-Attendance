@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     REDIS_STREAM_AI_BACKEND: str = "ai_backend"
     REDIS_CONSUMER_GROUP: str = "ai_service_group"
     REDIS_CONSUMER_NAME: str = "ai_service_1"
-    RECOGNITION_BUFFER_EXPECTED_CANDIDATES: int = 3
+    RECOGNITION_BUFFER_EXPECTED_CANDIDATES: int = 5
     RECOGNITION_BUFFER_TTL_SECONDS: int = 3
     RECOGNITION_BUFFER_PUBLISHED_TTL_SECONDS: int = 10
 
@@ -24,11 +24,10 @@ class Settings(BaseSettings):
     MINIO_SECURE: bool = False
 
     # ── AI Models ──────────────────────────────────────────────────────────
-    INSIGHTFACE_MODEL_NAME: str = "buffalo_l"
+    INSIGHTFACE_MODEL_NAME: str = "antelopev2"
     INSIGHTFACE_MODEL_VERSION: str = "1.0"
     INSIGHTFACE_MODEL_DIR: str = "/app/models/insightface"
     INSIGHTFACE_RECOGNITION_MODEL_FILE: str | None = None
-    INSIGHTFACE_AUTO_DOWNLOAD: bool = True
     INSIGHTFACE_CTX_ID: int = 0
     INSIGHTFACE_DET_SIZE: int = 640
 
@@ -41,7 +40,7 @@ class Settings(BaseSettings):
 
     # ── Thresholds (env-configurable, do NOT hardcode in logic) ───────────
     # Cosine similarity >= RECOGNITION_THRESHOLD → known person
-    RECOGNITION_THRESHOLD: float = 0.45
+    RECOGNITION_THRESHOLD: float = 0.70
     # Real-face score >= SPOOF_THRESHOLD → pass anti-spoof (lower = spoof)
     SPOOF_THRESHOLD: float = 0.70
 

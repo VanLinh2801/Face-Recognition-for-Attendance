@@ -37,15 +37,15 @@ class Settings(BaseSettings):
     FACE_DETECTION_THRESHOLD: float = 0.65
     FACE_TRACKER_COOLDOWN: int = 300  # 5 phút (300 giây)
     FACE_TRACKER_MAX_AGE: float = 60.0 # Giây trước khi quên 1 track (mất dấu)
-    MAX_INITIAL_SNAPSHOTS: int = 3   # Số ảnh tối đa trong 2 giây đầu
+    MAX_INITIAL_SNAPSHOTS: int = 5   # Số ảnh đủ điều kiện ban đầu gửi sang AI
 
     # Face Quality Filter — hard filter: face fail thì không gửi lên ai_service
-    MIN_FACE_SIZE_PX: int = 80       # Cạnh nhỏ nhất của SCRFD bbox trong ảnh gốc (px)
+    MIN_FACE_SIZE_PX: int = 90       # Cạnh nhỏ nhất của SCRFD bbox trong ảnh gốc (px)
     REQUIRE_FULL_KPS: bool = True    # Yêu cầu đủ 5 keypoints
     MIN_KPS_DIST_PX: float = 2.0      # Khoảng cách tối thiểu giữa 2 keypoints (tránh trùng)
     FACE_OVERLAP_IOU_THRESHOLD: float = 0.5  # IoU > 0.5 → reject face nhỏ hơn
     MAX_FACE_YAW_DEG: float = 45.0   # Góc nghiêng tối đa (3/4 face = 45°)
-    MIN_FACE_SHARPNESS: float = 25.0 # Ngưỡng phương sai Laplacian để lọc ảnh mờ
+    MIN_FACE_SHARPNESS: float = 100.0 # Ngưỡng phương sai Laplacian để lọc ảnh mờ
 
     class Config:
         env_file = ".env"

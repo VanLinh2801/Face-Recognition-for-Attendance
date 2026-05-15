@@ -25,7 +25,10 @@ def main() -> None:
         urlretrieve(ANTI_SPOOF_URL, anti_spoof_path)
 
     print(f"InsightFace model directory ready: {insightface_dir}")
-    print("InsightFace buffalo_l is downloaded lazily by insightface on first embedding request.")
+    print(
+        "Place recognition models under models/insightface/models/<model_name>/ "
+        "(for example antelopev2/glintr100.onnx)."
+    )
 
 
 if __name__ == "__main__":

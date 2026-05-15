@@ -25,7 +25,7 @@ from app.presentation.event_handlers.registration_requested_handler import (  # 
 class _FakeUseCase:
     def __init__(self, result: dict | None = None) -> None:
         self.result = result or {
-            "embedding_model": "buffalo_l",
+            "embedding_model": "antelopev2",
             "embedding_version": "1.0",
             "indexed_at": "2026-05-07T00:00:00+00:00",
         }

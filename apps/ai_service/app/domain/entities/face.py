@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import Optional
 import numpy as np
 
+FaceLandmarks = list[list[float]]
+
 
 @dataclass(frozen=True)
 class BoundingBox:
@@ -20,7 +22,7 @@ class FaceInput:
     track_id: str
     image_data: bytes
     bbox: Optional[BoundingBox] = None
-    kpss: Optional[list] = None
+    kpss: Optional[FaceLandmarks] = None
     detection_confidence: Optional[float] = None
     quality_status: Optional[str] = None  # "passed" | "marginal" | "failed"
 
