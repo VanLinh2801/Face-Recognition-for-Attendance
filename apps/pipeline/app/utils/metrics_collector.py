@@ -236,6 +236,18 @@ class MetricsCollector:
         """Ghi nhận tổng số thay đổi track (passed frame)."""
         self.pipeline.total_track_changes += 1
 
+    def start_track(self, track_id: str):
+        """Start detection-to-send latency tracking for a track."""
+        self.pipeline.start_track(track_id)
+
+    def record_frame_sent(self, track_id: str) -> bool:
+        """Record one sent frame for a track."""
+        return self.pipeline.record_frame_sent(track_id)
+
+    def check_track_expired(self, track_id: str) -> Optional[float]:
+        """Return latency when a tracked face times out before enough frames are sent."""
+        return self.pipeline.check_track_expired(track_id)
+
     def record_input_frame(self):
         """Ghi nhận một frame đầu vào."""
         self.pipeline.input_frame_count += 1

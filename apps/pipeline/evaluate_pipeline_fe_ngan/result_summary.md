@@ -1,7 +1,7 @@
 # KPI Evaluation Report
 
-**Runtime:** 0h 0m 32s
-**Generated:** 2026-05-15T16:33:54.214905
+**Runtime:** 0h 13m 17s
+**Generated:** 2026-05-15T17:08:09.206124
 
 ---
 
@@ -9,31 +9,31 @@
 
 | Metric | Value |
 |--------|-------|
-| Total detections | 129 |
-| Passed | 0 |
-| Rejected | 129 |
-| Pass rate | 0.0% |
-| Avg filter latency | 8.54ms |
+| Total detections | 1239 |
+| Passed | 38 |
+| Rejected | 1201 |
+| Pass rate | 3.1% |
+| Avg filter latency | 8.09ms |
 
 ## 2. Detection-to-Send Latency
 
 | Metric | Value |
 |--------|-------|
-| Samples | 0 |
-| Avg | 0ms |
-| Min | 0ms |
-| Max | 0ms |
-| P50 | 0ms |
-| P95 | 0ms |
+| Samples | 8 |
+| Avg | 6135ms |
+| Min | 412.0ms |
+| Max | 35900.0ms |
+| P50 | 1193.0ms |
+| P95 | 35900.0ms |
 
 ## 3. Pipeline Performance
 
 | Metric | Value |
 |--------|-------|
-| Input FPS | 4.5 |
-| Output FPS | 0.0 |
-| Frame drop rate | 100.0% |
-| Avg payload size | 0.00 KB |
+| Input FPS | 8.4 |
+| Output FPS | 0.1 |
+| Frame drop rate | 99.4% |
+| Avg payload size | 33.95 KB |
 | Aspect ratio distortion | 0.00% |
 | ID switch count | 0 |
 | ID switch rate | 0.00% |
@@ -42,5 +42,5 @@
 
 | Metric | Value |
 |--------|-------|
-| Avg upload dispatch | 0.00ms |
-| Avg upload complete | 0.00ms |
+| Avg upload dispatch | 0.02ms |
+| Avg upload complete | 58.69ms |
