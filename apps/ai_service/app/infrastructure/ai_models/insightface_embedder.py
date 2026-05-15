@@ -2,6 +2,7 @@ import asyncio
 import io
 import logging
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -23,7 +24,7 @@ class InsightFaceEmbedder(IFaceEmbedder):
     """
 
     def __init__(self) -> None:
-        self._recognition_model = None
+        self._recognition_model: Any | None = None
         self._lock = asyncio.Lock()
 
     async def _ensure_loaded(self) -> None:
@@ -76,36 +77,6 @@ class InsightFaceEmbedder(IFaceEmbedder):
             if candidate.exists():
                 return candidate
 
-        if settings.INSIGHTFACE_AUTO_DOWNLOAD:
-            logger.info(
-                "InsightFace model file not found. Downloading model pack '%s' into %s",
-                settings.INSIGHTFACE_MODEL_NAME,
-                root,
-            )
-            root.mkdir(parents=True, exist_ok=True)
-            try:
-                from insightface.app import FaceAnalysis  # noqa: PLC0415
-
-                app = FaceAnalysis(
-                    name=settings.INSIGHTFACE_MODEL_NAME,
-                    root=str(root),
-                    providers=[settings.ONNX_EXECUTION_PROVIDER],
-                )
-                app.prepare(
-                    ctx_id=settings.INSIGHTFACE_CTX_ID,
-                    det_size=(settings.INSIGHTFACE_DET_SIZE, settings.INSIGHTFACE_DET_SIZE),
-                )
-            except Exception as exc:
-                raise FileNotFoundError(
-                    "InsightFace recognition model was not found and auto-download failed. "
-                    "Expected one of: "
-                    + ", ".join(str(path) for path in candidates)
-                ) from exc
-
-            for candidate in candidates:
-                if candidate.exists():
-                    return candidate
-
         raise FileNotFoundError(
             "InsightFace recognition model not found. Expected one of: "
             + ", ".join(str(path) for path in candidates)
@@ -113,13 +84,24 @@ class InsightFaceEmbedder(IFaceEmbedder):
 
     async def extract(self, face: FaceInput) -> FaceEmbedding:
         await self._ensure_loaded()
+        recognition_model = self._recognition_model
+        if recognition_model is None:
+            raise RuntimeError("InsightFace recognition model was not loaded")
+
         loop = asyncio.get_running_loop()
 
         def _infer() -> tuple[np.ndarray, float]:
-            if face.kpss is None or len(face.kpss) != 5:
+            if face.kpss is None:
                 raise ValueError(
                     f"Missing 5-point landmarks for track_id={face.track_id}; "
-                    "AI service no longer runs FaceAnalysis detection fallback"
+                    "AI service requires landmarks from the pipeline"
+                )
+
+            kpss_np = np.asarray(face.kpss, dtype=np.float32)
+            if kpss_np.shape != (5, 2) or not np.isfinite(kpss_np).all():
+                raise ValueError(
+                    f"Invalid 5-point landmarks for track_id={face.track_id}: "
+                    f"expected shape (5, 2), got {kpss_np.shape}"
                 )
 
             img = Image.open(io.BytesIO(face.image_data)).convert("RGB")
@@ -127,9 +109,8 @@ class InsightFaceEmbedder(IFaceEmbedder):
 
             from insightface.utils import face_align  # noqa: PLC0415
 
-            kpss_np = np.array(face.kpss, dtype=np.float32)
             aligned = face_align.norm_crop(img_array, kpss_np)
-            feat = self._recognition_model.get_feat(aligned)
+            feat = recognition_model.get_feat(aligned)
             vector = np.array(feat, dtype=np.float32).reshape(-1)
             norm = np.linalg.norm(vector)
             if norm <= 0:

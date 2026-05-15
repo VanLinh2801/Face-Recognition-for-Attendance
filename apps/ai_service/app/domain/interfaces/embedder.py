@@ -19,7 +19,7 @@ class IFaceEmbedder(ABC):
     @property
     @abstractmethod
     def model_name(self) -> str:
-        """Human-readable model name, e.g. 'buffalo_l'."""
+        """Human-readable model name, e.g. 'antelopev2'."""
         ...
 
     @property

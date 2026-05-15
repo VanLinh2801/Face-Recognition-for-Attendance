@@ -7,7 +7,7 @@ Microservice chịu trách nhiệm toàn bộ logic nhận diện khuôn mặt t
 | Trách nhiệm | Chi tiết |
 |---|---|
 | **Anti-spoofing** | Tự chạy MiniFASNet (ONNX) — không phụ thuộc Pipeline |
-| **Embedding** | InsightFace ArcFace `buffalo_l` → vector 512-d |
+| **Embedding** | InsightFace ArcFace `antelopev2` → vector 512-d |
 | **Vector search** | Qdrant cosine similarity → top-1 match |
 | **Registration indexing** | Nhận `registration.requested`, embed và upsert Qdrant |
 | **Event publishing** | Phát `recognition_event.detected` / `unknown_event.detected` / `registration_processing.completed` |
@@ -53,8 +53,8 @@ Redis Stream pipeline_ai
                     spoof_score < 0.70 → REJECT (không emit event)
                  3. InsightFaceEmbedder.extract() → 512-d vector
                  4. QdrantVectorStore.search() → top-1 match
-                    score ≥ 0.45 → recognition_event.detected → Redis ai_backend
-                    score < 0.45 → unknown_event.detected    → Redis ai_backend
+                    score ≥ 0.70 → recognition_event.detected → Redis ai_backend
+                    score < 0.70 → unknown_event.detected    → Redis ai_backend
 ```
 
 ### Registration (Async)
@@ -76,7 +76,7 @@ Redis Stream pipeline_ai
 
 | Threshold | Giá trị mặc định | Env var | Ý nghĩa |
 |---|---|---|---|
-| Recognition | `0.45` | `RECOGNITION_THRESHOLD` | Cosine similarity ≥ ngưỡng → known person |
+| Recognition | `0.70` | `RECOGNITION_THRESHOLD` | Cosine similarity ≥ ngưỡng → known person |
 | Anti-spoof | `0.70` | `SPOOF_THRESHOLD` | Real-face score ≥ ngưỡng → pass (thấp hơn = spoof) |
 
 > Tất cả threshold là env var, **không hardcode** trong logic.
@@ -99,7 +99,7 @@ pip install -r requirements.txt
 ```
 apps/ai_service/
 └── models/
-    ├── insightface/     # InsightFace sẽ tự download buffalo_l vào đây
+    ├── insightface/     # Đặt recognition model đã tải sẵn tại đây
     └── anti_spoof/
         └── minifasnet.onnx   # Tải từ: https://github.com/minivision-ai/Silent-Face-Anti-Spoofing
 ```
@@ -114,9 +114,10 @@ MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 
 INSIGHTFACE_MODEL_DIR=./models/insightface
+INSIGHTFACE_MODEL_NAME=antelopev2
 ANTI_SPOOF_MODEL_PATH=./models/anti_spoof/minifasnet.onnx
 
-RECOGNITION_THRESHOLD=0.45
+RECOGNITION_THRESHOLD=0.70
 SPOOF_THRESHOLD=0.70
 LOG_LEVEL=INFO
 ```

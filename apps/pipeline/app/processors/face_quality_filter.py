@@ -268,11 +268,20 @@ class FaceQualityFilter(BaseProcessor):
             return False
 
         eye_dist = float(np.linalg.norm(right_eye - left_eye))
-        min_eye_dist = max(self.min_kps_dist * 2.0, bw * 0.12)
+        min_eye_dist = max(self.min_kps_dist * 2.0, bw * 0.25)
         if eye_dist < min_eye_dist:
             logger.debug(
                 f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
                 f"eye_dist={eye_dist:.1f} < {min_eye_dist:.1f}"
+            )
+            return False
+
+        mouth_dist = float(np.linalg.norm(mouth_right - mouth_left))
+        min_mouth_dist = max(self.min_kps_dist * 2.0, bw * 0.22)
+        if mouth_dist < min_mouth_dist:
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
+                f"mouth_dist={mouth_dist:.1f} < {min_mouth_dist:.1f}"
             )
             return False
 
@@ -282,10 +291,72 @@ class FaceQualityFilter(BaseProcessor):
 
         eye_y = (left_eye[1] + right_eye[1]) / 2.0
         mouth_y = (mouth_left[1] + mouth_right[1]) / 2.0
-        if not (eye_y < nose[1] < mouth_y):
+        eye_to_nose_y = float(nose[1] - eye_y)
+        nose_to_mouth_y = float(mouth_y - nose[1])
+        if eye_to_nose_y < bh * 0.12 or nose_to_mouth_y < bh * 0.15:
             logger.debug(
                 f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
-                f"eye_y={eye_y:.1f}, nose_y={nose[1]:.1f}, mouth_y={mouth_y:.1f}"
+                f"eye_to_nose_y={eye_to_nose_y:.1f}, nose_to_mouth_y={nose_to_mouth_y:.1f}"
+            )
+            return False
+
+        if not (eye_y < nose[1] < mouth_left[1] and eye_y < nose[1] < mouth_right[1]):
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
+                f"eye_y={eye_y:.1f}, nose_y={nose[1]:.1f}, "
+                f"mouth_left_y={mouth_left[1]:.1f}, mouth_right_y={mouth_right[1]:.1f}"
+            )
+            return False
+
+        feature_height = float(mouth_y - eye_y)
+        min_feature_height = bh * 0.32
+        if feature_height < min_feature_height:
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
+                f"feature_height={feature_height:.1f} < {min_feature_height:.1f}"
+            )
+            return False
+
+        eye_y_norm = (eye_y - y1) / bh
+        nose_y_norm = (nose[1] - y1) / bh
+        mouth_y_norm = (mouth_y - y1) / bh
+        if not (0.10 <= eye_y_norm <= 0.60 and 0.25 <= nose_y_norm <= 0.80 and 0.45 <= mouth_y_norm <= 0.98):
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
+                f"norms eye={eye_y_norm:.2f}, nose={nose_y_norm:.2f}, mouth={mouth_y_norm:.2f}"
+            )
+            return False
+
+        mouth_center_x = (mouth_left[0] + mouth_right[0]) / 2.0
+        eye_center_x = (left_eye[0] + right_eye[0]) / 2.0
+        if abs(float(mouth_center_x - nose[0])) > bw * 0.28:
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
+                f"mouth_center_x={mouth_center_x:.1f}, nose_x={nose[0]:.1f}"
+            )
+            return False
+
+        if abs(float(eye_center_x - nose[0])) > eye_dist * 0.35:
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
+                f"eye_center_x={eye_center_x:.1f}, nose_x={nose[0]:.1f}"
+            )
+            return False
+
+        nose_left_span = float(nose[0] - left_eye[0])
+        nose_right_span = float(right_eye[0] - nose[0])
+        if nose_left_span < eye_dist * 0.20 or nose_right_span < eye_dist * 0.20:
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
+                f"nose_eye_spans=({nose_left_span:.1f},{nose_right_span:.1f}) eye_dist={eye_dist:.1f}"
+            )
+            return False
+
+        mouth_eye_ratio = mouth_dist / eye_dist
+        if not (0.50 <= mouth_eye_ratio <= 1.25):
+            logger.debug(
+                f"[QUALITY] {face.get('track_id')} invalid_kps_geometry: "
+                f"mouth_eye_ratio={mouth_eye_ratio:.2f}"
             )
             return False
 
