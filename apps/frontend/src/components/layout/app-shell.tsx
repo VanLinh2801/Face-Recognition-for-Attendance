@@ -224,7 +224,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <aside
         className={cn(
-          "app-shell-sidebar",
+          "app-shell-sidebar group/sidebar",
           "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-all duration-300",
           "before:pointer-events-none before:absolute before:left-6 before:right-6 before:top-[92px] before:h-px before:bg-[var(--sidebar-divider)]",
           "after:pointer-events-none after:absolute after:left-8 after:top-20 after:h-14 after:w-28 after:rounded-full after:bg-[var(--sidebar-brand-glow)] after:blur-3xl",
@@ -262,7 +262,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 size="icon"
                 onClick={() => setCollapsed((value) => !value)}
                 aria-label={t("layout.toggleSidebar")}
-                className="absolute right-2 top-2 h-8 w-8 rounded-full border border-[var(--sidebar-control-border)] bg-[var(--sidebar-control-bg)] text-[var(--sidebar-foreground-soft)] hover:border-[var(--sidebar-control-border-hover)] hover:bg-[var(--sidebar-control-hover)] hover:text-[var(--sidebar-foreground)]"
+                className="absolute right-2 top-2 h-8 w-8 rounded-full border border-[var(--sidebar-control-border)] bg-[var(--sidebar-control-bg)] text-[var(--sidebar-foreground-soft)] opacity-0 shadow-sm pointer-events-none transition-all duration-200 hover:border-[var(--sidebar-control-border-hover)] hover:bg-[var(--sidebar-control-hover)] hover:text-[var(--sidebar-foreground)] group-hover/sidebar:opacity-100 group-hover/sidebar:pointer-events-auto group-focus-within/sidebar:opacity-100 group-focus-within/sidebar:pointer-events-auto"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -351,8 +351,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-expanded={accountMenuOpen}
               aria-haspopup="menu"
             >
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--sidebar-avatar-bg)] text-[var(--sidebar-avatar-foreground)] ring-1 ring-[var(--sidebar-avatar-ring)]">
-                <UserRound className="h-6 w-6" />
+              <span className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--sidebar-avatar-bg)] text-[var(--sidebar-avatar-foreground)] shadow-[var(--sidebar-avatar-shadow)] ring-1 ring-[var(--sidebar-avatar-ring)]">
+                <span className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_28%,var(--sidebar-avatar-accent),transparent_62%)]" />
+                <span className="pointer-events-none absolute inset-[1px] rounded-full bg-[var(--sidebar-avatar-highlight)]" />
+                <UserRound className="relative z-10 h-6 w-6" />
+                <span className="absolute bottom-[3px] right-[3px] z-10 h-2.5 w-2.5 rounded-full bg-[var(--sidebar-status-dot)] ring-2 ring-[var(--sidebar-status-dot-ring)]" />
               </span>
               {!collapsed && (
                 <>

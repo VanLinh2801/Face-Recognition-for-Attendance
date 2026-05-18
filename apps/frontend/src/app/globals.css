@@ -107,6 +107,11 @@
   --sidebar-avatar-bg: linear-gradient(180deg, #f5f7fa 0%, #d0d5dd 100%);
   --sidebar-avatar-foreground: #667085;
   --sidebar-avatar-ring: rgba(15, 23, 42, 0.06);
+  --sidebar-avatar-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  --sidebar-avatar-highlight: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.04) 100%);
+  --sidebar-avatar-accent: rgba(217, 32, 39, 0.14);
+  --sidebar-status-dot: #32d583;
+  --sidebar-status-dot-ring: rgba(255, 255, 255, 0.88);
   --toolbar-orb-bg: color-mix(in srgb, var(--background-elevated) 76%, transparent);
   --toolbar-orb-border: var(--border);
   --toolbar-orb-foreground: var(--foreground);
@@ -220,15 +225,24 @@
   --sidebar-item-active-shadow:
     0 14px 28px rgba(2, 6, 23, 0.22),
     0 0 0 1px rgba(239, 68, 68, 0.08);
-  --sidebar-profile-bg: rgba(255, 255, 255, 0.035);
-  --sidebar-profile-hover: rgba(255, 255, 255, 0.06);
-  --sidebar-profile-border: rgba(255, 255, 255, 0.08);
-  --sidebar-profile-border-hover: rgba(239, 68, 68, 0.18);
-  --sidebar-profile-shadow: 0 18px 36px rgba(2, 6, 23, 0.24);
+  --sidebar-profile-bg: linear-gradient(180deg, rgba(23, 31, 48, 0.96) 0%, rgba(18, 25, 39, 0.98) 100%);
+  --sidebar-profile-hover: linear-gradient(180deg, rgba(28, 37, 56, 0.98) 0%, rgba(20, 28, 43, 1) 100%);
+  --sidebar-profile-border: rgba(255, 255, 255, 0.1);
+  --sidebar-profile-border-hover: rgba(248, 113, 113, 0.22);
+  --sidebar-profile-shadow:
+    0 18px 36px rgba(2, 6, 23, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   --sidebar-profile-menu-bg: rgba(12, 22, 38, 0.94);
-  --sidebar-avatar-bg: linear-gradient(180deg, #d7dbe4 0%, #7f8798 100%);
-  --sidebar-avatar-foreground: #4b5565;
-  --sidebar-avatar-ring: rgba(255, 255, 255, 0.08);
+  --sidebar-avatar-bg: linear-gradient(180deg, rgba(35, 49, 76, 0.96) 0%, rgba(18, 28, 46, 1) 100%);
+  --sidebar-avatar-foreground: #dce5f2;
+  --sidebar-avatar-ring: rgba(255, 255, 255, 0.1);
+  --sidebar-avatar-shadow:
+    0 14px 28px rgba(2, 6, 23, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  --sidebar-avatar-highlight: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%);
+  --sidebar-avatar-accent: rgba(239, 68, 68, 0.16);
+  --sidebar-status-dot: #32d583;
+  --sidebar-status-dot-ring: rgba(11, 20, 36, 0.92);
   --toolbar-orb-bg: linear-gradient(180deg, rgba(19, 31, 49, 0.94) 0%, rgba(12, 21, 37, 0.98) 100%);
   --toolbar-orb-border: var(--border);
   --toolbar-orb-foreground: #f3f6fb;
