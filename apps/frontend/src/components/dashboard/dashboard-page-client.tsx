@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, AlertTriangle, ShieldAlert, Users } from "lucide-react";
 import { ReviewStatusBadge, SeverityBadge } from "@/components/data/status-badge";
+import { ListTableAccent } from "@/components/data/list-table-accent";
 import { CameraView } from "@/components/dashboard/camera-view";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { LatestEvents } from "@/components/dashboard/latest-events";
@@ -233,7 +234,8 @@ export function DashboardPageClient() {
         <DashboardCharts data={hourlyStats} />
 
         <section className="grid gap-4 xl:grid-cols-3">
-          <Card className="xl:col-span-2">
+          <Card className="list-table-corner-accent xl:col-span-2">
+            <ListTableAccent />
             <CardHeader>
               <CardTitle>Recent attendance</CardTitle>
             </CardHeader>

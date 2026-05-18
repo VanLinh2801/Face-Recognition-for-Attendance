@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PageAmbientWave } from "@/components/data/page-ambient-wave";
 import { PageHeader } from "@/components/data/page-header";
 import { DepartmentsManager } from "@/components/departments/departments-manager";
 import { ApiError, apiFetch } from "@/lib/api-client";
@@ -49,9 +50,10 @@ export default function DepartmentsPage() {
   }, [router, t]);
 
   return (
-    <div>
+    <div className="relative min-h-[calc(100vh-5rem)]">
+      <PageAmbientWave className="fixed inset-x-0 top-1/2 z-0 h-0" />
       <PageHeader title={t("departments.page.title")} description={t("departments.page.description")} />
-      <div className="p-6">
+      <div className="relative z-10 p-6">
         {loading ? <div className="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-500">{t("departments.page.loading")}</div> : null}
         {error ? <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
         {!loading && !error ? <DepartmentsManager initialDepartments={departments} /> : null}

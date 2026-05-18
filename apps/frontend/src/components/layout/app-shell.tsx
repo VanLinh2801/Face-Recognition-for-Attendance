@@ -224,6 +224,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <aside
         className={cn(
+          "app-shell-sidebar",
           "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-all duration-300",
           "before:pointer-events-none before:absolute before:left-6 before:right-6 before:top-[92px] before:h-px before:bg-[var(--sidebar-divider)]",
           "after:pointer-events-none after:absolute after:left-8 after:top-20 after:h-14 after:w-28 after:rounded-full after:bg-[var(--sidebar-brand-glow)] after:blur-3xl",
@@ -374,7 +375,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <PageHeaderContext.Provider value={{ setHeader: setPageHeader }}>
         <main className={cn("min-h-screen transition-all duration-300", collapsed ? MAIN_COLLAPSED_PADDING : MAIN_EXPANDED_PADDING)}>
-          <div className="sticky top-0 z-20 flex min-h-20 items-center gap-4 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--background-panel)_76%,transparent)] px-6 py-4 backdrop-blur-xl">
+          <div className="app-shell-topbar sticky top-0 z-20 flex min-h-20 items-center gap-4 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--background-panel)_76%,transparent)] px-6 py-4 backdrop-blur-xl">
             <div className="min-w-0 flex-1">
               <div className="truncate text-[1.45rem] font-semibold tracking-[-0.03em] text-[var(--foreground)]">
                 {pageHeader?.title ?? t("layout.appName")}
@@ -397,7 +398,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {visibleSessionExpiredMessage ? (
         <div
-          className={`fixed inset-0 z-[100] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(sessionExpiredDialog.visible)}`}
+          className={`fixed inset-0 z-[120] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(sessionExpiredDialog.visible)}`}
         >
           <div className={`w-full max-w-md overflow-hidden rounded-lg bg-[var(--background-elevated)] shadow-[var(--shadow-md)] ${dialogPanelClass(sessionExpiredDialog.visible)}`}>
             <div className="border-b border-[var(--border)] p-5">
@@ -420,7 +421,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {visibleChangePasswordDialog ? (
         <div
-          className={`fixed inset-0 z-[100] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(changePasswordDialog.visible)}`}
+          className={`fixed inset-0 z-[120] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(changePasswordDialog.visible)}`}
           onMouseDown={closeChangePasswordDialog}
         >
           <div
@@ -511,7 +512,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Button type="button" variant="outline" onClick={closeChangePasswordDialog} disabled={submittingPasswordChange}>
                 {t("common.cancel")}
               </Button>
-              <Button type="button" onClick={handleChangePassword} disabled={submittingPasswordChange}>
+              <Button className="ui-button-link ui-button-link-primary" type="button" onClick={handleChangePassword} disabled={submittingPasswordChange}>
                 {submittingPasswordChange ? t("layout.updatingPassword") : t("layout.updatePassword")}
               </Button>
             </div>

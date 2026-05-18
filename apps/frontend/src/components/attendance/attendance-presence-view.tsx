@@ -6,6 +6,8 @@ import {
   CalendarSearch,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Clock,
   Eye,
   ImageIcon,
@@ -21,6 +23,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ListTableAccent } from "@/components/data/list-table-accent";
+import { useTheme } from "@/components/theme/theme-provider";
 import { Input } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { getAccessToken } from "@/lib/auth-client";
@@ -70,6 +74,7 @@ export function AttendancePresenceView({
 }) {
   const t = useTranslations();
   const locale = useLocale();
+  const { theme } = useTheme();
   const defaultRange = useMemo(() => getDefaultAttendanceRange(filterPolicy), [filterPolicy]);
   const attendanceBoundaries = useMemo(() => getAttendanceBoundaryValues(filterPolicy), [filterPolicy]);
   const [departmentId, setDepartmentId] = useState("all");
@@ -177,12 +182,39 @@ export function AttendancePresenceView({
   const totalPages = Math.max(1, Math.ceil(presenceRows.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const pagedRows = presenceRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pageRangeStart = presenceRows.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const pageRangeEnd = presenceRows.length === 0 ? 0 : Math.min(safePage * pageSize, presenceRows.length);
+  const paginationPages = getVisiblePageNumbers(safePage, totalPages);
 
-  const summaryCards: Array<{ label: string; value: number; icon: LucideIcon }> = [
-    { label: t("attendance.summary.present"), value: presentCount, icon: Users },
-    { label: t("attendance.summary.late"), value: lateCount, icon: Clock },
-    { label: t("attendance.summary.absent"), value: absentCount, icon: UserX },
-    { label: t("attendance.summary.recognitions"), value: totalRecognitions, icon: Eye },
+  const summaryCards: Array<{ label: string; value: number; icon: LucideIcon; iconClassName: string; iconShellClassName: string }> = [
+    {
+      label: t("attendance.summary.present"),
+      value: presentCount,
+      icon: Users,
+      iconClassName: "text-white",
+      iconShellClassName: "bg-emerald-600 ring-1 ring-emerald-700/40 dark:bg-emerald-500 dark:ring-emerald-300/20",
+    },
+    {
+      label: t("attendance.summary.late"),
+      value: lateCount,
+      icon: Clock,
+      iconClassName: "text-white",
+      iconShellClassName: "bg-orange-500 ring-1 ring-orange-700/35 dark:bg-orange-400 dark:ring-orange-200/20",
+    },
+    {
+      label: t("attendance.summary.absent"),
+      value: absentCount,
+      icon: UserX,
+      iconClassName: "text-white",
+      iconShellClassName: "bg-rose-600 ring-1 ring-rose-800/35 dark:bg-rose-500 dark:ring-rose-200/20",
+    },
+    {
+      label: t("attendance.summary.recognitions"),
+      value: totalRecognitions,
+      icon: Eye,
+      iconClassName: "text-white",
+      iconShellClassName: "bg-blue-600 ring-1 ring-blue-800/35 dark:bg-blue-500 dark:ring-blue-200/20",
+    },
   ];
 
   async function handleGenerateReport() {
@@ -277,29 +309,35 @@ export function AttendancePresenceView({
   return (
     <div className="space-y-4 p-6">
       <div className="flex justify-end">
-        <Button onClick={() => setReportDialogOpen(true)}>
+        <Button className="ui-button-link ui-button-link-primary" onClick={() => setReportDialogOpen(true)}>
           <CalendarSearch className="h-4 w-4" />
           {t("attendance.filters.generateReport")}
         </Button>
       </div>
 
       <section className="grid gap-4 md:grid-cols-4">
-        {summaryCards.map(({ label, value, icon: Icon }) => (
+        {summaryCards.map(({ label, value, icon: Icon, iconClassName, iconShellClassName }) => (
           <Card key={label}>
             <CardContent className="flex items-center justify-between">
               <div>
                 <div className="text-2xl font-semibold">{value}</div>
                 <div className="text-sm text-slate-500">{label}</div>
               </div>
-              <div className="grid h-11 w-11 place-items-center rounded-md bg-slate-100">
-                <Icon className="h-5 w-5 text-slate-600" />
+              <div className={`grid h-11 w-11 place-items-center rounded-xl shadow-sm ${iconShellClassName}`}>
+                <Icon className={`h-5 w-5 ${iconClassName}`} />
               </div>
             </CardContent>
           </Card>
         ))}
       </section>
 
-      <Card>
+      <Card
+        className={
+          theme === "dark"
+            ? "relative z-20 border-white/8 bg-[rgba(15,27,45,0.42)] shadow-[0_18px_42px_rgba(2,6,23,0.24)] backdrop-blur-xl"
+            : "relative z-20 border-white/10 bg-[rgba(255,255,255,0.58)] shadow-[0_18px_42px_rgba(15,23,42,0.08)] backdrop-blur-xl"
+        }
+      >
         <CardContent>
           <div className="grid items-center gap-3 xl:grid-cols-[minmax(220px,0.8fr)_190px_260px_170px]">
             <Input
@@ -337,7 +375,8 @@ export function AttendancePresenceView({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="relative z-10 list-table-corner-accent">
+        <ListTableAccent />
         <CardHeader>
           <CardTitle>{t("attendance.table.title")}</CardTitle>
         </CardHeader>
@@ -388,25 +427,57 @@ export function AttendancePresenceView({
               {t("attendance.table.empty")}
             </div>
           ) : null}
-          <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
-            <span>{t("attendance.table.pageSummary", { page: safePage, totalPages, records: presenceRows.length })}</span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={safePage === 1}
+          <div className="mt-4 flex flex-col gap-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+            <span>{t("attendance.table.pageSummary", { page: safePage, totalPages, records: presenceRows.length })} - {pageRangeStart}-{pageRangeEnd}</span>
+            <div className="flex flex-wrap items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage <= 1}
+                onClick={() => setPage(1)}
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage <= 1}
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
-                className="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {t("attendance.table.previous")}
-              </button>
-              <button
-                type="button"
-                disabled={safePage === totalPages}
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {paginationPages.map((pageNumber) => (
+                <Button
+                  key={pageNumber}
+                  variant={pageNumber === safePage ? "default" : "outline"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setPage(pageNumber)}
+                  aria-current={pageNumber === safePage ? "page" : undefined}
+                >
+                  {pageNumber}
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage >= totalPages}
                 onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                className="inline-flex h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {t("attendance.table.next")}
-              </button>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage(totalPages)}
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -414,85 +485,87 @@ export function AttendancePresenceView({
 
       {reportDialog.value ? (
         <div
-          className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4 ${dialogOverlayClass(reportDialog.visible)}`}
+          className={`fixed inset-0 z-[120] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(reportDialog.visible)}`}
           onMouseDown={() => setReportDialogOpen(false)}
         >
           <div
-            className={`w-full max-w-5xl rounded-lg border border-slate-200 bg-white shadow-2xl ${dialogPanelClass(reportDialog.visible)}`}
+            className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-elevated)] text-[var(--foreground)] shadow-[var(--shadow-md)] ${dialogPanelClass(reportDialog.visible)}`}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+            <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-6 py-5">
               <div>
-                <h2 className="text-xl font-semibold text-slate-950">{t("attendance.report.title")}</h2>
-                <p className="mt-1 text-sm text-slate-500">{t("attendance.report.description")}</p>
+                <h2 className="text-xl font-semibold text-[var(--foreground)]">{t("attendance.report.title")}</h2>
+                <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[var(--foreground-soft)]">{t("attendance.report.description")}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setReportDialogOpen(false)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                aria-label={t("attendance.report.close")}
-              >
+              <Button variant="ghost" size="icon" onClick={() => setReportDialogOpen(false)} aria-label={t("attendance.report.close")}>
                 <X className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
 
-            <div className="space-y-4 p-5">
-              <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.25fr_auto] md:items-end">
-                <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                  {t("attendance.report.fromDate")}
-                  <DatePicker
-                    value={reportFromDate}
-                    minDate={attendanceBoundaries.minAttendanceDate}
-                    maxDate={attendanceBoundaries.maxAttendanceDate}
-                    onChange={(value) => {
-                      const nextRange = normalizeAttendanceRange({ fromDate: value, toDate: reportToDate }, filterPolicy, "from");
-                      if (!nextRange) return;
-                      setReportFromDate(nextRange.fromDate);
-                      setReportToDate(nextRange.toDate);
-                    }}
-                  />
-                </label>
-                <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                  {t("attendance.report.toDate")}
-                  <DatePicker
-                    value={reportToDate}
-                    minDate={attendanceBoundaries.minAttendanceDate}
-                    maxDate={attendanceBoundaries.maxAttendanceDate}
-                    onChange={(value) => {
-                      const nextRange = normalizeAttendanceRange({ fromDate: reportFromDate, toDate: value }, filterPolicy, "to");
-                      if (!nextRange) return;
-                      setReportFromDate(nextRange.fromDate);
-                      setReportToDate(nextRange.toDate);
-                    }}
-                  />
-                </label>
-                <label className="space-y-1.5 text-sm font-medium text-slate-700">
-                  {t("attendance.report.department")}
-                  <DepartmentTreeSelect departments={departments} value={reportDepartmentId} onChange={setReportDepartmentId} />
-                </label>
-                <Button onClick={() => void handleGenerateReport()} disabled={reportLoading}>
-                  {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarSearch className="h-4 w-4" />}
-                  {reportLoading ? t("attendance.report.generating") : t("attendance.report.generate")}
-                </Button>
-              </div>
+            <div className="thin-scrollbar flex-1 space-y-6 overflow-y-auto bg-[var(--background-muted)] p-6">
+              <section className="rounded-xl border border-[var(--border)] bg-[var(--background-elevated)] p-5 shadow-[var(--shadow-sm)]">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-end">
+                  <label className="space-y-2 text-sm font-medium text-[var(--foreground)]">
+                    {t("attendance.report.fromDate")}
+                    <DatePicker
+                      value={reportFromDate}
+                      minDate={attendanceBoundaries.minAttendanceDate}
+                      maxDate={attendanceBoundaries.maxAttendanceDate}
+                      onChange={(value) => {
+                        const nextRange = normalizeAttendanceRange({ fromDate: value, toDate: reportToDate }, filterPolicy, "from");
+                        if (!nextRange) return;
+                        setReportFromDate(nextRange.fromDate);
+                        setReportToDate(nextRange.toDate);
+                      }}
+                    />
+                  </label>
+                  <label className="space-y-2 text-sm font-medium text-[var(--foreground)]">
+                    {t("attendance.report.toDate")}
+                    <DatePicker
+                      value={reportToDate}
+                      minDate={attendanceBoundaries.minAttendanceDate}
+                      maxDate={attendanceBoundaries.maxAttendanceDate}
+                      onChange={(value) => {
+                        const nextRange = normalizeAttendanceRange({ fromDate: reportFromDate, toDate: value }, filterPolicy, "to");
+                        if (!nextRange) return;
+                        setReportFromDate(nextRange.fromDate);
+                        setReportToDate(nextRange.toDate);
+                      }}
+                    />
+                  </label>
+                  <label className="space-y-2 text-sm font-medium text-[var(--foreground)]">
+                    {t("attendance.report.department")}
+                    <DepartmentTreeSelect departments={departments} value={reportDepartmentId} onChange={setReportDepartmentId} />
+                  </label>
+                  <Button
+                    className="ui-button-link ui-button-link-primary w-full lg:w-auto"
+                    onClick={() => void handleGenerateReport()}
+                    disabled={reportLoading}
+                  >
+                    {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarSearch className="h-4 w-4" />}
+                    {reportLoading ? t("attendance.report.generating") : t("attendance.report.generate")}
+                  </Button>
+                </div>
+              </section>
 
               {reportError ? (
-                <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{reportError}</div>
+                <div className="rounded-md border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">{reportError}</div>
               ) : null}
 
-              <div className="rounded-lg border border-slate-200">
-                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                  <div className="font-medium text-slate-950">{t("attendance.report.resultTitle")}</div>
+              <section className="list-table-corner-accent overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-elevated)] shadow-[var(--shadow-sm)]">
+                <ListTableAccent />
+                <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="font-medium text-[var(--foreground)]">{t("attendance.report.resultTitle")}</div>
                   <Button variant="outline" size="sm" onClick={handlePrintReport} disabled={!reportRows || reportRows.length === 0}>
                     <Printer className="h-4 w-4" />
                     {t("attendance.report.print")}
                   </Button>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto px-5 pb-5 pt-2">
                   {reportRows && reportRows.length > 0 ? (
                     <table className="w-full min-w-[760px] table-fixed text-left text-sm">
-                      <thead className="text-xs uppercase text-slate-500">
-                        <tr className="border-b border-slate-200">
+                      <thead className="text-xs uppercase text-[var(--foreground-soft)]">
+                        <tr className="border-b border-[var(--border)]">
                           <th className="w-12 py-3">{t("attendance.report.index")}</th>
                           <th>{t("attendance.report.person")}</th>
                           <th className="w-40">{t("attendance.report.departmentColumn")}</th>
@@ -504,10 +577,10 @@ export function AttendancePresenceView({
                       </thead>
                       <tbody>
                         {reportRows.map((row, index) => (
-                          <tr key={row.person.id} className="border-b border-slate-100">
-                            <td className="py-3 font-mono text-xs text-slate-500">{index + 1}</td>
-                            <td className="truncate pr-4 font-medium">{row.person.full_name}</td>
-                            <td className="truncate pr-4">{row.person.department_name || t("common.notAssigned")}</td>
+                          <tr key={row.person.id} className="border-b border-[var(--border)]/60">
+                            <td className="py-3 font-mono text-xs text-[var(--foreground-muted)]">{index + 1}</td>
+                            <td className="truncate pr-4 font-medium text-[var(--foreground)]">{row.person.full_name}</td>
+                            <td className="truncate pr-4 text-[var(--foreground-soft)]">{row.person.department_name || t("common.notAssigned")}</td>
                             <td>{row.present_days}</td>
                             <td>{row.late_days}</td>
                             <td>{row.absent_days}</td>
@@ -517,13 +590,15 @@ export function AttendancePresenceView({
                       </tbody>
                     </table>
                   ) : (
-                    <div className="p-6 text-center text-sm text-slate-500">{t("attendance.report.empty")}</div>
+                    <div className="rounded-lg border border-dashed border-[var(--border-strong)] px-6 py-10 text-center text-sm text-[var(--foreground-soft)]">
+                      {t("attendance.report.empty")}
+                    </div>
                   )}
                 </div>
-              </div>
+              </section>
             </div>
 
-            <div className="flex justify-end border-t border-slate-200 p-5">
+            <div className="flex justify-end border-t border-[var(--border)] bg-[var(--background-elevated)] px-6 py-4">
               <Button variant="outline" onClick={() => setReportDialogOpen(false)}>
                 {t("attendance.report.cancel")}
               </Button>
@@ -556,7 +631,7 @@ function PresenceDetailDialog({
   const threshold = `${String(LATE_AFTER_HOUR).padStart(2, "0")}:${String(LATE_AFTER_MINUTE).padStart(2, "0")}`;
 
   return (
-    <div className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
+    <div className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
       <div
         className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(visible)}`}
         onMouseDown={(event) => event.stopPropagation()}
@@ -723,16 +798,16 @@ function StatusFilterSelect({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        className="ui-filter-trigger"
       >
         <span className="flex min-w-0 items-center gap-2">
-          {selectedOption.value === "all" ? <span className="truncate font-medium text-slate-700">{selectedOption.label}</span> : <PresenceStatusBadge status={selectedOption.value} />}
+          {selectedOption.value === "all" ? <span className="ui-filter-value">{selectedOption.label}</span> : <PresenceStatusBadge status={selectedOption.value} />}
         </span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-11 z-30 w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+        <div className="ui-filter-panel absolute left-0 top-12 z-30 w-full p-1">
           {options.map((option) => (
             <button
               key={option.value}
@@ -741,9 +816,9 @@ function StatusFilterSelect({
                 onChange(option.value);
                 setOpen(false);
               }}
-              className={value === option.value ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+              className={value === option.value ? "ui-filter-option ui-filter-option-active" : "ui-filter-option"}
             >
-              {option.value === "all" ? <span>{t("attendance.filters.allStatuses")}</span> : <PresenceStatusBadge status={option.value} />}
+              {option.value === "all" ? <span className="ui-filter-value">{t("attendance.filters.allStatuses")}</span> : <PresenceStatusBadge status={option.value} />}
             </button>
           ))}
         </div>
@@ -795,6 +870,26 @@ function buildPresenceReport(
       total_recognitions: dailyStatuses.reduce((sum, day) => sum + day.recognition_count, 0),
     };
   });
+}
+
+function getVisiblePageNumbers(currentPage: number, totalPages: number) {
+  const maxVisiblePages = 5;
+  if (totalPages <= maxVisiblePages) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  let startPage = currentPage - Math.floor(maxVisiblePages / 2);
+  let endPage = currentPage + Math.floor(maxVisiblePages / 2);
+
+  if (startPage < 1) {
+    startPage = 1;
+    endPage = maxVisiblePages;
+  } else if (endPage > totalPages) {
+    endPage = totalPages;
+    startPage = totalPages - maxVisiblePages + 1;
+  }
+
+  return Array.from({ length: endPage - startPage + 1 }, (_, index) => startPage + index);
 }
 
 function getDateRange(fromDate: string, toDate: string) {
@@ -861,17 +956,17 @@ function DatePicker({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        className="ui-filter-trigger"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <CalendarSearch className="h-4 w-4 shrink-0 text-slate-500" />
-          <span className="truncate font-medium text-slate-800">{formatDateLocalized(value, locale)}</span>
+          <CalendarSearch className="ui-filter-search-icon shrink-0" />
+          <span className="ui-filter-value">{formatDateLocalized(value, locale)}</span>
         </span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-11 z-30 w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+        <div className="ui-filter-panel absolute left-0 top-12 z-30 w-80">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
             <button type="button" onClick={() => shiftMonth(-1)} className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label={t("previousMonth")}>
               <ChevronLeft className="h-4 w-4" />
@@ -1007,17 +1102,17 @@ function DepartmentTreeSelect({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        className="ui-filter-trigger"
       >
-        <span className="truncate">{selectedLabel}</span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <span className="ui-filter-value">{selectedLabel}</span>
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-11 z-30 w-[360px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
-          <div className="border-b border-slate-100 p-2">
-            <div className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3">
-              <Search className="h-4 w-4 text-slate-400" />
+        <div className="ui-filter-panel absolute left-0 top-12 z-30 w-[360px]">
+          <div className="border-b border-[var(--border)] p-2">
+            <div className="ui-filter-search-shell">
+              <Search className="ui-filter-search-icon" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -1034,7 +1129,7 @@ function DepartmentTreeSelect({
                 onChange("all");
                 setOpen(false);
               }}
-              className={value === "all" ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+              className={value === "all" ? "ui-filter-option ui-filter-option-active" : "ui-filter-option"}
             >
               <Building2 className="h-4 w-4" />
               {t("allDepartments")}
@@ -1100,7 +1195,11 @@ function DepartmentTreeOption({
   return (
     <div>
       <div
-        className={selectedId === department.id ? "flex items-center gap-2 rounded-md bg-slate-950 px-2 py-2 text-sm font-medium text-white" : "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-slate-50"}
+        className={
+          selectedId === department.id
+            ? "flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--background-muted)] px-2 py-2.5 text-sm font-medium text-[var(--foreground)]"
+            : "flex items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-[var(--foreground)] hover:bg-[var(--background-panel)]"
+        }
         style={{ paddingLeft: 8 + depth * 18 }}
       >
         <button

@@ -2,15 +2,21 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Fingerprint, ImageUp, UploadCloud, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { PageAmbientWave } from "@/components/data/page-ambient-wave";
 import { PageHeader } from "@/components/data/page-header";
+import { useTheme } from "@/components/theme/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { getAccessToken } from "@/lib/auth-client";
+import { getLatestIndexedProfileAssetId } from "@/lib/person-profile-image";
+import { getTranslatedBackendError } from "@/lib/translated-backend-error";
+import { useCachedMediaAsset } from "@/lib/use-cached-media-asset";
 import type { CreatePersonRegistrationResponse, Department, FaceRegistration, PageResult, Person } from "@/lib/types";
 
 const allowedImageTypes = new Set(["image/jpeg", "image/png"]);
@@ -23,12 +29,17 @@ type ToastState = {
   variant: "success" | "danger" | "info";
 } | null;
 
+type Translator = ReturnType<typeof useTranslations>;
+
 export default function NewPersonFaceRegistrationPage() {
+  const t = useTranslations();
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { theme } = useTheme();
   const personId = params.id;
   const [person, setPerson] = useState<Person | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [registrations, setRegistrations] = useState<FaceRegistration[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
@@ -38,6 +49,12 @@ export default function NewPersonFaceRegistrationPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
   const [toastVisible, setToastVisible] = useState(false);
+  const profileImageAssetId = getLatestIndexedProfileAssetId(registrations);
+  const profileImage = useCachedMediaAsset(profileImageAssetId);
+  const glassCardClass =
+    theme === "dark"
+      ? "border-white/8 bg-[rgba(15,27,45,0.42)] shadow-[0_18px_42px_rgba(2,6,23,0.24)] backdrop-blur-xl"
+      : "border-white/10 bg-[rgba(255,255,255,0.58)] shadow-[0_18px_42px_rgba(15,23,42,0.08)] backdrop-blur-xl";
 
   useEffect(() => {
     const token = getAccessToken();
@@ -53,18 +70,20 @@ export default function NewPersonFaceRegistrationPage() {
       setError(null);
 
       try {
-        const [personData, departmentsPage] = await Promise.all([
+        const [personData, departmentsPage, registrationsPage] = await Promise.all([
           apiFetch<Person>(`/persons/${personId}`, { withAuth: true }),
           apiFetch<PageResult<Department>>("/departments?page=1&page_size=100", { withAuth: true }),
+          apiFetch<PageResult<FaceRegistration>>(`/persons/${personId}/registrations?page=1&page_size=20`, { withAuth: true }),
         ]);
 
         if (cancelled) return;
 
         setPerson(personData);
         setDepartments(departmentsPage.items);
+        setRegistrations(registrationsPage.items);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : "Không thể tải thông tin nhân sự.");
+        setError(err instanceof ApiError ? getTranslatedBackendError(t, err, "persons") : t("persons.addFace.loadFailed"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -75,7 +94,7 @@ export default function NewPersonFaceRegistrationPage() {
     return () => {
       cancelled = true;
     };
-  }, [personId, router]);
+  }, [personId, router, t]);
 
   useEffect(() => {
     if (!toast) return;
@@ -97,9 +116,9 @@ export default function NewPersonFaceRegistrationPage() {
   }, [selectedFilePreviewUrl]);
 
   const departmentName = useMemo(() => {
-    if (!person?.department_id) return "Không trực thuộc";
-    return departments.find((department) => department.id === person.department_id)?.name ?? "Không xác định";
-  }, [departments, person]);
+    if (!person?.department_id) return t("common.notAssigned");
+    return departments.find((department) => department.id === person.department_id)?.name ?? t("common.unknown");
+  }, [departments, person, t]);
 
   function showToast(nextToast: NonNullable<ToastState>) {
     setToast(nextToast);
@@ -126,8 +145,8 @@ export default function NewPersonFaceRegistrationPage() {
       setSelectedFile(null);
       setSelectedFilePreviewUrl(null);
       showToast({
-        title: "Ảnh không hợp lệ",
-        description: "Vui lòng chọn file JPG hoặc PNG.",
+        title: t("persons.addFace.invalidImageTitle"),
+        description: t("persons.addFace.invalidImageDescription"),
         variant: "danger",
       });
       return;
@@ -141,10 +160,9 @@ export default function NewPersonFaceRegistrationPage() {
     const startedAt = Date.now();
 
     while (Date.now() - startedAt < REGISTRATION_POLL_TIMEOUT_MS) {
-      const registration = await apiFetch<FaceRegistration>(
-        `/persons/${personIdValue}/registrations/${registrationId}`,
-        { withAuth: true },
-      );
+      const registration = await apiFetch<FaceRegistration>(`/persons/${personIdValue}/registrations/${registrationId}`, {
+        withAuth: true,
+      });
 
       if (registration.registration_status === "indexed") {
         return registration;
@@ -153,15 +171,15 @@ export default function NewPersonFaceRegistrationPage() {
         const failureReason = registration.validation_notes?.trim();
         throw new Error(
           failureReason && failureReason.length > 0
-            ? translateFailureReason(failureReason)
-            : "Đăng ký khuôn mặt thất bại sau khi hệ thống xử lý ảnh.",
+            ? translateFailureReason(failureReason, t)
+            : t("persons.addFace.registrationFailedAfterProcessing"),
         );
       }
 
       await new Promise((resolve) => window.setTimeout(resolve, REGISTRATION_POLL_INTERVAL_MS));
     }
 
-    throw new Error("Hệ thống xử lý quá thời gian chờ. Đăng ký khuôn mặt chưa hoàn tất.");
+    throw new Error(t("persons.addFace.processingTimeout"));
   }
 
   async function submitRegistration() {
@@ -169,8 +187,8 @@ export default function NewPersonFaceRegistrationPage() {
 
     if (!selectedFile) {
       showToast({
-        title: "Chưa chọn ảnh",
-        description: "Vui lòng chọn một ảnh JPG hoặc PNG trước khi đăng ký.",
+        title: t("persons.addFace.missingImageTitle"),
+        description: t("persons.addFace.missingImageDescription"),
         variant: "danger",
       });
       return;
@@ -178,8 +196,8 @@ export default function NewPersonFaceRegistrationPage() {
 
     if (!allowedImageTypes.has(selectedFile.type)) {
       showToast({
-        title: "Ảnh không hợp lệ",
-        description: "Vui lòng chọn file JPG hoặc PNG.",
+        title: t("persons.addFace.invalidImageTitle"),
+        description: t("persons.addFace.invalidImageDescription"),
         variant: "danger",
       });
       return;
@@ -203,28 +221,25 @@ export default function NewPersonFaceRegistrationPage() {
 
       setProcessingRegistration(true);
       showToast({
-        title: "Đang xử lý đăng ký khuôn mặt",
-        description: "Ảnh đã được gửi sang pipeline và AI service để xử lý.",
+        title: t("persons.addFace.processingTitle"),
+        description: t("persons.addFace.processingDescription"),
         variant: "info",
       });
+
       await waitForRegistrationCompletion(person.id, response.registration.id);
+
       setProcessingRegistration(false);
       showToast({
-        title: "Đăng ký khuôn mặt thành công",
-        description: "Ảnh đã được xử lý xong và sẵn sàng sử dụng.",
+        title: t("persons.addFace.successTitle"),
+        description: t("persons.addFace.successDescription"),
         variant: "success",
       });
       window.setTimeout(() => router.push(`/persons/${person.id}`), 1500);
     } catch (err) {
       setProcessingRegistration(false);
       showToast({
-        title: "Đăng ký khuôn mặt thất bại",
-        description:
-          err instanceof ApiError
-            ? translateFailureReason(err.message)
-            : err instanceof Error
-              ? translateFailureReason(err.message)
-              : "Không thể tạo đăng ký khuôn mặt. Vui lòng thử lại.",
+        title: t("persons.addFace.failedTitle"),
+        description: getLocalizedRegistrationError(err, t),
         variant: "danger",
       });
     } finally {
@@ -233,26 +248,27 @@ export default function NewPersonFaceRegistrationPage() {
   }
 
   return (
-    <div>
+    <div className="relative min-h-[calc(100vh-5rem)]">
+      <PageAmbientWave className="fixed inset-x-0 top-1/2 z-0 h-0" />
       <PageHeader
-        title="Đăng ký khuôn mặt"
-        description={person ? `Tạo face registration cho ${person.full_name}.` : "Đang tải thông tin nhân sự."}
+        title={t("persons.addFace.pageTitle")}
+        description={
+          person
+            ? t("persons.addFace.pageDescriptionWithName", { name: person.full_name })
+            : t("persons.addFace.pageDescription")
+        }
       />
 
-      <div className="mx-auto max-w-6xl space-y-4 p-6">
+      <div className="relative z-10 mx-auto max-w-6xl space-y-4 p-6">
         <Link
           href={person ? `/persons/${person.id}` : "/persons"}
           className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-950"
         >
           <ArrowLeft className="h-4 w-4" />
-          Quay lại chi tiết nhân sự
+          {t("persons.addFace.backToDetail")}
         </Link>
 
-        {loading ? (
-          <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">
-            Đang tải thông tin nhân sự...
-          </div>
-        ) : null}
+        {loading ? <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">{t("persons.addFace.loading")}</div> : null}
 
         {!loading && error ? (
           <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-sm text-red-700">{error}</div>
@@ -260,45 +276,58 @@ export default function NewPersonFaceRegistrationPage() {
 
         {!loading && !error && person ? (
           <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
-            <Card>
+            <Card className={glassCardClass}>
               <CardHeader>
-                <CardTitle>Nhân sự đã chọn</CardTitle>
-                <CardDescription>URL đã chứa person_id nên không cần tìm lại người đăng ký.</CardDescription>
+                <CardTitle>{t("persons.addFace.selectedPersonTitle")}</CardTitle>
+                <CardDescription>{t("persons.addFace.selectedPersonDescription")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid aspect-square place-items-center rounded-lg bg-slate-100 text-5xl font-semibold text-slate-400">
-                  {person.full_name.split(" ").slice(-1)[0]?.[0] ?? "?"}
+                <div className="relative grid aspect-square overflow-hidden rounded-lg bg-slate-100">
+                  {profileImage.status === "loading" ? <div className="absolute inset-0 animate-pulse bg-slate-200/70" aria-hidden="true" /> : null}
+                  <div className="grid h-full w-full place-items-center text-5xl font-semibold text-slate-400">
+                    {person.full_name.split(" ").slice(-1)[0]?.[0] ?? "?"}
+                  </div>
+                  {profileImage.src ? (
+                    <Image
+                      src={profileImage.src}
+                      alt={`${t("persons.addFace.selectedPersonTitle")} ${person.full_name}`}
+                      width={640}
+                      height={640}
+                      unoptimized
+                      className="absolute inset-0 h-full w-full object-cover transition-opacity duration-200 opacity-100"
+                    />
+                  ) : null}
                 </div>
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">Mã nhân viên</span>
+                    <span className="text-slate-500">{t("persons.addFace.employeeCode")}</span>
                     <span className="font-mono text-xs">{person.employee_code}</span>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">Họ tên</span>
+                    <span className="text-slate-500">{t("persons.addFace.fullName")}</span>
                     <span className="font-medium">{person.full_name}</span>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">Phòng ban</span>
+                    <span className="text-slate-500">{t("persons.addFace.department")}</span>
                     <span>{departmentName}</span>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <span className="text-slate-500">Chức danh</span>
-                    <span>{person.title}</span>
+                    <span className="text-slate-500">{t("persons.addFace.title")}</span>
+                    <span>{person.title || t("common.unknown")}</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={glassCardClass}>
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <div className="grid h-10 w-10 place-items-center rounded-md bg-slate-100">
                     <Fingerprint className="h-5 w-5 text-slate-600" />
                   </div>
                   <div>
-                    <CardTitle>Ảnh đăng ký khuôn mặt</CardTitle>
-                    <CardDescription>Upload ảnh lên media assets rồi tạo registration cho nhân sự.</CardDescription>
+                    <CardTitle>{t("persons.addFace.registrationCardTitle")}</CardTitle>
+                    <CardDescription>{t("persons.addFace.registrationCardDescription")}</CardDescription>
                   </div>
                 </div>
               </CardHeader>
@@ -316,7 +345,7 @@ export default function NewPersonFaceRegistrationPage() {
                         <div className="relative mx-auto aspect-[4/3] w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white">
                           <Image
                             src={selectedFilePreviewUrl}
-                            alt={selectedFile?.name ?? "Ảnh đăng ký khuôn mặt"}
+                            alt={selectedFile?.name ?? t("persons.addFace.imageAlt")}
                             fill
                             unoptimized
                             className="object-contain"
@@ -332,30 +361,38 @@ export default function NewPersonFaceRegistrationPage() {
                         <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-white shadow-sm ring-1 ring-slate-200">
                           <ImageUp className="h-7 w-7 text-slate-500" />
                         </div>
-                        <div className="mt-4 text-base font-semibold">Chọn ảnh khuôn mặt</div>
-                        <div className="mt-1 text-sm text-slate-500">JPG/PNG, một người, rõ mặt, đủ sáng.</div>
+                        <div className="mt-4 text-base font-semibold">{t("persons.addFace.selectImageTitle")}</div>
+                        <div className="mt-1 text-sm text-slate-500">{t("persons.addFace.selectImageHint")}</div>
                       </div>
                     )}
                     <div className="mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-medium text-white">
                       <UploadCloud className="h-4 w-4" />
-                      {selectedFilePreviewUrl ? "Đổi ảnh" : "Chọn ảnh"}
+                      {selectedFilePreviewUrl ? t("persons.addFace.changeImage") : t("persons.addFace.selectImage")}
                     </div>
                   </div>
                 </label>
 
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium">Ghi chú</span>
-                  <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Nhập ghi chú nếu cần" />
+                  <span className="text-sm font-medium">{t("persons.addFace.notes")}</span>
+                  <Textarea
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder={t("persons.addFace.notesPlaceholder")}
+                  />
                 </label>
 
                 <div className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-start gap-2 text-sm text-slate-600">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
-                    <span>Hệ thống sẽ upload ảnh trước, sau đó tạo registration từ media asset vừa nhận.</span>
+                    <span>{t("persons.addFace.flowHint")}</span>
                   </div>
-                  <Button onClick={submitRegistration} disabled={submitting}>
+                  <Button className="ui-button-link ui-button-link-primary" onClick={submitRegistration} disabled={submitting}>
                     <Fingerprint className="h-4 w-4" />
-                    {submitting ? (processingRegistration ? "Đang chờ xử lý..." : "Đang đăng ký...") : "Gửi đăng ký"}
+                    {submitting
+                      ? processingRegistration
+                        ? t("persons.addFace.processing")
+                        : t("persons.addFace.submitting")
+                      : t("persons.addFace.submit")}
                   </Button>
                 </div>
               </CardContent>
@@ -389,7 +426,7 @@ export default function NewPersonFaceRegistrationPage() {
               type="button"
               onClick={closeToast}
               className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-950"
-              aria-label="Đóng thông báo"
+              aria-label={t("persons.addFace.closeToast")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -400,25 +437,41 @@ export default function NewPersonFaceRegistrationPage() {
   );
 }
 
-function translateFailureReason(message: string) {
+function getLocalizedRegistrationError(error: unknown, t: Translator) {
+  if (error instanceof ApiError) {
+    const translated = translateFailureReason(error.message, t);
+    if (translated !== error.message.trim()) {
+      return translated;
+    }
+    return getTranslatedBackendError(t, error, "registrations");
+  }
+
+  if (error instanceof Error) {
+    return translateFailureReason(error.message, t);
+  }
+
+  return t("persons.addFace.failedDescription");
+}
+
+function translateFailureReason(message: string, t: Translator) {
   const normalized = message.trim();
   const lowered = normalized.toLowerCase();
 
-  if (lowered.includes("multiple faces detected")) return "Ảnh có nhiều khuôn mặt. Vui lòng chọn ảnh chỉ có một người.";
-  if (lowered.includes("no face detected")) return "Không phát hiện được khuôn mặt trong ảnh. Vui lòng chọn ảnh rõ mặt hơn.";
-  if (lowered.includes("face too small")) return "Khuôn mặt trong ảnh quá nhỏ. Vui lòng chọn ảnh gần hơn.";
-  if (lowered.includes("blur")) return "Ảnh bị mờ. Vui lòng chọn ảnh rõ nét hơn.";
-  if (lowered.includes("low light")) return "Ảnh quá tối. Vui lòng chọn ảnh đủ sáng hơn.";
-  if (lowered.includes("spoof")) return "Hệ thống nghi ngờ ảnh không phải khuôn mặt thật hợp lệ.";
-  if (lowered.includes("embedding failed")) return "Hệ thống không tạo được đặc trưng khuôn mặt từ ảnh đã tải lên.";
-  if (lowered.includes("image is empty")) return "Ảnh tải lên bị trống.";
-  if (lowered.includes("too large")) return "Ảnh tải lên quá lớn.";
-  if (lowered.includes("unsupported image type")) return "Định dạng ảnh không được hỗ trợ. Vui lòng chọn JPG hoặc PNG.";
-  if (lowered.includes("timeout")) return "Hệ thống xử lý quá thời gian chờ.";
-  if (lowered.includes("person not found")) return "Không tìm thấy nhân sự để đăng ký khuôn mặt.";
-  if (lowered.includes("registration not found")) return "Không tìm thấy bản đăng ký khuôn mặt.";
-  if (lowered.includes("bucket name is required")) return "Thiếu thông tin bucket lưu ảnh.";
-  if (lowered.includes("request failed")) return "Yêu cầu thất bại. Vui lòng thử lại.";
+  if (lowered.includes("multiple faces detected")) return t("persons.addFace.multipleFacesDetected");
+  if (lowered.includes("no face detected")) return t("persons.addFace.noFaceDetected");
+  if (lowered.includes("face too small")) return t("persons.addFace.faceTooSmall");
+  if (lowered.includes("blur")) return t("persons.addFace.blurredImage");
+  if (lowered.includes("low light")) return t("persons.addFace.lowLightImage");
+  if (lowered.includes("spoof")) return t("persons.addFace.spoofSuspected");
+  if (lowered.includes("embedding failed")) return t("persons.addFace.embeddingFailed");
+  if (lowered.includes("image is empty")) return t("persons.addFace.emptyImage");
+  if (lowered.includes("too large")) return t("persons.addFace.imageTooLarge");
+  if (lowered.includes("unsupported image type")) return t("persons.addFace.invalidImageDescription");
+  if (lowered.includes("timeout")) return t("persons.addFace.processingTimeout");
+  if (lowered.includes("person not found")) return t("persons.addFace.personNotFound");
+  if (lowered.includes("registration not found")) return t("persons.addFace.registrationNotFound");
+  if (lowered.includes("bucket name is required")) return t("persons.addFace.missingBucket");
+  if (lowered.includes("request failed")) return t("errors.system.requestFailed");
 
   return normalized;
 }

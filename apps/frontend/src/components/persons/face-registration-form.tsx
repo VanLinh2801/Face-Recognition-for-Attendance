@@ -276,7 +276,7 @@ export function FaceRegistrationForm({ person }: { person: Person }) {
                         Reset
                       </Button>
                     ) : null}
-                    <Button disabled={!canSubmit || submitState === "submitting"} onClick={submitRegistration}>
+                    <Button className="ui-button-link ui-button-link-primary" disabled={!canSubmit || submitState === "submitting"} onClick={submitRegistration}>
                       {submitState === "submitting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                       Gửi đăng ký
                     </Button>

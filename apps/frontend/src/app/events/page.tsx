@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { PageAmbientWave } from "@/components/data/page-ambient-wave";
 import { EventsReviewCenter } from "@/components/events/events-review-center";
 import { PageHeader } from "@/components/data/page-header";
 import { ApiError, apiFetch } from "@/lib/api-client";
@@ -172,49 +173,52 @@ export default function EventsPage() {
   }, [activeType, filterPolicy, focusTime, fromTime, requestedType, selectedEventId, toTime]);
 
   return (
-    <div>
+    <div className="relative min-h-[calc(100vh-5rem)]">
+      <PageAmbientWave className="fixed inset-x-0 top-1/2 z-0 h-0" />
       <PageHeader title={t("events.page.title")} description={t("events.page.description")} />
-      <EventsReviewCenter
-        rows={rows}
-        total={total}
-        currentPage={currentPage}
-        pageSize={PAGE_SIZE}
-        loading={loading}
-        error={error}
-        activeType={activeType}
-        query={query}
-        fromTime={fromTime}
-        toTime={toTime}
-        retentionDays={filterPolicy?.retention_days ?? null}
-        minTime={eventBoundaries?.minEventStart ?? null}
-        maxTime={eventBoundaries?.maxEventEnd ?? null}
-        selectedEventId={selectedEventId}
-        onTypeChange={(value) => {
-          setActiveType(value);
-          setCurrentPage(1);
-        }}
-        onQueryChange={(value) => {
-          setQuery(value);
-          setCurrentPage(1);
-        }}
-        onFromTimeChange={(value) => {
-          if (!filterPolicy) return;
-          const nextRange = normalizeEventRange({ fromTime: value, toTime }, filterPolicy, "from");
-          if (!nextRange) return;
-          setFromTime(nextRange.fromTime);
-          setToTime(nextRange.toTime);
-          setCurrentPage(1);
-        }}
-        onToTimeChange={(value) => {
-          if (!filterPolicy) return;
-          const nextRange = normalizeEventRange({ fromTime, toTime: value }, filterPolicy, "to");
-          if (!nextRange) return;
-          setFromTime(nextRange.fromTime);
-          setToTime(nextRange.toTime);
-          setCurrentPage(1);
-        }}
-        onPageChange={setCurrentPage}
-      />
+      <div className="relative z-10">
+        <EventsReviewCenter
+          rows={rows}
+          total={total}
+          currentPage={currentPage}
+          pageSize={PAGE_SIZE}
+          loading={loading}
+          error={error}
+          activeType={activeType}
+          query={query}
+          fromTime={fromTime}
+          toTime={toTime}
+          retentionDays={filterPolicy?.retention_days ?? null}
+          minTime={eventBoundaries?.minEventStart ?? null}
+          maxTime={eventBoundaries?.maxEventEnd ?? null}
+          selectedEventId={selectedEventId}
+          onTypeChange={(value) => {
+            setActiveType(value);
+            setCurrentPage(1);
+          }}
+          onQueryChange={(value) => {
+            setQuery(value);
+            setCurrentPage(1);
+          }}
+          onFromTimeChange={(value) => {
+            if (!filterPolicy) return;
+            const nextRange = normalizeEventRange({ fromTime: value, toTime }, filterPolicy, "from");
+            if (!nextRange) return;
+            setFromTime(nextRange.fromTime);
+            setToTime(nextRange.toTime);
+            setCurrentPage(1);
+          }}
+          onToTimeChange={(value) => {
+            if (!filterPolicy) return;
+            const nextRange = normalizeEventRange({ fromTime, toTime: value }, filterPolicy, "to");
+            if (!nextRange) return;
+            setFromTime(nextRange.fromTime);
+            setToTime(nextRange.toTime);
+            setCurrentPage(1);
+          }}
+          onPageChange={setCurrentPage}
+        />
+      </div>
     </div>
   );
 }

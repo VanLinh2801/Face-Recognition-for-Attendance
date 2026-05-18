@@ -2,20 +2,20 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
-const buttonVariants = cva(
-  "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
+export const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl font-sans text-[0.875rem] leading-none font-semibold shadow-[var(--shadow-sm)] transition-all duration-180 appearance-none disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
-        outline: "border border-[var(--border)] bg-[var(--background-elevated)] text-[var(--foreground)] hover:bg-[var(--background-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
-        ghost: "text-[var(--foreground-soft)] hover:bg-[var(--background-muted)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
-        danger: "bg-[var(--danger)] text-[var(--primary-foreground)] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
+        default: "bg-[var(--primary)] text-[var(--primary-foreground)] hover:-translate-y-px hover:bg-[var(--primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
+        outline: "border border-[var(--border)] bg-[var(--background-elevated)] text-[var(--foreground)] hover:-translate-y-px hover:border-[var(--border-strong)] hover:bg-[var(--background-panel)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
+        ghost: "text-[var(--foreground-soft)] shadow-none hover:bg-[var(--background-muted)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
+        danger: "bg-[var(--danger)] text-[var(--primary-foreground)] hover:-translate-y-px hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
       },
       size: {
-        default: "h-9 px-3",
-        sm: "h-8 px-2.5 text-xs",
-        icon: "h-9 w-9 px-0",
+        default: "h-10 px-3.5",
+        sm: "h-9 px-3",
+        icon: "h-10 w-10 px-0",
       },
     },
     defaultVariants: {
@@ -28,6 +28,8 @@ const buttonVariants = cva(
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
   VariantProps<typeof buttonVariants>;
 
-export function Button({ className, variant, size, ...props }: ButtonProps) {
-  return <button className={cn(buttonVariants({ variant, size, className }))} {...props} />;
-}
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, ...props }, ref) => {
+  return <button ref={ref} className={cn(buttonVariants({ variant, size, className }))} {...props} />;
+});
+
+Button.displayName = "Button";

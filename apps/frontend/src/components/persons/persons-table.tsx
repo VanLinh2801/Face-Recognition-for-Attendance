@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { createPortal } from "react-dom";
 import {
   Building2,
   CalendarSearch,
   ChevronLeft,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   ChevronsLeft,
   ChevronsRight,
   Eye,
@@ -19,7 +22,9 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ListTableAccent } from "@/components/data/list-table-accent";
 import { PersonStatusBadge } from "@/components/data/status-badge";
+import { useTheme } from "@/components/theme/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
@@ -36,6 +41,12 @@ type PersonRow = Person & {
 
 export type EditablePersonStatus = Exclude<Person["status"], "inactive">;
 type PersonStatusFilter = "all" | EditablePersonStatus;
+type SortKey = "full_name" | "employee_code" | "department_name" | "title" | "status" | "joined_at";
+type SortDirection = "asc" | "desc";
+type SortState = {
+  key: SortKey;
+  direction: SortDirection;
+};
 
 type DeleteRequest = {
   type: "single" | "bulk";
@@ -55,6 +66,11 @@ type EditFieldErrors = {
   phone?: string;
 };
 
+type ActionMenuPosition = {
+  top: number;
+  left: number;
+};
+
 const PAGE_SIZE = 10;
 
 export function PersonsTable({
@@ -65,6 +81,8 @@ export function PersonsTable({
   departments: Department[];
 }) {
   const t = useTranslations();
+  const locale = useLocale();
+  const { theme } = useTheme();
   const [persons, setPersons] = useState<PersonRow[]>(initialPersons);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [editingPerson, setEditingPerson] = useState<PersonRow | null>(null);
@@ -73,45 +91,57 @@ export function PersonsTable({
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentId, setDepartmentId] = useState("all");
   const [statusFilter, setStatusFilter] = useState<PersonStatusFilter>("all");
+  const [sort, setSort] = useState<SortState>({ key: "full_name", direction: "asc" });
   const [currentPage, setCurrentPage] = useState(1);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editFieldErrors, setEditFieldErrors] = useState<EditFieldErrors>({});
   const [toast, setToast] = useState<ToastState>(null);
   const [toastVisible, setToastVisible] = useState(false);
+  const [actionMenuPosition, setActionMenuPosition] = useState<ActionMenuPosition | null>(null);
+  const [actionMenuVisible, setActionMenuVisible] = useState(false);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+  const actionButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const editingDialog = useDialogTransition(editingPerson);
   const deleteDialog = useDialogTransition(deleteRequest);
   const visibleEditingPerson = editingDialog.value;
   const visibleDeleteRequest = deleteDialog.value;
 
-  useOutsideClick(actionMenuRef, openActionId !== null, () => setOpenActionId(null));
-
   const departmentScopeIds = useMemo(() => getDepartmentScopeIds(departmentId, departments), [departmentId, departments]);
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-  const filteredPersons = persons.filter((person) => {
-    const searchMatches =
-      normalizedSearchQuery.length === 0 ||
-      person.full_name.toLowerCase().includes(normalizedSearchQuery) ||
-      person.employee_code.toLowerCase().includes(normalizedSearchQuery);
-    const departmentMatches = !departmentScopeIds || (person.department_id ? departmentScopeIds.has(person.department_id) : false);
-    const statusMatches = statusFilter === "all" || person.status === statusFilter;
-    return searchMatches && departmentMatches && statusMatches;
-  });
-  const totalPages = Math.max(1, Math.ceil(filteredPersons.length / PAGE_SIZE));
+  const filteredPersons = useMemo(
+    () =>
+      persons.filter((person) => {
+        const searchMatches =
+          normalizedSearchQuery.length === 0 ||
+          person.full_name.toLowerCase().includes(normalizedSearchQuery) ||
+          person.employee_code.toLowerCase().includes(normalizedSearchQuery);
+        const departmentMatches = !departmentScopeIds || (person.department_id ? departmentScopeIds.has(person.department_id) : false);
+        const statusMatches = statusFilter === "all" || person.status === statusFilter;
+        return searchMatches && departmentMatches && statusMatches;
+      }),
+    [departmentScopeIds, normalizedSearchQuery, persons, statusFilter],
+  );
+  const sortedPersons = useMemo(() => {
+    const nextPersons = [...filteredPersons];
+    nextPersons.sort((left, right) => comparePersons(left, right, sort, locale));
+    return nextPersons;
+  }, [filteredPersons, locale, sort]);
+  const totalPages = Math.max(1, Math.ceil(sortedPersons.length / PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = (safeCurrentPage - 1) * PAGE_SIZE;
-  const paginatedPersons = filteredPersons.slice(pageStartIndex, pageStartIndex + PAGE_SIZE);
+  const paginatedPersons = sortedPersons.slice(pageStartIndex, pageStartIndex + PAGE_SIZE);
   const selectedFilteredCount = filteredPersons.filter((person) => selectedIds.has(person.id)).length;
   const allSelected = paginatedPersons.length > 0 && paginatedPersons.every((person) => selectedIds.has(person.id));
-  const pageRangeStart = filteredPersons.length === 0 ? 0 : pageStartIndex + 1;
-  const pageRangeEnd = Math.min(pageStartIndex + paginatedPersons.length, filteredPersons.length);
+  const pageRangeStart = sortedPersons.length === 0 ? 0 : pageStartIndex + 1;
+  const pageRangeEnd = Math.min(pageStartIndex + paginatedPersons.length, sortedPersons.length);
   const paginationPages = getVisiblePageNumbers(safeCurrentPage, totalPages);
 
   const selectedText =
     selectedFilteredCount === 0
       ? t("persons.table.selectedNone")
       : t("persons.table.selectedCount", { count: selectedFilteredCount });
+  const openActionPerson = openActionId ? paginatedPersons.find((person) => person.id === openActionId) ?? null : null;
 
   useEffect(() => {
     if (!toast) return;
@@ -123,6 +153,56 @@ export function PersonsTable({
       window.clearTimeout(removeTimer);
     };
   }, [toast]);
+
+  useEffect(() => {
+    if (!openActionId) {
+      setActionMenuPosition(null);
+      setActionMenuVisible(false);
+      return;
+    }
+
+    function updateActionMenuPosition() {
+      const trigger = actionButtonRefs.current[openActionId];
+      if (!trigger) {
+        setActionMenuPosition(null);
+        return;
+      }
+
+      const rect = trigger.getBoundingClientRect();
+      const menuWidth = 176;
+      const margin = 8;
+      const nextLeft = Math.min(
+        Math.max(margin, rect.right + window.scrollX - menuWidth),
+        window.scrollX + window.innerWidth - menuWidth - margin,
+      );
+
+      setActionMenuPosition({
+        top: rect.bottom + window.scrollY + 8,
+        left: nextLeft,
+      });
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const menu = actionMenuRef.current;
+      const trigger = actionButtonRefs.current[openActionId];
+      const target = event.target as Node;
+      if (menu?.contains(target) || trigger?.contains(target)) return;
+      setOpenActionId(null);
+    }
+
+    updateActionMenuPosition();
+    const frame = window.requestAnimationFrame(() => setActionMenuVisible(true));
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("resize", updateActionMenuPosition);
+    window.addEventListener("scroll", updateActionMenuPosition, true);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("resize", updateActionMenuPosition);
+      window.removeEventListener("scroll", updateActionMenuPosition, true);
+    };
+  }, [openActionId]);
 
   function showToast(nextToast: NonNullable<ToastState>) {
     setToast(nextToast);
@@ -136,6 +216,14 @@ export function PersonsTable({
 
   function updateEditingPerson(field: keyof Person, value: string | null) {
     setEditingPerson((current) => (current ? { ...current, [field]: value } : current));
+  }
+
+  function updateSort(nextKey: SortKey) {
+    setSort((current) => ({
+      key: nextKey,
+      direction: current.key === nextKey && current.direction === "asc" ? "desc" : "asc",
+    }));
+    setCurrentPage(1);
   }
 
   async function saveEditingPerson() {
@@ -298,7 +386,13 @@ export function PersonsTable({
 
   return (
     <>
-      <Card>
+      <Card
+        className={
+          theme === "dark"
+            ? "relative z-20 border-white/8 bg-[rgba(15,27,45,0.42)] shadow-[0_18px_42px_rgba(2,6,23,0.24)] backdrop-blur-xl"
+            : "relative z-20 border-white/10 bg-[rgba(255,255,255,0.58)] shadow-[0_18px_42px_rgba(15,23,42,0.08)] backdrop-blur-xl"
+        }
+      >
         <CardContent className="grid gap-3 md:grid-cols-[minmax(240px,0.78fr)_220px_280px_auto]">
           <Input
             value={searchQuery}
@@ -325,17 +419,18 @@ export function PersonsTable({
             rootValue="all"
             rootLabel={t("persons.table.allDepartments")}
           />
-          <Button variant="outline" disabled={selectedFilteredCount === 0 || deleting} onClick={requestDeleteSelected}>
+          <Button variant="danger" disabled={selectedFilteredCount === 0 || deleting} onClick={requestDeleteSelected}>
             <Trash2 className="h-4 w-4" />
             {t("persons.table.bulkDelete")}
           </Button>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="relative z-10 list-table-corner-accent list-table-corner-accent-open">
+        <ListTableAccent />
         <CardContent>
-          <div className="overflow-visible">
-            <table className="w-full table-fixed text-left text-sm">
+          <div className="overflow-x-auto overflow-y-visible">
+            <table className="w-full min-w-[1160px] table-fixed text-left text-sm">
               <thead className="text-xs uppercase text-slate-500">
                 <tr className="border-b border-slate-200">
                   <th className="w-9 py-3">
@@ -348,13 +443,56 @@ export function PersonsTable({
                     />
                   </th>
                   <th className="w-12 py-3">{t("persons.table.index")}</th>
-                  <th className="w-[18%]">{t("persons.table.fullName")}</th>
-                  <th className="w-[15%]">{t("persons.table.department")}</th>
-                  <th className="w-[15%]">{t("persons.table.title")}</th>
-                  <th className="w-[22%]">{t("persons.table.contact")}</th>
-                  <th className="w-[11%]">{t("persons.table.status")}</th>
-                  <th className="w-[11%]">{t("persons.table.joinedAt")}</th>
-                  <th className="w-14 text-right">{t("common.actions")}</th>
+                  <SortableHeader
+                    className="w-[16%]"
+                    label={formatColumnLabel(t("persons.table.fullName"), locale)}
+                    sortKey="full_name"
+                    sort={sort}
+                    onSort={updateSort}
+                    t={t}
+                  />
+                  <SortableHeader
+                    className="w-[11%]"
+                    label={formatColumnLabel(t("persons.table.employeeCode"), locale)}
+                    sortKey="employee_code"
+                    sort={sort}
+                    onSort={updateSort}
+                    t={t}
+                  />
+                  <SortableHeader
+                    className="w-[16%]"
+                    label={formatColumnLabel(t("persons.table.department"), locale)}
+                    sortKey="department_name"
+                    sort={sort}
+                    onSort={updateSort}
+                    t={t}
+                  />
+                  <SortableHeader
+                    className="w-[14%]"
+                    label={formatColumnLabel(t("persons.table.title"), locale)}
+                    sortKey="title"
+                    sort={sort}
+                    onSort={updateSort}
+                    t={t}
+                  />
+                  <th className="w-[18%] whitespace-nowrap py-3">{formatColumnLabel(t("persons.table.contact"), locale)}</th>
+                  <SortableHeader
+                    className="w-[12%]"
+                    label={formatColumnLabel(t("persons.table.status"), locale)}
+                    sortKey="status"
+                    sort={sort}
+                    onSort={updateSort}
+                    t={t}
+                  />
+                  <SortableHeader
+                    className="w-[9%]"
+                    label={formatColumnLabel(t("persons.table.joinedAt"), locale)}
+                    sortKey="joined_at"
+                    sort={sort}
+                    onSort={updateSort}
+                    t={t}
+                  />
+                  <th className="w-24 whitespace-nowrap py-3 text-right">{formatColumnLabel(t("common.actions"), locale)}</th>
                 </tr>
               </thead>
               <tbody>
@@ -370,150 +508,176 @@ export function PersonsTable({
                       />
                     </td>
                     <td className="font-mono text-xs text-slate-500">{pageStartIndex + index + 1}</td>
-                    <td className="truncate pr-4 font-medium">{person.full_name}</td>
-                    <td className="truncate pr-4">{person.department_name || t("common.notAssigned")}</td>
-                    <td className="truncate pr-4">{person.title || t("common.unknown")}</td>
-                    <td className="truncate pr-4">
+                    <td className="truncate pr-5 font-medium">{person.full_name}</td>
+                    <td className="truncate pr-5 font-mono text-xs text-slate-500">{person.employee_code}</td>
+                    <td className="truncate pr-5">{person.department_name || t("common.notAssigned")}</td>
+                    <td className="truncate pr-5">{person.title || t("common.unknown")}</td>
+                    <td className="truncate pr-5">
                       <div className="truncate">{person.email || t("common.unknown")}</div>
                       <div className="text-xs text-slate-500">{person.phone || t("common.unknown")}</div>
                     </td>
-                    <td>
+                    <td className="pr-4">
                       <PersonStatusBadge status={person.status} />
                     </td>
-                    <td className="truncate">{person.joined_at}</td>
+                    <td className="truncate pr-4">{person.joined_at}</td>
                     <td className="text-right">
-                      <div ref={openActionId === person.id ? actionMenuRef : undefined} className="relative inline-flex justify-end">
+                      <div className="inline-flex justify-end">
                         <Button
                           variant="outline"
                           size="icon"
+                          ref={(element) => {
+                            actionButtonRefs.current[person.id] = element;
+                          }}
                           aria-label={t("persons.table.openActions", { name: person.full_name })}
                           onClick={() => setOpenActionId((current) => (current === person.id ? null : person.id))}
                         >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
-                        {openActionId === person.id ? (
-                          <div className="absolute right-0 top-10 z-20 w-44 overflow-hidden rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg">
-                            <Link
-                              href={`/persons/${person.id}`}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                              onClick={() => setOpenActionId(null)}
-                            >
-                              <Eye className="h-4 w-4" />
-                              {t("persons.table.viewDetails")}
-                            </Link>
-                            <Link
-                              href={`/persons/${person.id}/face-registrations/new`}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                              onClick={() => setOpenActionId(null)}
-                            >
-                              <Plus className="h-4 w-4" />
-                              {t("persons.table.addFace")}
-                            </Link>
-                            <button
-                              type="button"
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                              onClick={() => {
-                                setEditingPerson(person);
-                                setEditFieldErrors({});
-                                setOpenActionId(null);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                              {t("persons.table.edit")}
-                            </button>
-                            <button
-                              type="button"
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-700 hover:bg-red-50"
-                              onClick={() => requestDeletePerson(person)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              {t("persons.table.delete")}
-                            </button>
-                          </div>
-                        ) : null}
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
-            </table>
-            {filteredPersons.length === 0 ? (
-              <div className="rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                {t("persons.table.empty")}
-              </div>
-            ) : null}
-          </div>
-          <div className="mt-4 flex flex-col gap-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
-            <span>
-              {t("persons.table.showing", {
-                from: pageRangeStart,
-                to: pageRangeEnd,
-                total: filteredPersons.length,
-                selected: selectedText,
-              })}
-            </span>
-            <div className="flex flex-wrap items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                disabled={safeCurrentPage <= 1}
-                onClick={() => setCurrentPage(1)}
-                aria-label={t("persons.table.firstPage")}
-              >
-                <ChevronsLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                disabled={safeCurrentPage <= 1}
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                aria-label={t("persons.table.previousPage")}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              {paginationPages.map((page) => (
+              </table>
+              {filteredPersons.length === 0 ? (
+                <div className="rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                  {t("persons.table.empty")}
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-4 flex flex-col gap-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+              <span>
+                {t("persons.table.showing", {
+                  from: pageRangeStart,
+                  to: pageRangeEnd,
+                  total: filteredPersons.length,
+                  selected: selectedText,
+                })}
+              </span>
+              <div className="flex flex-wrap items-center gap-1">
                 <Button
-                  key={page}
-                  variant={page === safeCurrentPage ? "default" : "outline"}
+                  variant="outline"
                   size="icon"
                   className="h-8 w-8"
-                  onClick={() => setCurrentPage(page)}
-                  aria-label={t("persons.table.goToPage", { page })}
-                  aria-current={page === safeCurrentPage ? "page" : undefined}
+                  disabled={safeCurrentPage <= 1}
+                  onClick={() => setCurrentPage(1)}
+                  aria-label={t("persons.table.firstPage")}
                 >
-                  {page}
+                  <ChevronsLeft className="h-4 w-4" />
                 </Button>
-              ))}
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                disabled={safeCurrentPage >= totalPages}
-                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                aria-label={t("persons.table.nextPage")}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                disabled={safeCurrentPage >= totalPages}
-                onClick={() => setCurrentPage(totalPages)}
-                aria-label={t("persons.table.lastPage")}
-              >
-                <ChevronsRight className="h-4 w-4" />
-              </Button>
-            </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={safeCurrentPage <= 1}
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  aria-label={t("persons.table.previousPage")}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {paginationPages.map((page) => (
+                  <Button
+                    key={page}
+                    variant={page === safeCurrentPage ? "default" : "outline"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(page)}
+                    aria-label={t("persons.table.goToPage", { page })}
+                    aria-current={page === safeCurrentPage ? "page" : undefined}
+                  >
+                    {page}
+                  </Button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={safeCurrentPage >= totalPages}
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  aria-label={t("persons.table.nextPage")}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={safeCurrentPage >= totalPages}
+                  onClick={() => setCurrentPage(totalPages)}
+                  aria-label={t("persons.table.lastPage")}
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
           </div>
         </CardContent>
       </Card>
 
+      {openActionPerson && actionMenuPosition
+        ? createPortal(
+            <div
+              ref={actionMenuRef}
+              className={`fixed z-[80] w-44 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--background-elevated)] py-1 text-left shadow-lg transition-all duration-150 ease-out ${
+                actionMenuVisible ? "translate-y-0 scale-100 opacity-100" : "-translate-y-1 scale-[0.98] opacity-0"
+              }`}
+              style={{ top: actionMenuPosition.top, left: actionMenuPosition.left }}
+            >
+              <Link
+                href={`/persons/${openActionPerson.id}`}
+                className={`flex w-full items-center gap-3 px-3 py-2 text-[15px] font-semibold leading-6 text-[var(--foreground-soft)] transition-all duration-150 ease-out hover:bg-[var(--background-panel)] hover:text-[var(--foreground)] ${
+                  actionMenuVisible ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+                }`}
+                style={{ transitionDelay: actionMenuVisible ? "20ms" : "0ms" }}
+                onClick={() => setOpenActionId(null)}
+              >
+                <Eye className="h-4 w-4 shrink-0" />
+                <span className="font-semibold">{t("persons.table.viewDetails")}</span>
+              </Link>
+              <Link
+                href={`/persons/${openActionPerson.id}/face-registrations/new`}
+                className={`flex w-full items-center gap-3 px-3 py-2 text-[15px] font-semibold leading-6 text-[var(--foreground-soft)] transition-all duration-150 ease-out hover:bg-[var(--background-panel)] hover:text-[var(--foreground)] ${
+                  actionMenuVisible ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+                }`}
+                style={{ transitionDelay: actionMenuVisible ? "40ms" : "0ms" }}
+                onClick={() => setOpenActionId(null)}
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                <span className="font-semibold">{t("persons.table.addFace")}</span>
+              </Link>
+              <button
+                type="button"
+                className={`flex w-full items-center gap-3 bg-transparent px-3 py-2 text-left text-[15px] font-semibold leading-6 text-[var(--foreground-soft)] transition-all duration-150 ease-out hover:bg-[var(--background-panel)] hover:text-[var(--foreground)] ${
+                  actionMenuVisible ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+                }`}
+                style={{ transitionDelay: actionMenuVisible ? "60ms" : "0ms" }}
+                onClick={() => {
+                  setEditingPerson(openActionPerson);
+                  setEditFieldErrors({});
+                  setOpenActionId(null);
+                }}
+              >
+                <Pencil className="h-4 w-4 shrink-0" />
+                <span className="font-semibold">{t("persons.table.edit")}</span>
+              </button>
+              <button
+                type="button"
+                className={`flex w-full items-center gap-3 bg-transparent px-3 py-2 text-left text-[15px] font-semibold leading-6 text-[var(--danger)] transition-all duration-150 ease-out hover:bg-[var(--danger-soft)] ${
+                  actionMenuVisible ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+                }`}
+                style={{ transitionDelay: actionMenuVisible ? "80ms" : "0ms" }}
+                onClick={() => requestDeletePerson(openActionPerson)}
+              >
+                <Trash2 className="h-4 w-4 shrink-0" />
+                <span className="font-semibold">{t("persons.table.delete")}</span>
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
+
       {visibleEditingPerson ? (
         <div
-          className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(editingDialog.visible)}`}
+          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(editingDialog.visible)}`}
           onMouseDown={() => setEditingPerson(null)}
         >
           <div
@@ -611,7 +775,7 @@ export function PersonsTable({
               <Button variant="outline" onClick={() => setEditingPerson(null)}>
                 {t("common.cancel")}
               </Button>
-              <Button onClick={saveEditingPerson} disabled={savingEdit}>
+              <Button className="ui-button-link ui-button-link-primary" onClick={saveEditingPerson} disabled={savingEdit}>
                 <Save className="h-4 w-4" />
                 {savingEdit ? t("persons.editDialog.saving") : t("persons.editDialog.save")}
               </Button>
@@ -622,7 +786,7 @@ export function PersonsTable({
 
       {visibleDeleteRequest ? (
         <div
-          className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
+          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
           onMouseDown={() => setDeleteRequest(null)}
         >
           <div
@@ -690,6 +854,55 @@ export function PersonsTable({
   );
 }
 
+function SortableHeader({
+  className,
+  label,
+  sortKey,
+  sort,
+  onSort,
+  t,
+}: {
+  className?: string;
+  label: string;
+  sortKey: SortKey;
+  sort: SortState;
+  onSort: (sortKey: SortKey) => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const active = sort.key === sortKey;
+  const nextDirection = active && sort.direction === "asc" ? "desc" : "asc";
+  const ariaSort = active ? (sort.direction === "asc" ? "ascending" : "descending") : "none";
+  const ariaLabel =
+    nextDirection === "asc"
+      ? t("persons.table.sortAscending", { column: label })
+      : t("persons.table.sortDescending", { column: label });
+
+  return (
+    <th className={className} aria-sort={ariaSort}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        aria-label={ariaLabel}
+        title={ariaLabel}
+        className="flex w-full items-center gap-1 py-3 text-left transition hover:text-slate-700"
+      >
+        <span className="truncate">{label}</span>
+        {active ? (
+          sort.direction === "asc" ? (
+            <ChevronUp className="h-4 w-4 shrink-0 text-slate-700" />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0 text-slate-700" />
+          )
+        ) : null}
+      </button>
+    </th>
+  );
+}
+
+function formatColumnLabel(label: string, locale: string) {
+  return label.toLocaleUpperCase(locale);
+}
+
 function getDepartmentScopeIds(departmentId: string, departments: Department[]) {
   if (departmentId === "all") return null;
 
@@ -724,6 +937,81 @@ function getVisiblePageNumbers(currentPage: number, totalPages: number) {
   }
 
   return Array.from({ length: endPage - startPage + 1 }, (_, index) => startPage + index);
+}
+
+const PERSON_STATUS_SORT_ORDER: Record<Person["status"], number> = {
+  active: 0,
+  resigned: 1,
+  inactive: 2,
+};
+
+function comparePersons(left: PersonRow, right: PersonRow, sort: SortState, locale: string) {
+  const result = compareBySortKey(left, right, sort.key, sort.direction, locale);
+  if (result !== 0) return result;
+
+  const nameResult = compareNullableText(left.full_name, right.full_name, "asc", locale);
+  if (nameResult !== 0) return nameResult;
+
+  return left.id.localeCompare(right.id, locale);
+}
+
+function compareBySortKey(left: PersonRow, right: PersonRow, key: SortKey, direction: SortDirection, locale: string) {
+  switch (key) {
+    case "full_name":
+      return compareNullableText(left.full_name, right.full_name, direction, locale);
+    case "employee_code":
+      return compareNullableText(left.employee_code, right.employee_code, direction, locale);
+    case "department_name":
+      return compareNullableText(left.department_name, right.department_name, direction, locale);
+    case "title":
+      return compareNullableText(left.title, right.title, direction, locale);
+    case "status":
+      return compareStatus(left.status, right.status, direction);
+    case "joined_at":
+      return compareNullableDate(left.joined_at, right.joined_at, direction);
+    default:
+      return 0;
+  }
+}
+
+function compareNullableText(left: string | null | undefined, right: string | null | undefined, direction: SortDirection, locale: string) {
+  const normalizedLeft = normalizeSortableText(left);
+  const normalizedRight = normalizeSortableText(right);
+  if (!normalizedLeft && !normalizedRight) return 0;
+  if (!normalizedLeft) return 1;
+  if (!normalizedRight) return -1;
+
+  const result = normalizedLeft.localeCompare(normalizedRight, locale, { sensitivity: "base" });
+  return direction === "asc" ? result : -result;
+}
+
+function compareNullableDate(left: string | null | undefined, right: string | null | undefined, direction: SortDirection) {
+  const leftTime = toSortableTimestamp(left);
+  const rightTime = toSortableTimestamp(right);
+  if (leftTime == null && rightTime == null) return 0;
+  if (leftTime == null) return 1;
+  if (rightTime == null) return -1;
+
+  const result = leftTime - rightTime;
+  return direction === "asc" ? result : -result;
+}
+
+function compareStatus(left: Person["status"], right: Person["status"], direction: SortDirection) {
+  const result = PERSON_STATUS_SORT_ORDER[left] - PERSON_STATUS_SORT_ORDER[right];
+  return direction === "asc" ? result : -result;
+}
+
+function normalizeSortableText(value: string | null | undefined) {
+  const normalized = value?.trim() ?? "";
+  return normalized.length > 0 ? normalized : null;
+}
+
+function toSortableTimestamp(value: string | null | undefined) {
+  const normalized = normalizeSortableText(value);
+  if (!normalized) return null;
+
+  const timestamp = Date.parse(normalized);
+  return Number.isNaN(timestamp) ? null : timestamp;
 }
 
 function getDuplicatePersonField(error: unknown) {
@@ -819,13 +1107,13 @@ export function DatePicker({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        className="ui-filter-trigger"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <CalendarSearch className="h-4 w-4 shrink-0 text-slate-500" />
-          <span className="truncate font-medium text-slate-800">{formatDateLabel(value, locale)}</span>
+          <CalendarSearch className="ui-filter-search-icon shrink-0" />
+          <span className="ui-filter-value">{formatDateLabel(value, locale)}</span>
         </span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
@@ -953,12 +1241,12 @@ export function PersonStatusSelect({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        className="ui-filter-trigger"
       >
         <span className="flex min-w-0 items-center gap-2">
           <PersonStatusBadge status={value} />
         </span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
@@ -973,8 +1261,8 @@ export function PersonStatusSelect({
               }}
               className={
                 value === option
-                  ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white"
-                  : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  ? "ui-filter-option ui-filter-option-active"
+                  : "ui-filter-option"
               }
             >
               <PersonStatusBadge status={option} />
@@ -1010,20 +1298,20 @@ function StatusFilterSelect({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        className="ui-filter-trigger"
       >
         <span className="flex min-w-0 items-center gap-2">
           {selectedOption.value === "all" ? (
-            <span className="truncate font-medium text-slate-700">{selectedOption.label}</span>
+            <span className="ui-filter-value">{selectedOption.label}</span>
           ) : (
             <PersonStatusBadge status={selectedOption.value} />
           )}
         </span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-11 z-30 w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+        <div className="ui-filter-panel absolute left-0 top-12 z-30 w-full p-1.5">
           {options.map((option) => (
             <button
               key={option.value}
@@ -1034,11 +1322,11 @@ function StatusFilterSelect({
               }}
               className={
                 value === option.value
-                  ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white"
-                  : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  ? "ui-filter-option ui-filter-option-active"
+                  : "ui-filter-option"
               }
             >
-              {option.value === "all" ? <span>{t("persons.table.allStatuses")}</span> : <PersonStatusBadge status={option.value} />}
+              {option.value === "all" ? <span className="ui-filter-value">{t("persons.table.allStatuses")}</span> : <PersonStatusBadge status={option.value} />}
             </button>
           ))}
         </div>
@@ -1089,22 +1377,22 @@ export function DepartmentTreeSelect({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        className="ui-filter-trigger"
       >
-        <span className="truncate">{selectedLabel}</span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <span className="ui-filter-value">{selectedLabel}</span>
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-11 z-30 w-[360px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
-          <div className="border-b border-slate-100 p-2">
-            <div className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3">
-              <Search className="h-4 w-4 text-slate-400" />
+        <div className="ui-filter-panel absolute left-0 top-12 z-30 w-[360px]">
+          <div className="border-b border-[var(--border)] p-2">
+            <div className="ui-filter-search-shell">
+              <Search className="ui-filter-search-icon" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={t("persons.table.departmentSearchPlaceholder")}
-                className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm focus:border-transparent focus:ring-0"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm text-[var(--foreground)] focus:border-transparent focus:ring-0"
               />
             </div>
           </div>
@@ -1118,11 +1406,11 @@ export function DepartmentTreeSelect({
               }}
               className={
                 value === rootValue
-                  ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white"
-                  : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  ? "ui-filter-option ui-filter-option-active"
+                  : "ui-filter-option"
               }
             >
-              <Building2 className="h-4 w-4" />
+              <Building2 className="h-4 w-4 text-[var(--foreground-soft)]" />
               {fallbackRootLabel}
             </button>
 
@@ -1189,8 +1477,8 @@ function DepartmentTreeOption({
       <div
         className={
           selectedId === department.id
-            ? "flex items-center gap-2 rounded-md bg-slate-950 px-2 py-2 text-sm font-medium text-white"
-            : "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-slate-50"
+            ? "flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--background-muted)] px-2 py-2.5 text-sm font-medium text-[var(--foreground)]"
+            : "flex items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-[var(--foreground)] hover:bg-[var(--background-panel)]"
         }
         style={{ paddingLeft: 8 + depth * 18 }}
       >
@@ -1201,13 +1489,19 @@ function DepartmentTreeOption({
             event.stopPropagation();
             onToggle(department.id);
           }}
-          className="grid h-5 w-5 shrink-0 place-items-center rounded hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-transparent"
+          className="grid h-5 w-5 shrink-0 place-items-center rounded hover:bg-[var(--background-panel)] disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label={expanded ? t("collapse", { name: department.name }) : t("expand", { name: department.name })}
         >
-          <ChevronRight className={expanded ? "h-4 w-4 rotate-90 transition-transform" : "h-4 w-4 transition-transform"} />
+          <ChevronRight
+            className={
+              expanded
+                ? "h-4 w-4 rotate-90 text-[var(--foreground-soft)] transition-transform"
+                : "h-4 w-4 text-[var(--foreground-soft)] transition-transform"
+            }
+          />
         </button>
         <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => onSelect(department.id)}>
-          <Building2 className="h-4 w-4 shrink-0" />
+          <Building2 className="h-4 w-4 shrink-0 text-[var(--foreground-soft)]" />
           <span className="truncate">
             {department.code} · {department.name}
           </span>

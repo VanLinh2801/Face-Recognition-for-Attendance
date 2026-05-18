@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { AttendancePresenceView } from "@/components/attendance/attendance-presence-view";
+import { PageAmbientWave } from "@/components/data/page-ambient-wave";
 import { PageHeader } from "@/components/data/page-header";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { getFilterPolicy } from "@/lib/filter-policy";
@@ -59,26 +60,31 @@ export default function AttendancePage() {
 
   if (loading) {
     return (
-      <div>
+      <div className="relative min-h-[calc(100vh-5rem)]">
+        <PageAmbientWave className="fixed inset-x-0 top-1/2 z-0 h-0" />
         <PageHeader title={t("attendance.page.title")} description={t("attendance.page.description")} />
-        <div className="flex items-center justify-center p-12 text-slate-500">{t("attendance.page.loading")}</div>
+        <div className="relative z-10 flex items-center justify-center p-12 text-slate-500">{t("attendance.page.loading")}</div>
       </div>
     );
   }
 
   if (error || !filterPolicy) {
     return (
-      <div>
+      <div className="relative min-h-[calc(100vh-5rem)]">
+        <PageAmbientWave className="fixed inset-x-0 top-1/2 z-0 h-0" />
         <PageHeader title={t("attendance.page.title")} description={t("attendance.page.description")} />
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-red-700">{error || t("attendance.page.missingFilterPolicy")}</div>
+        <div className="relative z-10 rounded-md border border-red-200 bg-red-50 p-4 text-red-700">{error || t("attendance.page.missingFilterPolicy")}</div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="relative min-h-[calc(100vh-5rem)]">
+      <PageAmbientWave className="fixed inset-x-0 top-1/2 z-0 h-0" />
       <PageHeader title={t("attendance.page.title")} description={t("attendance.page.description")} />
-      <AttendancePresenceView persons={persons} departments={departments} filterPolicy={filterPolicy} />
+      <div className="relative z-10">
+        <AttendancePresenceView persons={persons} departments={departments} filterPolicy={filterPolicy} />
+      </div>
     </div>
   );
 }

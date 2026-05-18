@@ -5,8 +5,10 @@ import { useTranslations } from "next-intl";
 import { Building2, ChevronRight, Eye, Pencil, Plus, PowerOff, Save, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ListTableAccent } from "@/components/data/list-table-accent";
+import { useTheme } from "@/components/theme/theme-provider";
 import { Input } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { normalizeBackendError } from "@/lib/backend-error-normalizer";
@@ -14,6 +16,7 @@ import { getTranslatedBackendError } from "@/lib/translated-backend-error";
 import type { Department } from "@/lib/types";
 import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import { useOutsideClick } from "@/lib/use-outside-click";
+import { cn } from "@/lib/utils";
 
 type DepartmentDraft = {
   id?: string;
@@ -49,6 +52,7 @@ export function DepartmentsManager({
   initialDepartments: Department[];
 }) {
   const t = useTranslations();
+  const { theme } = useTheme();
   const [departments, setDepartments] = useState<Department[]>(initialDepartments);
   const [draft, setDraft] = useState<DepartmentDraft | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
@@ -224,7 +228,13 @@ export function DepartmentsManager({
   return (
     <>
       <div className="space-y-4">
-        <Card>
+        <Card
+          className={
+            theme === "dark"
+              ? "relative z-20 border-white/8 bg-[rgba(15,27,45,0.42)] shadow-[0_18px_42px_rgba(2,6,23,0.24)] backdrop-blur-xl"
+              : "relative z-20 border-white/10 bg-[rgba(255,255,255,0.58)] shadow-[0_18px_42px_rgba(15,23,42,0.08)] backdrop-blur-xl"
+          }
+        >
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-medium">{t("departments.list.summaryTitle")}</div>
@@ -232,14 +242,15 @@ export function DepartmentsManager({
                 {t("departments.list.summaryDescription", { total: departments.length, active: activeDepartments.length })}
               </div>
             </div>
-            <Button onClick={openCreateDialog}>
+            <Button className="ui-button-link ui-button-link-primary" onClick={openCreateDialog}>
               <Plus className="h-4 w-4" />
               {t("departments.list.addAction")}
             </Button>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="relative z-10 list-table-corner-accent">
+          <ListTableAccent />
           <CardHeader>
             <CardTitle>{t("departments.list.tableTitle")}</CardTitle>
           </CardHeader>
@@ -272,7 +283,7 @@ export function DepartmentsManager({
                         <div className="flex justify-end gap-2">
                           <Link
                             href={`/departments/${department.id}`}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-900 hover:bg-slate-50"
+                            className={cn(buttonVariants({ variant: "outline", size: "icon" }))}
                             aria-label={t("departments.list.view", { name: department.name })}
                           >
                             <Eye className="h-4 w-4" />
@@ -303,7 +314,7 @@ export function DepartmentsManager({
 
       {visibleDraft ? (
         <div
-          className={`fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(draftDialog.visible)}`}
+          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(draftDialog.visible)}`}
           onMouseDown={() => setDraft(null)}
         >
           <div
@@ -376,7 +387,7 @@ export function DepartmentsManager({
 
             <div className="flex justify-end gap-2 border-t border-slate-200 p-5">
               <Button variant="outline" onClick={() => setDraft(null)} disabled={saving}>{t("common.cancel")}</Button>
-              <Button onClick={saveDraft} disabled={saving}>
+              <Button className="ui-button-link ui-button-link-primary" onClick={saveDraft} disabled={saving}>
                 <Save className="h-4 w-4" />
                 {saving ? t("departments.form.saving") : t("departments.form.save")}
               </Button>
@@ -388,7 +399,7 @@ export function DepartmentsManager({
 
       {visibleDeleteTarget ? (
         <div
-          className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
+          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
           onMouseDown={() => setDeleteTarget(null)}
         >
           <div
@@ -492,19 +503,17 @@ function DepartmentTreeSelect({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:ring-2 ${
-          invalid ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-slate-200 focus:border-slate-400 focus:ring-slate-100"
-        }`}
+        className={`ui-filter-trigger ${invalid ? "ui-filter-trigger-invalid" : ""}`}
       >
-        <span className="truncate">{selectedLabel}</span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <span className="ui-filter-value">{selectedLabel}</span>
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-11 z-[80] w-[360px] max-w-[calc(100vw-3rem)] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
-          <div className="border-b border-slate-100 p-2">
-            <div className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3">
-              <Search className="h-4 w-4 text-slate-400" />
+        <div className="ui-filter-panel absolute left-0 top-12 z-[80] w-[360px] max-w-[calc(100vw-3rem)]">
+          <div className="border-b border-[var(--border)] p-2">
+            <div className="ui-filter-search-shell">
+              <Search className="ui-filter-search-icon" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -521,7 +530,7 @@ function DepartmentTreeSelect({
                 onChange("");
                 setOpen(false);
               }}
-              className={value === "" ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+              className={value === "" ? "ui-filter-option ui-filter-option-active" : "ui-filter-option"}
             >
               <Building2 className="h-4 w-4" />
               {t("departments.form.noParent")}
@@ -574,16 +583,16 @@ function DepartmentStatusSelect({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        className="ui-filter-trigger"
       >
         <span className="flex min-w-0 items-center gap-2">
           <DepartmentStatusBadge active={value} />
         </span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-11 z-30 w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+        <div className="ui-filter-panel absolute left-0 top-12 z-30 w-full p-1">
           {options.map((option) => (
             <button
               key={option.label}
@@ -592,7 +601,7 @@ function DepartmentStatusSelect({
                 onChange(option.value);
                 setOpen(false);
               }}
-              className={value === option.value ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white" : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"}
+              className={value === option.value ? "ui-filter-option ui-filter-option-active" : "ui-filter-option"}
             >
               {t(option.label)}
             </button>
@@ -641,7 +650,11 @@ function DepartmentTreeOption({
   return (
     <div>
       <div
-        className={selectedId === department.id ? "flex items-center gap-2 rounded-md bg-slate-950 px-2 py-2 text-sm font-medium text-white" : "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-slate-50"}
+        className={
+          selectedId === department.id
+            ? "flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--background-muted)] px-2 py-2.5 text-sm font-medium text-[var(--foreground)]"
+            : "flex items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-[var(--foreground)] hover:bg-[var(--background-panel)]"
+        }
         style={{ paddingLeft: 8 + depth * 18 }}
       >
         <button

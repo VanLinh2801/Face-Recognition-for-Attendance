@@ -3,13 +3,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Fingerprint, Loader2, Plus, X } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { RegistrationStatusBadge } from "@/components/data/status-badge";
+import { useTheme } from "@/components/theme/theme-provider";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api-client";
 import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import type { FaceRegistration } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 type RegistrationListResponse = {
   items: FaceRegistration[];
@@ -22,6 +25,9 @@ export function PersonFaceRegistrations({
   personId: string;
   initialRegistrations: FaceRegistration[];
 }) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const { theme } = useTheme();
   const [registrations, setRegistrations] = useState(initialRegistrations);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -29,6 +35,10 @@ export function PersonFaceRegistrations({
   const [selectedRegistration, setSelectedRegistration] = useState<FaceRegistration | null>(null);
   const registrationDialog = useDialogTransition(selectedRegistration);
   const visibleRegistration = registrationDialog.value;
+  const glassCardClass =
+    theme === "dark"
+      ? "border-white/8 bg-[rgba(15,27,45,0.42)] shadow-[0_18px_42px_rgba(2,6,23,0.24)] backdrop-blur-xl"
+      : "border-white/10 bg-[rgba(255,255,255,0.58)] shadow-[0_18px_42px_rgba(15,23,42,0.08)] backdrop-blur-xl";
 
   useEffect(() => {
     const token = window.localStorage.getItem("access_token");
@@ -46,7 +56,7 @@ export function PersonFaceRegistrations({
         setRegistrations(data.items);
       } catch (err) {
         if (!controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : "Failed to load registrations");
+          setError(err instanceof Error ? err.message : t("persons.registrations.loadFailed"));
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -55,7 +65,7 @@ export function PersonFaceRegistrations({
 
     void loadRegistrations();
     return () => controller.abort();
-  }, [personId]);
+  }, [personId, t]);
 
   useEffect(() => {
     const token = window.localStorage.getItem("access_token");
@@ -85,10 +95,8 @@ export function PersonFaceRegistrations({
           setPreviewUrls(Object.fromEntries(entries.filter((entry): entry is readonly [string, string] => entry !== null)));
         }
       } catch (err) {
-        if (controller.signal.aborted) {
-          return;
-        }
-        setError(err instanceof Error ? err.message : "Failed to load preview images");
+        if (controller.signal.aborted) return;
+        setError(err instanceof Error ? err.message : t("persons.registrations.previewLoadFailed"));
       }
     }
 
@@ -97,26 +105,26 @@ export function PersonFaceRegistrations({
       controller.abort();
       for (const url of urls) URL.revokeObjectURL(url);
     };
-  }, [registrations]);
+  }, [registrations, t]);
 
   return (
     <>
-      <Card>
+      <Card className={glassCardClass}>
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="grid h-9 w-9 place-items-center rounded-md bg-slate-100">
                 <Fingerprint className="h-4 w-4 text-slate-600" />
               </div>
-              <CardTitle>Face registrations</CardTitle>
+              <CardTitle>{t("persons.registrations.title")}</CardTitle>
               {loading ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : null}
             </div>
             <Link
               href={`/persons/${personId}/face-registrations/new`}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+              className={cn(buttonVariants({ size: "sm" }))}
             >
               <Plus className="h-4 w-4" />
-              Đăng ký lại face
+              {t("persons.registrations.addFace")}
             </Link>
           </div>
         </CardHeader>
@@ -141,33 +149,33 @@ export function PersonFaceRegistrations({
                 {previewUrls[registration.id] ? (
                   <Image
                     src={previewUrls[registration.id]}
-                    alt="Registered face crop"
+                    alt={t("persons.registrations.previewAlt")}
                     width={420}
                     height={240}
                     unoptimized
                     className="h-full w-full object-contain"
                   />
                 ) : (
-                  "Face crop preview"
+                  t("persons.registrations.previewFallback")
                 )}
               </div>
               <div className="mt-3 space-y-1 text-sm">
-                <div>Model: {registration.embedding_model ?? "N/A"}</div>
-                <div>Version: {registration.embedding_version ?? "N/A"}</div>
-                <div>Indexed: {registration.indexed_at ? formatDateTime(registration.indexed_at) : "Pending"}</div>
+                <div>{t("persons.registrations.model")}: {registration.embedding_model ?? "N/A"}</div>
+                <div>{t("persons.registrations.version")}: {registration.embedding_version ?? "N/A"}</div>
+                <div>{t("persons.registrations.indexed")}: {registration.indexed_at ? formatDateTimeLocalized(registration.indexed_at, locale) : t("persons.registrations.pending")}</div>
                 {registration.validation_notes ? <div className="text-slate-500">{registration.validation_notes}</div> : null}
               </div>
             </button>
           ))}
           {registrations.length === 0 ? (
-            <div className="rounded-md border border-dashed border-slate-300 p-6 text-sm text-slate-500">No registrations.</div>
+            <div className="rounded-md border border-dashed border-slate-300 p-6 text-sm text-slate-500">{t("persons.registrations.empty")}</div>
           ) : null}
         </CardContent>
       </Card>
 
       {visibleRegistration ? (
         <div
-          className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(registrationDialog.visible)}`}
+          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(registrationDialog.visible)}`}
           onMouseDown={() => setSelectedRegistration(null)}
         >
           <div
@@ -176,14 +184,14 @@ export function PersonFaceRegistrations({
           >
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
               <div>
-                <h2 className="text-lg font-semibold">Chi tiết face registration</h2>
+                <h2 className="text-lg font-semibold">{t("persons.registrations.detailTitle")}</h2>
                 <p className="mt-1 font-mono text-xs text-slate-500">{visibleRegistration.id}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedRegistration(null)}
                 className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-950"
-                aria-label="Đóng chi tiết registration"
+                aria-label={t("persons.registrations.closeDetail")}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -195,14 +203,14 @@ export function PersonFaceRegistrations({
                   {previewUrls[visibleRegistration.id] ? (
                     <Image
                       src={previewUrls[visibleRegistration.id]}
-                      alt="Registered face crop"
+                      alt={t("persons.registrations.previewAlt")}
                       width={960}
                       height={540}
                       unoptimized
                       className="h-full w-full object-contain"
                     />
                   ) : (
-                    "Face crop preview"
+                    t("persons.registrations.previewFallback")
                   )}
                 </div>
                 {visibleRegistration.validation_notes ? (
@@ -214,40 +222,40 @@ export function PersonFaceRegistrations({
 
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Trạng thái</span>
+                  <span className="text-slate-500">{t("persons.detail.status")}</span>
                   <RegistrationStatusBadge status={visibleRegistration.registration_status} />
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Model</span>
+                  <span className="text-slate-500">{t("persons.registrations.model")}</span>
                   <span>{visibleRegistration.embedding_model ?? "N/A"}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Version</span>
+                  <span className="text-slate-500">{t("persons.registrations.version")}</span>
                   <span>{visibleRegistration.embedding_version ?? "N/A"}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Indexed</span>
-                  <span>{visibleRegistration.indexed_at ? formatDateTime(visibleRegistration.indexed_at) : "Pending"}</span>
+                  <span className="text-slate-500">{t("persons.registrations.indexed")}</span>
+                  <span>{visibleRegistration.indexed_at ? formatDateTimeLocalized(visibleRegistration.indexed_at, locale) : t("persons.registrations.pending")}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Created</span>
-                  <span>{formatDateTime(visibleRegistration.created_at)}</span>
+                  <span className="text-slate-500">{t("persons.registrations.created")}</span>
+                  <span>{formatDateTimeLocalized(visibleRegistration.created_at, locale)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Updated</span>
-                  <span>{formatDateTime(visibleRegistration.updated_at)}</span>
+                  <span className="text-slate-500">{t("persons.registrations.updated")}</span>
+                  <span>{formatDateTimeLocalized(visibleRegistration.updated_at, locale)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Source media</span>
+                  <span className="text-slate-500">{t("persons.registrations.sourceMedia")}</span>
                   <span className="truncate font-mono text-xs">{visibleRegistration.source_media_asset_id}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Face media</span>
+                  <span className="text-slate-500">{t("persons.registrations.faceMedia")}</span>
                   <span className="truncate font-mono text-xs">{visibleRegistration.face_image_media_asset_id ?? "N/A"}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Hoạt động</span>
-                  <span>{visibleRegistration.is_active ? "Có" : "Không"}</span>
+                  <span className="text-slate-500">{t("persons.registrations.active")}</span>
+                  <span>{visibleRegistration.is_active ? t("persons.registrations.yes") : t("persons.registrations.no")}</span>
                 </div>
               </div>
             </div>
@@ -256,4 +264,11 @@ export function PersonFaceRegistrations({
       ) : null}
     </>
   );
+}
+
+function formatDateTimeLocalized(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
 }

@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ListTableAccent } from "@/components/data/list-table-accent";
+import { useTheme } from "@/components/theme/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -87,6 +89,7 @@ export function EventsReviewCenter({
 }) {
   const t = useTranslations();
   const locale = useLocale();
+  const { theme } = useTheme();
   const [selectedEventKey, setSelectedEventKey] = useState<EventKey | null>(null);
   const [reviewingKeys, setReviewingKeys] = useState<EventKey[]>([]);
   const [bulkReviewing, setBulkReviewing] = useState(false);
@@ -140,11 +143,35 @@ export function EventsReviewCenter({
     unreviewed: pendingReviewRows.length,
   };
 
-  const summaryCards: Array<{ label: string; value: number; icon: LucideIcon }> = [
-    { label: t("events.summary.recognition"), value: counts.recognition, icon: Radio },
-    { label: t("events.summary.unknown"), value: counts.unknown, icon: AlertTriangle },
-    { label: t("events.summary.spoof"), value: counts.spoof, icon: ShieldAlert },
-    { label: t("events.summary.needsReview"), value: counts.unreviewed, icon: Eye },
+  const summaryCards: Array<{ label: string; value: number; icon: LucideIcon; iconClassName: string; iconShellClassName: string }> = [
+    {
+      label: t("events.summary.recognition"),
+      value: counts.recognition,
+      icon: Radio,
+      iconClassName: "text-white",
+      iconShellClassName: "bg-blue-600 ring-1 ring-blue-800/35 dark:bg-blue-500 dark:ring-blue-200/20",
+    },
+    {
+      label: t("events.summary.unknown"),
+      value: counts.unknown,
+      icon: AlertTriangle,
+      iconClassName: "text-white",
+      iconShellClassName: "bg-orange-500 ring-1 ring-orange-700/35 dark:bg-orange-400 dark:ring-orange-200/20",
+    },
+    {
+      label: t("events.summary.spoof"),
+      value: counts.spoof,
+      icon: ShieldAlert,
+      iconClassName: "text-white",
+      iconShellClassName: "bg-rose-600 ring-1 ring-rose-800/35 dark:bg-rose-500 dark:ring-rose-200/20",
+    },
+    {
+      label: t("events.summary.needsReview"),
+      value: counts.unreviewed,
+      icon: Eye,
+      iconClassName: "text-white",
+      iconShellClassName: "bg-fuchsia-600 ring-1 ring-fuchsia-800/35 dark:bg-fuchsia-500 dark:ring-fuchsia-200/20",
+    },
   ];
 
   function showToast(nextToast: NonNullable<ToastState>) {
@@ -243,22 +270,28 @@ export function EventsReviewCenter({
   return (
     <div className="space-y-4 p-6">
       <section className="grid gap-4 md:grid-cols-4">
-        {summaryCards.map(({ label, value, icon: Icon }) => (
+        {summaryCards.map(({ label, value, icon: Icon, iconClassName, iconShellClassName }) => (
           <Card key={label}>
             <CardContent className="flex items-center justify-between">
               <div>
                 <div className="text-2xl font-semibold">{value}</div>
                 <div className="text-sm text-slate-500">{label}</div>
               </div>
-              <div className="grid h-11 w-11 place-items-center rounded-md bg-slate-100">
-                <Icon className="h-5 w-5 text-slate-600" />
+              <div className={`grid h-11 w-11 place-items-center rounded-xl shadow-sm ${iconShellClassName}`}>
+                <Icon className={`h-5 w-5 ${iconClassName}`} />
               </div>
             </CardContent>
           </Card>
         ))}
       </section>
 
-      <Card>
+      <Card
+        className={
+          theme === "dark"
+            ? "relative z-20 border-white/8 bg-[rgba(15,27,45,0.42)] shadow-[0_18px_42px_rgba(2,6,23,0.24)] backdrop-blur-xl"
+            : "relative z-20 border-white/10 bg-[rgba(255,255,255,0.58)] shadow-[0_18px_42px_rgba(15,23,42,0.08)] backdrop-blur-xl"
+        }
+      >
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
             {([
@@ -267,18 +300,15 @@ export function EventsReviewCenter({
               ["unknown", t("events.filters.unknown")],
               ["spoof", t("events.filters.spoof")],
             ] as const).map(([value, label]) => (
-              <button
+              <Button
                 key={value}
                 type="button"
+                variant={activeType === value ? "default" : "outline"}
+                size="sm"
                 onClick={() => onTypeChange(value as EventType)}
-                className={
-                  activeType === value
-                    ? "h-9 rounded-md bg-slate-950 px-3 text-sm font-medium text-white"
-                    : "h-9 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                }
               >
                 {label}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -304,7 +334,8 @@ export function EventsReviewCenter({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="relative z-10 list-table-corner-accent">
+        <ListTableAccent />
         <CardContent>
           {loading ? (
             <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">{t("events.table.loading")}</div>
@@ -496,17 +527,17 @@ function DateTimePicker({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        className="ui-filter-trigger"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <CalendarSearch className="h-4 w-4 shrink-0 text-slate-500" />
-          <span className="truncate font-medium text-slate-800">{formatDateTimeInputLabel(value, locale)}</span>
+          <CalendarSearch className="ui-filter-search-icon shrink-0" />
+          <span className="ui-filter-value">{formatDateTimeInputLabel(value, locale)}</span>
         </span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-11 z-30 w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+        <div className="ui-filter-panel absolute left-0 top-12 z-30 w-80">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
             <button type="button" onClick={() => shiftMonth(-1)} className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label={t("previousMonth")}>
               <ChevronLeft className="h-4 w-4" />
@@ -627,7 +658,7 @@ function EventDetailDrawer({
   }, [event.snapshot_media_asset_id, t]);
 
   return (
-    <div className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
+    <div className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
       <div className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(visible)}`} onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}>
         <div className="flex items-start justify-between border-b border-slate-200 p-5">
           <div className="flex items-start gap-3">
@@ -700,7 +731,7 @@ function EventDetailDrawer({
 
         <div className="flex justify-end gap-2 border-t border-slate-200 p-5">
           {event.person_id ? (
-            <Link href={`/persons/${event.person_id}`} className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50">
+            <Link href={`/persons/${event.person_id}`} className="ui-button-link ui-button-link-outline">
               {t("events.detail.openPersonProfile")}
             </Link>
           ) : null}

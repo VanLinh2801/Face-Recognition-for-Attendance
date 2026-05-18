@@ -4,7 +4,9 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Building2, ChevronRight, Eye, MoreHorizontal, Pencil, Save, Search, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ListTableAccent } from "@/components/data/list-table-accent";
 import { PersonStatusBadge } from "@/components/data/status-badge";
+import { useTheme } from "@/components/theme/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +46,7 @@ export function DepartmentDetailView({
 }) {
   const t = useTranslations();
   const router = useRouter();
+  const { theme } = useTheme();
   const [deletedPersonIds, setDeletedPersonIds] = useState<Set<string>>(new Set());
   const [openPersonActionId, setOpenPersonActionId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DepartmentPerson | null>(null);
@@ -66,6 +69,10 @@ export function DepartmentDetailView({
     () => persons.filter((person) => !deletedPersonIds.has(person.id)),
     [deletedPersonIds, persons],
   );
+  const glassCardClass =
+    theme === "dark"
+      ? "border-white/8 bg-[rgba(15,27,45,0.42)] shadow-[0_18px_42px_rgba(2,6,23,0.24)] backdrop-blur-xl"
+      : "border-white/10 bg-[rgba(255,255,255,0.58)] shadow-[0_18px_42px_rgba(15,23,42,0.08)] backdrop-blur-xl";
 
   useOutsideClick(personActionMenuRef, openPersonActionId !== null, () => setOpenPersonActionId(null));
 
@@ -219,7 +226,7 @@ export function DepartmentDetailView({
     <>
       <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
         <div className="space-y-4">
-          <Card>
+          <Card className={glassCardClass}>
             <CardHeader>
               <CardTitle>{t("departments.detail.infoTitle")}</CardTitle>
             </CardHeader>
@@ -248,14 +255,14 @@ export function DepartmentDetailView({
                 <span className="text-slate-500">{t("departments.detail.persons")}</span>
                 <span>{treePersons.length}</span>
               </div>
-              <Button variant="outline" className="mt-2 w-full" onClick={openEditDialog}>
+              <Button className="ui-button-link ui-button-link-primary mt-2 w-full" onClick={openEditDialog}>
                 <Pencil className="h-4 w-4" />
                 {t("departments.detail.editAction")}
               </Button>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={glassCardClass}>
             <CardHeader>
               <CardTitle>{t("departments.detail.treeTitle")}</CardTitle>
             </CardHeader>
@@ -270,7 +277,8 @@ export function DepartmentDetailView({
           </Card>
         </div>
 
-        <Card>
+        <Card className={`list-table-corner-accent ${glassCardClass}`}>
+          <ListTableAccent />
           <CardHeader>
             <CardTitle>{t("departments.detail.personsTitle")}</CardTitle>
           </CardHeader>
@@ -352,7 +360,7 @@ export function DepartmentDetailView({
 
       {visibleEditDraft ? (
         <div
-          className={`fixed inset-0 z-[60] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(editDialog.visible)}`}
+          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(editDialog.visible)}`}
           onMouseDown={() => setEditDraft(null)}
         >
           <div
@@ -427,7 +435,7 @@ export function DepartmentDetailView({
               <Button variant="outline" onClick={() => setEditDraft(null)} disabled={savingDepartment}>
                 {t("common.cancel")}
               </Button>
-              <Button onClick={saveDepartmentDraft} disabled={savingDepartment}>
+              <Button className="ui-button-link ui-button-link-primary" onClick={saveDepartmentDraft} disabled={savingDepartment}>
                 <Save className="h-4 w-4" />
                 {savingDepartment ? t("departments.form.saving") : t("departments.form.saveChanges")}
               </Button>
@@ -438,7 +446,7 @@ export function DepartmentDetailView({
 
       {visibleDeleteTarget ? (
         <div
-          className={`fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
+          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
           onMouseDown={() => setDeleteTarget(null)}
         >
           <div
@@ -648,19 +656,17 @@ function DepartmentTreeSelect({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:ring-2 ${
-          invalid ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-slate-200 focus:border-slate-400 focus:ring-slate-100"
-        }`}
+        className={`ui-filter-trigger ${invalid ? "ui-filter-trigger-invalid" : ""}`}
       >
-        <span className="truncate">{selectedLabel}</span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <span className="ui-filter-value">{selectedLabel}</span>
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-11 z-[80] w-[360px] max-w-[calc(100vw-3rem)] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
-          <div className="border-b border-slate-100 p-2">
-            <div className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3">
-              <Search className="h-4 w-4 text-slate-400" />
+        <div className="ui-filter-panel absolute left-0 top-12 z-[80] w-[360px] max-w-[calc(100vw-3rem)]">
+          <div className="border-b border-[var(--border)] p-2">
+            <div className="ui-filter-search-shell">
+              <Search className="ui-filter-search-icon" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -679,8 +685,8 @@ function DepartmentTreeSelect({
               }}
               className={
                 value === ""
-                  ? "flex w-full items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white"
-                  : "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  ? "ui-filter-option ui-filter-option-active"
+                  : "ui-filter-option"
               }
             >
               <Building2 className="h-4 w-4" />
@@ -737,16 +743,16 @@ function DepartmentStatusSelect({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 text-left text-sm outline-none transition hover:bg-slate-50 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+        className="ui-filter-trigger"
       >
         <span className="flex min-w-0 items-center gap-2">
           <DepartmentStatusBadge active={value} />
         </span>
-        <ChevronRight className={open ? "h-4 w-4 rotate-90 text-slate-500 transition-transform" : "h-4 w-4 text-slate-500 transition-transform"} />
+        <ChevronRight className={open ? "ui-filter-chevron rotate-90" : "ui-filter-chevron"} />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-11 z-30 w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+        <div className="ui-filter-panel absolute left-0 top-12 z-30 w-full p-1">
           {options.map((option) => (
             <button
               key={option ? "active" : "inactive"}
@@ -757,8 +763,8 @@ function DepartmentStatusSelect({
               }}
               className={
                 value === option
-                  ? "flex w-full items-center rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-medium text-white"
-                  : "flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  ? "ui-filter-option ui-filter-option-active"
+                  : "ui-filter-option"
               }
             >
               <DepartmentStatusBadge active={option} />
@@ -811,8 +817,8 @@ function DepartmentTreeOption({
       <div
         className={
           selectedId === department.id
-            ? "flex items-center gap-2 rounded-md bg-slate-950 px-2 py-2 text-sm font-medium text-white"
-            : "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-slate-50"
+            ? "flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--background-muted)] px-2 py-2.5 text-sm font-medium text-[var(--foreground)]"
+            : "flex items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-[var(--foreground)] hover:bg-[var(--background-panel)]"
         }
         style={{ paddingLeft: 8 + depth * 18 }}
       >

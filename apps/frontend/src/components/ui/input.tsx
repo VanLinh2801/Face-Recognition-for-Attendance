@@ -43,7 +43,7 @@ export function Input({ className, value, onChange, onCompositionStart, onCompos
   return (
     <input
       className={cn(
-        "h-9 w-full rounded-md border border-[var(--border)] bg-[var(--background-elevated)] px-3 text-sm text-[var(--foreground)] outline-none transition placeholder:text-[var(--foreground-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--focus-ring)]",
+        "h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--background-elevated)] px-3.5 text-sm text-[var(--foreground)] shadow-[var(--shadow-sm)] outline-none transition placeholder:font-normal placeholder:text-[var(--foreground-soft)] focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]",
         className,
       )}
       value={isControlled ? localValue : value}
@@ -59,7 +59,7 @@ export function Select({ className, ...props }: React.SelectHTMLAttributes<HTMLS
   return (
     <select
       className={cn(
-        "h-9 w-full rounded-md border border-[var(--border)] bg-[var(--background-elevated)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--focus-ring)]",
+        "h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--background-elevated)] px-3.5 text-sm text-[var(--foreground)] shadow-[var(--shadow-sm)] outline-none transition focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]",
         className,
       )}
       {...props}
@@ -109,7 +109,7 @@ export function Textarea({ className, value, onChange, onCompositionStart, onCom
   return (
     <textarea
       className={cn(
-        "min-h-24 w-full rounded-md border border-[var(--border)] bg-[var(--background-elevated)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition placeholder:text-[var(--foreground-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--focus-ring)]",
+        "min-h-24 w-full rounded-lg border border-[var(--border)] bg-[var(--background-elevated)] px-3.5 py-2.5 text-sm text-[var(--foreground)] shadow-[var(--shadow-sm)] outline-none transition placeholder:font-normal placeholder:text-[var(--foreground-soft)] focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]",
         className,
       )}
       value={isControlled ? localValue : value}

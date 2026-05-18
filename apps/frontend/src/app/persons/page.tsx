@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { PageAmbientWave } from "@/components/data/page-ambient-wave";
 import { PageHeader } from "@/components/data/page-header";
 import { PersonsTable } from "@/components/persons/persons-table";
 import { ApiError, apiFetch } from "@/lib/api-client";
@@ -59,16 +60,17 @@ export default function PersonsPage() {
   }, [departments, persons, t]);
 
   return (
-    <div>
+    <div className="relative min-h-[calc(100vh-5rem)]">
+      <PageAmbientWave className="fixed inset-x-0 top-1/2 z-0 h-0" />
       <PageHeader
         title={t("persons.page.title")}
         description={t("persons.page.description")}
       />
-      <div className="space-y-4 p-6">
+      <div className="relative z-10 space-y-4 px-6 pb-16 pt-6">
         <div className="flex justify-end">
           <Link
             href="/persons/new"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] transition-colors hover:bg-[var(--primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+            className="ui-button-link ui-button-link-primary"
           >
             <Plus className="h-4 w-4" />
             {t("persons.page.addAction")}

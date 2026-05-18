@@ -3,16 +3,18 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { THEME_STORAGE_KEY } from "@/components/theme/theme-constants";
 
 export type ThemeMode = "light" | "dark";
-const THEME_TRANSITIONING_CLASS = "theme-transitioning";
-const THEME_TRANSITION_DURATION_MS = 280;
+const THEME_OVERLAY_FADE_IN_MS = 160;
+const THEME_OVERLAY_FADE_OUT_MS = 240;
 
 type ThemeContextValue = {
   theme: ThemeMode;
@@ -34,20 +36,6 @@ function applyTheme(theme: ThemeMode) {
   document.documentElement.style.colorScheme = theme;
 }
 
-function runThemeTransition(nextTheme: ThemeMode) {
-  const root = document.documentElement;
-  const body = document.body;
-
-  root.classList.add(THEME_TRANSITIONING_CLASS);
-  body.classList.add(THEME_TRANSITIONING_CLASS);
-  applyTheme(nextTheme);
-
-  window.setTimeout(() => {
-    root.classList.remove(THEME_TRANSITIONING_CLASS);
-    body.classList.remove(THEME_TRANSITIONING_CLASS);
-  }, THEME_TRANSITION_DURATION_MS);
-}
-
 function subscribeTheme(onStoreChange: () => void) {
   if (typeof window === "undefined") {
     return () => undefined;
@@ -66,27 +54,72 @@ function subscribeTheme(onStoreChange: () => void) {
   };
 }
 
+function readBackgroundColor() {
+  return getComputedStyle(document.documentElement).getPropertyValue("--background").trim() || "#000000";
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const theme = useSyncExternalStore(
     subscribeTheme,
     readStoredTheme,
     (): ThemeMode => "light",
   );
+  const [overlayVisible, setOverlayVisible] = useState(false);
+  const [overlayOpaque, setOverlayOpaque] = useState(false);
+  const [overlayColor, setOverlayColor] = useState("#000000");
 
   useLayoutEffect(() => {
     applyTheme(theme);
   }, [theme]);
 
+  useEffect(() => {
+    if (!overlayVisible) return;
+
+    const frame = window.requestAnimationFrame(() => setOverlayOpaque(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [overlayVisible]);
+
   const value = useMemo<ThemeContextValue>(() => ({
     theme,
     setTheme(nextTheme) {
-      window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
-      runThemeTransition(nextTheme);
-      window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+      if (nextTheme === theme) return;
+
+      const coverColor = readBackgroundColor();
+      setOverlayColor(coverColor);
+      setOverlayOpaque(false);
+      setOverlayVisible(true);
+
+      window.setTimeout(() => {
+        window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+        applyTheme(nextTheme);
+        window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            setOverlayColor(readBackgroundColor());
+            setOverlayOpaque(false);
+
+            window.setTimeout(() => {
+              setOverlayVisible(false);
+            }, THEME_OVERLAY_FADE_OUT_MS);
+          });
+        });
+      }, THEME_OVERLAY_FADE_IN_MS);
     },
   }), [theme]);
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={value}>
+      {children}
+      {overlayVisible ? (
+        <div
+          aria-hidden="true"
+          className={overlayOpaque ? "theme-transition-overlay theme-transition-overlay-visible" : "theme-transition-overlay"}
+          style={{ backgroundColor: overlayColor, transitionDuration: `${overlayOpaque ? THEME_OVERLAY_FADE_IN_MS : THEME_OVERLAY_FADE_OUT_MS}ms` }}
+        />
+      ) : null}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {
