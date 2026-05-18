@@ -43,7 +43,7 @@ export function Input({ className, value, onChange, onCompositionStart, onCompos
   return (
     <input
       className={cn(
-        "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100",
+        "h-9 w-full rounded-md border border-[var(--border)] bg-[var(--background-elevated)] px-3 text-sm text-[var(--foreground)] outline-none transition placeholder:text-[var(--foreground-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--focus-ring)]",
         className,
       )}
       value={isControlled ? localValue : value}
@@ -59,7 +59,7 @@ export function Select({ className, ...props }: React.SelectHTMLAttributes<HTMLS
   return (
     <select
       className={cn(
-        "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100",
+        "h-9 w-full rounded-md border border-[var(--border)] bg-[var(--background-elevated)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--focus-ring)]",
         className,
       )}
       {...props}
@@ -109,7 +109,7 @@ export function Textarea({ className, value, onChange, onCompositionStart, onCom
   return (
     <textarea
       className={cn(
-        "min-h-24 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100",
+        "min-h-24 w-full rounded-md border border-[var(--border)] bg-[var(--background-elevated)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition placeholder:text-[var(--foreground-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--focus-ring)]",
         className,
       )}
       value={isControlled ? localValue : value}

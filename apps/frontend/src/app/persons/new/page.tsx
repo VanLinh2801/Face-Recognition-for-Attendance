@@ -253,6 +253,8 @@ export default function NewPersonPage() {
     }
   }
 
+  void handleSubmit;
+
   async function handleSubmitWithRegistrationPolling(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");

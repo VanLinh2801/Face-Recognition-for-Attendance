@@ -52,11 +52,11 @@ export function NotificationCenter() {
       <StatusIndicator status={connectionStatus} />
 
       {open ? (
-        <div className="absolute right-0 top-12 z-[95] w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <div className="absolute right-0 top-12 z-[95] w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-elevated)] shadow-[var(--shadow-md)]">
+          <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
             <div>
-              <div className="text-sm font-semibold text-slate-950">{t("notifications.title")}</div>
-              <div className="mt-1 text-xs text-slate-500">{getConnectionLabel(connectionStatus, t)}</div>
+              <div className="text-sm font-semibold text-[var(--foreground)]">{t("notifications.title")}</div>
+              <div className="mt-1 text-xs text-[var(--foreground-soft)]">{getConnectionLabel(connectionStatus, t)}</div>
             </div>
             <Button variant="ghost" size="sm" disabled={unreadCount === 0} onClick={markAllAsRead}>
               <CheckCheck className="h-4 w-4" />
@@ -66,14 +66,14 @@ export function NotificationCenter() {
 
           <div className="thin-scrollbar max-h-[420px] overflow-y-auto">
             {items.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-slate-500">{t("notifications.empty")}</div>
+              <div className="px-4 py-10 text-center text-sm text-[var(--foreground-soft)]">{t("notifications.empty")}</div>
             ) : (
               items.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => handleOpenNotification(item)}
-                  className={item.read ? notificationRowClass : `${notificationRowClass} bg-slate-50/70`}
+                  className={item.read ? notificationRowClass : `${notificationRowClass} bg-[var(--background-muted)]`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={item.kind === "spoof" ? iconDangerClass : iconWarningClass}>
@@ -87,11 +87,11 @@ export function NotificationCenter() {
                           </Badge>
                           {!item.read ? <span className="h-2 w-2 rounded-full bg-sky-500" /> : null}
                         </div>
-                        <span className="text-[11px] text-slate-400">{formatNotificationDateTime(item.occurredAt, locale)}</span>
+                        <span className="text-[11px] text-[var(--foreground-muted)]">{formatNotificationDateTime(item.occurredAt, locale)}</span>
                       </div>
-                      <div className="mt-2 text-sm font-semibold text-slate-950">{getNotificationTitle(item, t)}</div>
-                      <div className="mt-1 truncate text-sm text-slate-600">{getNotificationMessage(item, t)}</div>
-                      <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                      <div className="mt-2 text-sm font-semibold text-[var(--foreground)]">{getNotificationTitle(item, t)}</div>
+                      <div className="mt-1 truncate text-sm text-[var(--foreground-soft)]">{getNotificationMessage(item, t)}</div>
+                      <div className="mt-2 flex items-center gap-2 text-xs text-[var(--foreground-soft)]">
                         {item.severity ? <span>{formatSeverity(item.severity, t)}</span> : null}
                         {item.score != null ? <span>{formatPercent(item.score, t("common.unknown"))}</span> : null}
                       </div>
@@ -167,20 +167,20 @@ function NotificationToasts({
             key={item.id}
             role="status"
             aria-live="polite"
-            className={`pointer-events-auto rounded-lg border bg-white p-4 text-sm shadow-2xl transition-all duration-300 ease-out ${
+            className={`pointer-events-auto rounded-lg border bg-[var(--background-elevated)] p-4 text-sm shadow-[var(--shadow-md)] transition-all duration-300 ease-out ${
               hiddenToastIds.includes(item.id) ? "translate-x-[calc(100%+2rem)] opacity-0" : "translate-x-0 opacity-100"
             } ${
-              item.kind === "spoof" ? "border-red-200" : "border-amber-200"
+              item.kind === "spoof" ? "border-[var(--danger)]" : "border-[var(--warning)]"
             }`}
           >
             <div className="flex items-start gap-3">
               <div className={item.kind === "spoof" ? dangerDotClass : warningDotClass} />
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-slate-950">{getNotificationTitle(item, t)}</div>
+                <div className="text-sm font-semibold text-[var(--foreground)]">{getNotificationTitle(item, t)}</div>
                 <button
                   type="button"
                   onClick={() => onOpen(item)}
-                  className="mt-1 block w-full text-left text-sm font-normal text-slate-600"
+                  className="mt-1 block w-full text-left text-sm font-normal text-[var(--foreground-soft)]"
                 >
                   {buildToastDescription(item, t, locale)}
                 </button>
@@ -191,7 +191,7 @@ function NotificationToasts({
                   event.stopPropagation();
                   closeToast(item.id);
                 }}
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[var(--foreground-muted)] hover:bg-[var(--background-muted)] hover:text-[var(--foreground)]"
                 aria-label={t("notifications.close")}
               >
                 <X className="h-4 w-4" />
@@ -208,8 +208,8 @@ function StatusIndicator({ status }: { status: WebSocketConnectionStatus }) {
   const connected = status === "connected";
 
   return (
-    <div className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full border border-white bg-white shadow-sm">
-      {connected ? <Wifi className="h-3.5 w-3.5 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5 text-slate-400" />}
+    <div className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full border border-[var(--border)] bg-[var(--background-elevated)] shadow-[var(--shadow-sm)]">
+      {connected ? <Wifi className="h-3.5 w-3.5 text-[var(--success)]" /> : <WifiOff className="h-3.5 w-3.5 text-[var(--foreground-muted)]" />}
     </div>
   );
 }
@@ -222,12 +222,12 @@ function getConnectionLabel(status: WebSocketConnectionStatus, t: ReturnType<typ
 }
 
 const notificationRowClass =
-  "w-full border-b border-slate-100 px-4 py-3 transition hover:bg-slate-50 last:border-b-0";
+  "w-full border-b border-[var(--border)] px-4 py-3 transition hover:bg-[var(--background-muted)] last:border-b-0";
 
-const iconDangerClass = "grid h-9 w-9 shrink-0 place-items-center rounded-full bg-red-50 text-red-600";
-const iconWarningClass = "grid h-9 w-9 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-600";
-const dangerDotClass = "mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-red-500";
-const warningDotClass = "mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500";
+const iconDangerClass = "grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--danger-soft)] text-[var(--danger)]";
+const iconWarningClass = "grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--warning-soft)] text-[var(--warning)]";
+const dangerDotClass = "mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--danger)]";
+const warningDotClass = "mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--warning)]";
 
 function getNotificationTitle(item: NotificationItem, t: ReturnType<typeof useTranslations>) {
   if (item.kind === "unknown") {

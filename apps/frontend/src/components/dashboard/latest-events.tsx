@@ -37,20 +37,27 @@ export function LatestEvents({
   }, [activeFilter, events]);
 
   return (
-    <aside className="flex h-full min-h-0 w-full flex-col border-l border-slate-800 bg-slate-950 text-white lg:w-[360px]">
-      <div className="border-b border-slate-800 p-4">
+    <aside
+      className="flex h-full min-h-0 w-full flex-col lg:w-[360px]"
+      style={{
+        borderLeft: "1px solid var(--border)",
+        background: "linear-gradient(180deg, var(--background-panel) 0%, var(--background) 100%)",
+        color: "var(--foreground)",
+      }}
+    >
+      <div className="border-b border-[var(--border)] p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">Latest events</h2>
           <Badge variant="dark">Live feed</Badge>
         </div>
-        <div className="mt-3 grid grid-cols-4 gap-1 rounded-md bg-slate-900 p-1 text-xs text-slate-300">
+        <div className="mt-3 grid grid-cols-4 gap-1 rounded-md bg-[var(--background-muted)] p-1 text-xs text-[var(--foreground-soft)]">
           {FILTER_ITEMS.map((item) => (
             <button
               key={item.value}
               className={
                 activeFilter === item.value
-                  ? "rounded bg-white px-2 py-1 text-slate-950"
-                  : "rounded px-2 py-1 hover:bg-slate-800"
+                  ? "rounded bg-[var(--background-elevated)] px-2 py-1 text-[var(--foreground)] shadow-[var(--shadow-sm)]"
+                  : "rounded px-2 py-1 hover:bg-[var(--background-panel)] hover:text-[var(--foreground)]"
               }
               onClick={() => setActiveFilter(item.value)}
               type="button"
@@ -61,27 +68,30 @@ export function LatestEvents({
         </div>
       </div>
       <div className="thin-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-        {loading ? <div className="text-sm text-slate-400">Loading dashboard events...</div> : null}
-        {!loading && error ? <div className="text-sm text-red-300">{error}</div> : null}
+        {loading ? <div className="text-sm text-[var(--foreground-muted)]">Loading dashboard events...</div> : null}
+        {!loading && error ? <div className="text-sm text-[var(--danger)]">{error}</div> : null}
         {!loading && !error && visibleEvents.length === 0 ? (
-          <div className="text-sm text-slate-400">No events for the selected filter.</div>
+          <div className="text-sm text-[var(--foreground-muted)]">No events for the selected filter.</div>
         ) : null}
         {!loading && !error && visibleEvents.map((event) => {
           const meta = eventMeta(event.eventType);
           const Icon = meta.icon;
           return (
-            <div key={`${event.eventType}-${event.id}`} className="rounded-lg border border-slate-800 bg-slate-900 p-3">
+            <div
+              key={`${event.eventType}-${event.id}`}
+              className="rounded-lg border border-[var(--border)] bg-[var(--background-elevated)] p-3 shadow-[var(--shadow-sm)]"
+            >
               <div className="flex items-start gap-3">
-                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-slate-800">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[var(--background-muted)] text-[var(--foreground-soft)]">
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-3">
                     <Badge variant={meta.variant}>{meta.label}</Badge>
-                    <span className="font-mono text-xs text-slate-400">{formatTime(event.occurredAt)}</span>
+                    <span className="font-mono text-xs text-[var(--foreground-muted)]">{formatTime(event.occurredAt)}</span>
                   </div>
-                  <div className="mt-2 truncate text-sm font-medium">{event.subject}</div>
-                  <div className="mt-1 text-xs text-slate-400">
+                  <div className="mt-2 truncate text-sm font-medium text-[var(--foreground)]">{event.subject}</div>
+                  <div className="mt-1 text-xs text-[var(--foreground-muted)]">
                     {event.channel} · score {percent(event.score)}
                   </div>
                 </div>

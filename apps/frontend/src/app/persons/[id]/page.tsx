@@ -59,7 +59,7 @@ export default function PersonDetailPage() {
   const editDialog = useDialogTransition(editing && editForm ? editForm : null);
   const visibleEditForm = editDialog.value;
   const profileImageAssetId = getLatestIndexedProfileAssetId(registrations);
-  const [profileImageFailed, setProfileImageFailed] = useState(false);
+  const [failedProfileImageAssetId, setFailedProfileImageAssetId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!personId) return;
@@ -102,10 +102,6 @@ export default function PersonDetailPage() {
       window.clearTimeout(removeTimer);
     };
   }, [toast]);
-
-  useEffect(() => {
-    setProfileImageFailed(false);
-  }, [profileImageAssetId]);
 
   const departmentName = person?.department_id
     ? departments.find((department) => department.id === person.department_id)?.name ?? "Unknown"
@@ -237,7 +233,7 @@ export default function PersonDetailPage() {
           <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="grid aspect-square overflow-hidden rounded-lg bg-slate-100">
-              {profileImageAssetId && !profileImageFailed ? (
+              {profileImageAssetId && profileImageAssetId !== failedProfileImageAssetId ? (
                 <Image
                   src={`/api/v1/media-assets/${profileImageAssetId}/content`}
                   alt={`Profile image of ${person.full_name}`}
@@ -245,7 +241,7 @@ export default function PersonDetailPage() {
                   height={640}
                   unoptimized
                   className="h-full w-full object-cover"
-                  onError={() => setProfileImageFailed(true)}
+                  onError={() => setFailedProfileImageAssetId(profileImageAssetId)}
                 />
               ) : (
                 <div className="grid h-full w-full place-items-center text-5xl font-semibold text-slate-400">

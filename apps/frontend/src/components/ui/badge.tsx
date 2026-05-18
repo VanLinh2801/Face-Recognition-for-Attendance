@@ -1,12 +1,12 @@
 import { cn } from "@/lib/utils";
 
 const variants = {
-  default: "bg-slate-100 text-slate-700 ring-slate-200",
-  success: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  warning: "bg-amber-50 text-amber-700 ring-amber-200",
-  danger: "bg-red-50 text-red-700 ring-red-200",
-  info: "bg-cyan-50 text-cyan-700 ring-cyan-200",
-  dark: "bg-slate-900 text-white ring-slate-700",
+  default: "bg-[var(--background-muted)] text-[var(--foreground-soft)] ring-[var(--border)]",
+  success: "bg-[var(--success-soft)] text-[var(--success)] ring-[var(--success)]",
+  warning: "bg-[var(--warning-soft)] text-[var(--warning)] ring-[var(--warning)]",
+  danger: "bg-[var(--danger-soft)] text-[var(--danger)] ring-[var(--danger)]",
+  info: "bg-[var(--info-soft)] text-[var(--info)] ring-[var(--info)]",
+  dark: "bg-[var(--foreground)] text-[var(--background-elevated)] ring-[var(--border-strong)]",
 };
 
 export function Badge({

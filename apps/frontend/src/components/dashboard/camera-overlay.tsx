@@ -10,14 +10,14 @@ interface CameraOverlayProps {
 }
 
 export function CameraOverlay({ boxes, className }: CameraOverlayProps) {
-  const [, tick] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const id = setInterval(() => tick((t) => t + 1), 200);
+    const id = setInterval(() => setNow(Date.now()), 200);
     return () => clearInterval(id);
   }, []);
 
-  const active = boxes.filter((box) => !box.expiresAt || Date.now() < box.expiresAt);
+  const active = boxes.filter((box) => !box.expiresAt || now < box.expiresAt);
 
   if (active.length === 0) {
     return null;

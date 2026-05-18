@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/data/page-header";
 import { PersonsTable } from "@/components/persons/persons-table";
@@ -61,10 +63,17 @@ export default function PersonsPage() {
       <PageHeader
         title={t("persons.page.title")}
         description={t("persons.page.description")}
-        action={t("persons.page.addAction")}
-        actionHref="/persons/new"
       />
       <div className="space-y-4 p-6">
+        <div className="flex justify-end">
+          <Link
+            href="/persons/new"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] transition-colors hover:bg-[var(--primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+          >
+            <Plus className="h-4 w-4" />
+            {t("persons.page.addAction")}
+          </Link>
+        </div>
         {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
         {loading ? <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{t("persons.page.loading")}</div> : null}
         {!loading ? <PersonsTable persons={personRows} departments={departments} /> : null}

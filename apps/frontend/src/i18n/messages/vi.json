@@ -29,6 +29,11 @@
     "vi": "Tiếng Việt",
     "en": "English"
   },
+  "theme": {
+    "label": "Giao diện",
+    "light": "Sáng",
+    "dark": "Tối"
+  },
   "notifications": {
     "open": "Mở thông báo",
     "title": "Thông báo",
@@ -60,7 +65,7 @@
     "departments": "Phòng ban"
   },
   "layout": {
-    "appName": "Face Recognition",
+    "appName": "FaceID",
     "appSubtitle": "Attendance Admin",
     "adminSession": "Phiên admin",
     "toggleSidebar": "Thu gọn/mở rộng sidebar",
@@ -86,6 +91,8 @@
   "auth": {
     "loginTitle": "Đăng nhập",
     "loginDescription": "Sử dụng tài khoản admin để vào dashboard.",
+    "heroTitleLine1": "Quản lý điểm danh thông minh",
+    "heroTitleLine2": "bằng nhận diện khuôn mặt",
     "securityPanel": "Bảng điều khiển bảo mật",
     "heroTitle": "Quản lý điểm danh bằng nhận diện khuôn mặt.",
     "heroDescription": "Đăng nhập để theo dõi camera, sự kiện nhận diện, chấm công và hồ sơ nhân sự trong cùng một dashboard.",

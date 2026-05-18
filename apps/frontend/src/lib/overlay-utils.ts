@@ -103,10 +103,8 @@ export function transformOverlayToRenderBoxes(
 export function mergeOverlayBoxes(
   existingBoxes: OverlayRenderBox[],
   newOverlay: FrameOverlayPayload,
-  videoDimensions: VideoDimensions | null,
-  maxAgeMs: number = 500
+  videoDimensions: VideoDimensions | null
 ): OverlayRenderBox[] {
-  const now = Date.now();
   const newBoxes = transformOverlayToRenderBoxes(newOverlay, videoDimensions);
 
   const existingByTrack = new Map(existingBoxes.map((box) => [box.track_id, box]));

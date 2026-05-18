@@ -11,17 +11,21 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  Fingerprint,
   KeyRound,
-  LayoutDashboard,
   LogOut,
   Radio,
+  ScanSearch,
   UserRound,
   Users,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { NotificationCenter, NotificationToastsLayer } from "@/components/notifications/notification-center";
+import { ThemeSwitcher } from "@/components/theme/theme-switcher";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { PageHeaderContext, type PageHeaderState } from "@/components/layout/page-header-context";
 import { apiFetch, SESSION_EXPIRED_EVENT } from "@/lib/api-client";
 import { clearAuthTokens, getRefreshToken } from "@/lib/auth-client";
 import { getTranslatedBackendError } from "@/lib/translated-backend-error";
@@ -31,12 +35,17 @@ import { useOutsideClick } from "@/lib/use-outside-click";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/", labelKey: "navigation.dashboard", icon: LayoutDashboard },
+  { href: "/", labelKey: "navigation.dashboard", icon: ScanSearch },
   { href: "/persons", labelKey: "navigation.persons", icon: Users },
   { href: "/attendance", labelKey: "navigation.attendance", icon: CalendarClock },
   { href: "/events", labelKey: "navigation.events", icon: Radio },
   { href: "/departments", labelKey: "navigation.departments", icon: Building2 },
 ];
+
+const SIDEBAR_EXPANDED_WIDTH = "w-[280px]";
+const SIDEBAR_COLLAPSED_WIDTH = "w-[88px]";
+const MAIN_EXPANDED_PADDING = "pl-[280px]";
+const MAIN_COLLAPSED_PADDING = "pl-[88px]";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const t = useTranslations();
@@ -54,6 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [changePasswordError, setChangePasswordError] = useState("");
   const [submittingPasswordChange, setSubmittingPasswordChange] = useState(false);
+  const [pageHeader, setPageHeader] = useState<PageHeaderState | null>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
@@ -102,8 +112,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [pathname]);
 
+  useEffect(() => {
+    if (pathname === "/login") return;
+    setPageHeader(getFallbackHeader(pathname, t));
+  }, [pathname, t]);
+
   if (pathname === "/login") {
-    return <div className="min-h-screen bg-slate-50 text-slate-950">{children}</div>;
+    return <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">{children}</div>;
   }
 
   async function handleLogout() {
@@ -206,66 +221,109 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-200 bg-white transition-all duration-200",
-          collapsed ? "w-[72px]" : "w-64",
+          "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-all duration-300",
+          "before:pointer-events-none before:absolute before:left-6 before:right-6 before:top-[92px] before:h-px before:bg-[var(--sidebar-divider)]",
+          "after:pointer-events-none after:absolute after:left-8 after:top-20 after:h-14 after:w-28 after:rounded-full after:bg-[var(--sidebar-brand-glow)] after:blur-3xl",
+          collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH,
         )}
       >
-        <div className="flex h-16 items-center justify-between border-b border-slate-200 px-3">
-          <Link href="/" className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-950 text-white">
-              <LayoutDashboard className="h-5 w-5" />
-            </div>
-            {!collapsed && (
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold">{t("layout.appName")}</div>
-                <div className="truncate text-xs text-slate-500">{t("layout.appSubtitle")}</div>
+        <div className={cn("relative px-4 pb-6 pt-6", collapsed ? "px-3" : "px-5")}>
+          <div className={cn("flex items-start gap-3", collapsed ? "justify-center" : "justify-between")}>
+            <Link href="/" className={cn("flex min-w-0 items-center gap-3", collapsed && "justify-center")}>
+              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-[18px] bg-[var(--sidebar-brand-surface)] text-[var(--primary)] shadow-[var(--sidebar-brand-shadow)] ring-1 ring-white/10">
+                <Fingerprint className="h-7 w-7" strokeWidth={2.2} />
               </div>
+              {!collapsed && (
+                <div className="min-w-0 pt-0.5">
+                  <div className="truncate text-[1.05rem] font-semibold tracking-[-0.02em] text-[var(--sidebar-foreground)]">
+                    {t("layout.appName")}
+                  </div>
+                  <div className="truncate text-sm text-[var(--sidebar-foreground-soft)]">{t("layout.appSubtitle")}</div>
+                </div>
+              )}
+            </Link>
+            {!collapsed ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setCollapsed((value) => !value)}
+                aria-label={t("layout.toggleSidebar")}
+                className="mt-1 h-9 w-9 rounded-full border border-[var(--sidebar-control-border)] bg-[var(--sidebar-control-bg)] text-[var(--sidebar-foreground-soft)] hover:border-[var(--sidebar-control-border-hover)] hover:bg-[var(--sidebar-control-hover)] hover:text-[var(--sidebar-foreground)]"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setCollapsed((value) => !value)}
+                aria-label={t("layout.toggleSidebar")}
+                className="absolute right-2 top-2 h-8 w-8 rounded-full border border-[var(--sidebar-control-border)] bg-[var(--sidebar-control-bg)] text-[var(--sidebar-foreground-soft)] hover:border-[var(--sidebar-control-border-hover)] hover:bg-[var(--sidebar-control-hover)] hover:text-[var(--sidebar-foreground)]"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             )}
-          </Link>
-          <Button variant="ghost" size="icon" onClick={() => setCollapsed((value) => !value)} aria-label={t("layout.toggleSidebar")}>
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </Button>
+          </div>
         </div>
 
-        <nav className="thin-scrollbar flex-1 space-y-1 overflow-y-auto p-3">
-          {navItems.map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-            const Icon = item.icon;
-            const label = t(item.labelKey);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={collapsed ? label : undefined}
-                className={cn(
-                  "flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition",
-                  active ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
-                  collapsed && "justify-center px-0",
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="truncate">{label}</span>}
-              </Link>
-            );
-          })}
+        <nav className={cn("thin-scrollbar relative flex-1 overflow-y-auto", collapsed ? "px-3 pb-4" : "px-4 pb-5")}>
+          <div className="space-y-2">
+            {navItems.map((item) => {
+              const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+              const Icon = item.icon;
+              const label = t(item.labelKey);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  title={collapsed ? label : undefined}
+                  className={cn(
+                    "group relative flex items-center overflow-hidden rounded-2xl text-sm font-semibold transition-all duration-200",
+                    collapsed ? "h-14 justify-center px-0" : "h-14 gap-3.5 px-4",
+                    active
+                      ? "border border-[var(--sidebar-item-active-border)] bg-[var(--sidebar-item-active-bg)] text-[var(--sidebar-item-active-foreground)] shadow-[var(--sidebar-item-active-shadow)]"
+                      : "text-[var(--sidebar-foreground-soft)] hover:bg-[var(--sidebar-item-hover)] hover:text-[var(--sidebar-foreground)]",
+                  )}
+                >
+                  {active ? (
+                    <>
+                      <span className="pointer-events-none absolute inset-y-[3px] left-[3px] right-[3px] rounded-[13px] ring-1 ring-[var(--sidebar-item-active-border-inner)]" />
+                      <span className="pointer-events-none absolute -right-6 top-1/2 h-14 w-12 -translate-y-1/2 rounded-full bg-[var(--sidebar-item-active-glow)] blur-2xl" />
+                    </>
+                  ) : null}
+                  <span
+                    className={cn(
+                      "relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-colors duration-200",
+                      active
+                        ? "bg-[var(--sidebar-item-active-icon-bg)] text-[var(--sidebar-item-active-foreground)]"
+                        : "text-[var(--sidebar-icon-muted)] group-hover:text-[var(--sidebar-foreground)]",
+                    )}
+                  >
+                    <Icon className="h-[18px] w-[18px]" />
+                  </span>
+                  {!collapsed && <span className="relative z-10 truncate">{label}</span>}
+                </Link>
+              );
+            })}
+          </div>
         </nav>
 
-        <div className="border-t border-slate-200 p-3">
+        <div className={cn("relative border-t border-[var(--sidebar-divider-strong)]", collapsed ? "p-3" : "p-4")}>
           <div ref={accountMenuRef} className="relative">
             {accountMenuOpen ? (
               <div
                 className={cn(
-                  "absolute bottom-12 z-40 overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl",
+                  "absolute bottom-[calc(100%+12px)] z-40 overflow-hidden rounded-2xl border border-[var(--sidebar-border)] bg-[var(--sidebar-profile-menu-bg)] p-1.5 shadow-[var(--shadow-md)] backdrop-blur-xl",
                   collapsed ? "left-0 w-56" : "left-0 right-0",
                 )}
               >
                 <button
                   type="button"
                   onClick={openChangePasswordDialog}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-[var(--sidebar-foreground-soft)] hover:bg-[var(--sidebar-item-hover)] hover:text-[var(--sidebar-foreground)]"
                 >
                   <KeyRound className="h-4 w-4" />
                   {t("layout.changePassword")}
@@ -274,7 +332,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   type="button"
                   onClick={handleLogout}
                   disabled={loggingOut}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-[var(--danger)] hover:bg-[var(--danger-soft)] disabled:cursor-wait disabled:opacity-60"
                 >
                   <LogOut className="h-4 w-4" />
                   {loggingOut ? t("layout.signingOut") : t("layout.signOut")}
@@ -286,22 +344,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={() => setAccountMenuOpen((value) => !value)}
               className={cn(
-                "flex w-full items-center gap-3 rounded-md bg-slate-50 p-2 text-left transition hover:bg-slate-100",
-                collapsed && "justify-center",
+                "w-full rounded-2xl border border-[var(--sidebar-profile-border)] bg-[var(--sidebar-profile-bg)] text-left shadow-[var(--sidebar-profile-shadow)] transition-all duration-200 hover:border-[var(--sidebar-profile-border-hover)] hover:bg-[var(--sidebar-profile-hover)]",
+                collapsed ? "flex justify-center p-3" : "flex items-center gap-3 px-3 py-3.5",
               )}
               aria-expanded={accountMenuOpen}
               aria-haspopup="menu"
             >
-              <UserRound className="h-5 w-5 text-slate-500" />
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--sidebar-avatar-bg)] text-[var(--sidebar-avatar-foreground)] ring-1 ring-[var(--sidebar-avatar-ring)]">
+                <UserRound className="h-6 w-6" />
+              </span>
               {!collapsed && (
                 <>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{accountUsername}</div>
-                    <div className="truncate text-xs text-slate-500">{t("layout.adminSession")}</div>
+                    <div className="truncate text-base font-semibold text-[var(--sidebar-foreground)]">{accountUsername}</div>
+                    <div className="truncate text-sm text-[var(--sidebar-foreground-soft)]">{t("layout.adminSession")}</div>
                   </div>
                   <ChevronRight
                     className={cn(
-                      "h-4 w-4 shrink-0 text-slate-400 transition-transform",
+                      "h-4 w-4 shrink-0 text-[var(--sidebar-foreground-muted)] transition-transform",
                       accountMenuOpen && "-rotate-90",
                     )}
                   />
@@ -312,29 +372,42 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className={cn("min-h-screen transition-all duration-200", collapsed ? "pl-[72px]" : "pl-64")}>
-        <div className="sticky top-0 z-20 flex h-16 items-center justify-end gap-3 border-b border-slate-200 bg-slate-50/95 px-6 backdrop-blur">
-          <LanguageSwitcher compact />
-          <NotificationCenter />
-        </div>
-        {children}
-      </main>
+      <PageHeaderContext.Provider value={{ setHeader: setPageHeader }}>
+        <main className={cn("min-h-screen transition-all duration-300", collapsed ? MAIN_COLLAPSED_PADDING : MAIN_EXPANDED_PADDING)}>
+          <div className="sticky top-0 z-20 flex min-h-20 items-center gap-4 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--background-panel)_76%,transparent)] px-6 py-4 backdrop-blur-xl">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[1.45rem] font-semibold tracking-[-0.03em] text-[var(--foreground)]">
+                {pageHeader?.title ?? t("layout.appName")}
+              </div>
+              {pageHeader?.description ? (
+                <div className="mt-1 truncate text-sm text-[var(--foreground-soft)]">{pageHeader.description}</div>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-3">
+              <ThemeSwitcher compact />
+              <LanguageSwitcher compact />
+              <NotificationCenter />
+            </div>
+          </div>
+          {children}
+        </main>
+      </PageHeaderContext.Provider>
 
       <NotificationToastsLayer />
 
       {visibleSessionExpiredMessage ? (
         <div
-          className={`fixed inset-0 z-[100] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm ${dialogOverlayClass(sessionExpiredDialog.visible)}`}
+          className={`fixed inset-0 z-[100] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(sessionExpiredDialog.visible)}`}
         >
-          <div className={`w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(sessionExpiredDialog.visible)}`}>
-            <div className="border-b border-slate-200 p-5">
+          <div className={`w-full max-w-md overflow-hidden rounded-lg bg-[var(--background-elevated)] shadow-[var(--shadow-md)] ${dialogPanelClass(sessionExpiredDialog.visible)}`}>
+            <div className="border-b border-[var(--border)] p-5">
               <div className="flex items-start gap-3">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-700">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--warning-soft)] text-[var(--warning)]">
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold">{t("layout.sessionExpiredTitle")}</h2>
-                  <p className="mt-2 text-sm text-slate-600">{visibleSessionExpiredMessage}</p>
+                  <p className="mt-2 text-sm text-[var(--foreground-soft)]">{visibleSessionExpiredMessage}</p>
                 </div>
               </div>
             </div>
@@ -347,16 +420,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {visibleChangePasswordDialog ? (
         <div
-          className={`fixed inset-0 z-[100] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm ${dialogOverlayClass(changePasswordDialog.visible)}`}
+          className={`fixed inset-0 z-[100] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(changePasswordDialog.visible)}`}
           onMouseDown={closeChangePasswordDialog}
         >
           <div
-            className={`w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(changePasswordDialog.visible)}`}
+            className={`w-full max-w-md overflow-hidden rounded-lg bg-[var(--background-elevated)] shadow-[var(--shadow-md)] ${dialogPanelClass(changePasswordDialog.visible)}`}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="border-b border-slate-200 p-5">
+            <div className="border-b border-[var(--border)] p-5">
               <h2 className="text-lg font-semibold">{t("layout.changePassword")}</h2>
-              <p className="mt-2 text-sm text-slate-600">
+              <p className="mt-2 text-sm text-[var(--foreground-soft)]">
                 {t("layout.changePasswordDescription")}
               </p>
             </div>
@@ -366,11 +439,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <label className="block space-y-2">
                 <span className="text-sm font-medium">{t("layout.currentPassword")}</span>
                 <div className="relative">
-                  <input
+                  <Input
                     type={showCurrentPassword ? "text" : "password"}
                     value={currentPassword}
                     onChange={(event) => setCurrentPassword(event.target.value)}
-                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 pr-10 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                    className="pr-10"
                     autoComplete="off"
                     data-lpignore="true"
                     data-1p-ignore="true"
@@ -379,7 +452,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <button
                     type="button"
                     onClick={() => setShowCurrentPassword((value) => !value)}
-                    className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-[var(--foreground-soft)] hover:bg-[var(--background-muted)] hover:text-[var(--foreground)]"
                     aria-label={showCurrentPassword ? t("layout.hideCurrentPassword") : t("layout.showCurrentPassword")}
                   >
                     {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -389,18 +462,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <label className="block space-y-2">
                 <span className="text-sm font-medium">{t("layout.newPassword")}</span>
                 <div className="relative">
-                  <input
+                  <Input
                     type={showNewPassword ? "text" : "password"}
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
-                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 pr-10 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                    className="pr-10"
                     autoComplete="new-password"
                     name="new_password_input"
                   />
                   <button
                     type="button"
                     onClick={() => setShowNewPassword((value) => !value)}
-                    className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-[var(--foreground-soft)] hover:bg-[var(--background-muted)] hover:text-[var(--foreground)]"
                     aria-label={showNewPassword ? t("layout.hideNewPassword") : t("layout.showNewPassword")}
                   >
                     {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -410,18 +483,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <label className="block space-y-2">
                 <span className="text-sm font-medium">{t("layout.confirmNewPassword")}</span>
                 <div className="relative">
-                  <input
+                  <Input
                     type={showConfirmPassword ? "text" : "password"}
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
-                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 pr-10 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                    className="pr-10"
                     autoComplete="new-password"
                     name="confirm_new_password_input"
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword((value) => !value)}
-                    className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-[var(--foreground-soft)] hover:bg-[var(--background-muted)] hover:text-[var(--foreground)]"
                     aria-label={showConfirmPassword ? t("layout.hidePasswordConfirmation") : t("layout.showPasswordConfirmation")}
                   >
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -429,12 +502,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               </label>
               {changePasswordError ? (
-                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className="rounded-md border border-[var(--danger)] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
                   {changePasswordError}
                 </div>
               ) : null}
             </form>
-            <div className="flex justify-end gap-2 border-t border-slate-200 p-5">
+            <div className="flex justify-end gap-2 border-t border-[var(--border)] p-5">
               <Button type="button" variant="outline" onClick={closeChangePasswordDialog} disabled={submittingPasswordChange}>
                 {t("common.cancel")}
               </Button>
@@ -447,4 +520,61 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ) : null}
     </div>
   );
+}
+
+function getFallbackHeader(pathname: string, t: ReturnType<typeof useTranslations>): PageHeaderState {
+  if (pathname === "/" || pathname === "/dashboard") {
+    return {
+      title: t("navigation.dashboard"),
+    };
+  }
+  if (pathname === "/persons") {
+    return {
+      title: t("persons.page.title"),
+      description: t("persons.page.description"),
+    };
+  }
+  if (pathname === "/persons/new") {
+    return {
+      title: "Thêm nhân sự",
+    };
+  }
+  if (pathname.startsWith("/persons/") && pathname.endsWith("/face-registrations/new")) {
+    return {
+      title: "Đăng ký khuôn mặt",
+    };
+  }
+  if (pathname.startsWith("/persons/")) {
+    return {
+      title: "Chi tiết nhân sự",
+    };
+  }
+  if (pathname === "/attendance") {
+    return {
+      title: t("attendance.page.title"),
+      description: t("attendance.page.description"),
+    };
+  }
+  if (pathname === "/events") {
+    return {
+      title: t("events.page.title"),
+      description: t("events.page.description"),
+    };
+  }
+  if (pathname === "/departments") {
+    return {
+      title: t("departments.page.title"),
+      description: t("departments.page.description"),
+    };
+  }
+  if (pathname.startsWith("/departments/")) {
+    return {
+      title: t("departments.page.title"),
+      description: t("departments.page.detailLoadingDescription"),
+    };
+  }
+  return {
+    title: t("layout.appName"),
+    description: t("layout.appSubtitle"),
+  };
 }

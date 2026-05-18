@@ -1,15 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getAccessToken } from "@/lib/auth-client";
-import { CameraOverlay } from "./camera-overlay";
 import { Badge } from "@/components/ui/badge";
+import { getAccessToken } from "@/lib/auth-client";
 import { transformRecognitionToRenderBox, type RecognitionBoxSource } from "@/lib/overlay-utils";
 import { buildRealtimeWebSocketUrl } from "@/lib/realtime-websocket";
 import type { OverlayRenderBox } from "@/lib/types";
+import { CameraOverlay } from "./camera-overlay";
 import { WebRTCPlayer, type VideoDimensions } from "./webrtc-player";
 
-// Which stream IDs to display overlays for. Empty array = show all.
 const ALLOWED_STREAM_IDS: string[] = [];
 const OVERLAY_TTL_MS = 1000;
 
@@ -162,7 +161,12 @@ export function CameraView() {
   }, [wsStatus]);
 
   return (
-    <section className="relative min-h-0 flex-1 overflow-hidden bg-slate-950 text-white">
+    <section
+      className="relative min-h-0 flex-1 overflow-hidden text-white"
+      style={{
+        background: "linear-gradient(180deg, var(--background-panel) 0%, var(--background) 100%)",
+      }}
+    >
       <div className="absolute inset-0 z-0">
         <WebRTCPlayer
           url="http://localhost:8889/mystream/whep"
@@ -170,11 +174,22 @@ export function CameraView() {
         />
       </div>
 
-      <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_center,transparent_30%,rgba(15,23,42,0.4)_100%)]" />
+      <div
+        className="absolute inset-0 z-10"
+        style={{
+          background: "radial-gradient(circle at center, transparent 30%, rgba(15, 23, 42, 0.4) 100%)",
+        }}
+      />
 
       <CameraOverlay boxes={renderBoxes} />
 
-      <div className="absolute inset-8 z-20 rounded-xl border border-white/10 bg-slate-900/10 backdrop-blur-[1px]">
+      <div
+        className="absolute inset-8 z-20 rounded-xl border backdrop-blur-[1px]"
+        style={{
+          borderColor: "rgb(255 255 255 / 0.1)",
+          backgroundColor: "rgb(15 23 42 / 0.12)",
+        }}
+      >
         <div className="absolute left-5 top-5 flex flex-wrap items-center gap-2">
           <Badge variant="danger">Live</Badge>
           <Badge variant="success">Camera online</Badge>
@@ -182,10 +197,10 @@ export function CameraView() {
           <Badge variant="dark">42 ms</Badge>
           {overlayStatusBadge}
         </div>
-        <div className="absolute right-5 top-5 font-mono text-xs text-slate-400">CAM-ENTRY-01 · Main Gate</div>
+        <div className="absolute right-5 top-5 font-mono text-xs text-white/55">CAM-ENTRY-01 · Main Gate</div>
         <div className="absolute bottom-5 left-5 max-w-md">
           <h1 className="text-2xl font-semibold">Realtime recognition monitor</h1>
-          <p className="mt-2 text-sm text-slate-300">
+          <p className="mt-2 text-sm text-white/70">
             Bounding boxes only appear on the first recognition moment for each detected person.
           </p>
         </div>

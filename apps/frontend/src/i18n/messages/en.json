@@ -26,8 +26,13 @@
   },
   "language": {
     "label": "Language",
-    "vi": "Vietnamese",
+    "vi": "Tiếng Việt",
     "en": "English"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark"
   },
   "notifications": {
     "open": "Open notifications",
@@ -60,7 +65,7 @@
     "departments": "Departments"
   },
   "layout": {
-    "appName": "Face Recognition",
+    "appName": "FaceID",
     "appSubtitle": "Attendance Admin",
     "adminSession": "Admin session",
     "toggleSidebar": "Toggle sidebar",
@@ -86,6 +91,8 @@
   "auth": {
     "loginTitle": "Sign in",
     "loginDescription": "Use your admin account to access the dashboard.",
+    "heroTitleLine1": "Smart attendance management",
+    "heroTitleLine2": "with face recognition",
     "securityPanel": "Secure control panel",
     "heroTitle": "Manage attendance with face recognition.",
     "heroDescription": "Sign in to monitor cameras, recognition events, attendance, and personnel records from one dashboard.",
