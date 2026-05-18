@@ -11,6 +11,8 @@ import {
 import { THEME_STORAGE_KEY } from "@/components/theme/theme-constants";
 
 export type ThemeMode = "light" | "dark";
+const THEME_TRANSITIONING_CLASS = "theme-transitioning";
+const THEME_TRANSITION_DURATION_MS = 280;
 
 type ThemeContextValue = {
   theme: ThemeMode;
@@ -30,6 +32,20 @@ function readStoredTheme(): ThemeMode {
 function applyTheme(theme: ThemeMode) {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
+}
+
+function runThemeTransition(nextTheme: ThemeMode) {
+  const root = document.documentElement;
+  const body = document.body;
+
+  root.classList.add(THEME_TRANSITIONING_CLASS);
+  body.classList.add(THEME_TRANSITIONING_CLASS);
+  applyTheme(nextTheme);
+
+  window.setTimeout(() => {
+    root.classList.remove(THEME_TRANSITIONING_CLASS);
+    body.classList.remove(THEME_TRANSITIONING_CLASS);
+  }, THEME_TRANSITION_DURATION_MS);
 }
 
 function subscribeTheme(onStoreChange: () => void) {
@@ -65,7 +81,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     theme,
     setTheme(nextTheme) {
       window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
-      applyTheme(nextTheme);
+      runThemeTransition(nextTheme);
       window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
     },
   }), [theme]);

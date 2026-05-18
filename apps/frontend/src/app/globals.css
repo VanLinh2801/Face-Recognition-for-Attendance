@@ -226,8 +226,44 @@ body {
   background: var(--background);
   color: var(--foreground);
   transition:
-    background-color 180ms ease,
-    color 180ms ease;
+    background-color 240ms ease,
+    color 220ms ease,
+    border-color 240ms ease,
+    box-shadow 280ms ease,
+    opacity 220ms ease,
+    transform 260ms ease,
+    filter 260ms ease;
+}
+
+html.theme-transitioning,
+body.theme-transitioning {
+  transition:
+    background-color 240ms ease,
+    color 220ms ease,
+    border-color 240ms ease,
+    box-shadow 280ms ease,
+    opacity 220ms ease,
+    transform 260ms ease,
+    filter 260ms ease;
+}
+
+html.theme-transitioning body {
+  opacity: 0.988;
+  transform: scale(0.9985);
+  filter: saturate(0.985);
+}
+
+body.theme-transitioning *,
+body.theme-transitioning *::before,
+body.theme-transitioning *::after {
+  transition:
+    background-color 240ms ease,
+    color 220ms ease,
+    border-color 240ms ease,
+    box-shadow 280ms ease,
+    fill 220ms ease,
+    stroke 220ms ease,
+    opacity 220ms ease;
 }
 
 .locale-transition-shell {
