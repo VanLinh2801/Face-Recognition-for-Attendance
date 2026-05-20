@@ -155,14 +155,16 @@ export function PersonsTable({
   }, [toast]);
 
   useEffect(() => {
-    if (!openActionId) {
+    const currentId = openActionId;
+    if (!currentId) {
       setActionMenuPosition(null);
       setActionMenuVisible(false);
       return;
     }
 
     function updateActionMenuPosition() {
-      const trigger = actionButtonRefs.current[openActionId];
+      if (!currentId) return;
+      const trigger = actionButtonRefs.current[currentId];
       if (!trigger) {
         setActionMenuPosition(null);
         return;
@@ -183,8 +185,9 @@ export function PersonsTable({
     }
 
     function handlePointerDown(event: PointerEvent) {
+      if (!currentId) return;
       const menu = actionMenuRef.current;
-      const trigger = actionButtonRefs.current[openActionId];
+      const trigger = actionButtonRefs.current[currentId];
       const target = event.target as Node;
       if (menu?.contains(target) || trigger?.contains(target)) return;
       setOpenActionId(null);

@@ -1,5 +1,6 @@
 fastapi
-uvicorn
+uvicorn[standard]
+websockets
 pydantic-settings
 httpx
 opencv-python

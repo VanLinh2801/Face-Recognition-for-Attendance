@@ -1,79 +1,42 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { getAccessToken } from "@/lib/auth-client";
-import { transformRecognitionToRenderBox, type RecognitionBoxSource } from "@/lib/overlay-utils";
 import { buildRealtimeWebSocketUrl } from "@/lib/realtime-websocket";
-import type { OverlayRenderBox } from "@/lib/types";
 import { CameraOverlay } from "./camera-overlay";
 import { WebRTCPlayer, type VideoDimensions } from "./webrtc-player";
-
-const ALLOWED_STREAM_IDS: string[] = [];
-const OVERLAY_TTL_MS = 1000;
-
-type RecognitionRealtimeMessage = {
-  channel: "events.business";
-  event_type: "recognition_event.detected" | "unknown_event.detected";
-  payload: Record<string, unknown>;
-};
+import { usePipelineBBoxStream } from "@/hooks/usePipelineBBoxStream";
 
 export function CameraView() {
   const [videoDimensions, setVideoDimensions] = useState<VideoDimensions | null>(null);
-  const [renderBoxes, setRenderBoxes] = useState<OverlayRenderBox[]>([]);
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("disconnected");
 
-  const pendingEventsRef = useRef<RecognitionRealtimeMessage[]>([]);
+  const { boxes: detectionBoxes, status: pipelineStatus, setIdentity } = usePipelineBBoxStream(videoDimensions);
 
-  const addRecognitionBox = useCallback((data: RecognitionRealtimeMessage) => {
-    const payload = data.payload;
-    const trackId = payload.track_id as string;
-    const streamId = (payload.stream_id as string) || "";
-
-    if (ALLOWED_STREAM_IDS.length > 0 && !ALLOWED_STREAM_IDS.some((value) => streamId.includes(value))) {
-      return;
+  const overlayStatusBadge = useMemo(() => {
+    switch (wsStatus) {
+      case "connected":
+        return <Badge variant="success">WS Connected</Badge>;
+      case "connecting":
+        return <Badge variant="warning">WS Connecting</Badge>;
+      case "error":
+        return <Badge variant="danger">WS Error</Badge>;
+      default:
+        return <Badge variant="dark">WS Disconnected</Badge>;
     }
+  }, [wsStatus]);
 
-    if (!videoDimensions) {
-      pendingEventsRef.current.push(data);
-      return;
+  const pipelineStatusBadge = useMemo(() => {
+    switch (pipelineStatus) {
+      case "connected":
+        return <Badge variant="success">Pipeline Connected</Badge>;
+      case "connecting":
+        return <Badge variant="warning">Pipeline Connecting</Badge>;
+      default:
+        return <Badge variant="dark">Pipeline Disconnected</Badge>;
     }
-
-    const bbox = payload.bbox as { x: number; y: number; width: number; height: number } | null;
-    if (!bbox) return;
-
-    const source: RecognitionBoxSource = {
-      track_id: trackId,
-      person_id: (payload.person_id as string | null) ?? null,
-      full_name: (payload.full_name as string | null) ?? null,
-      bbox: { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height },
-      match_score: (payload.match_score as number | null) ?? null,
-      is_unknown: data.event_type === "unknown_event.detected",
-      frame_width: (payload.frame_width as number | undefined) ?? undefined,
-      frame_height: (payload.frame_height as number | undefined) ?? undefined,
-    };
-
-    const newBox = transformRecognitionToRenderBox(source, videoDimensions);
-    if (!newBox) return;
-
-    const expiresAt = Date.now() + OVERLAY_TTL_MS;
-    setRenderBoxes((previousBoxes) => {
-      const existing = previousBoxes.find((box) => box.track_id === trackId);
-      if (existing) {
-        return previousBoxes.map((box) => (box.track_id === trackId ? { ...box, expiresAt } : box));
-      }
-      return [...previousBoxes, { ...newBox, expiresAt }];
-    });
-  }, [videoDimensions]);
-
-  useEffect(() => {
-    if (videoDimensions && pendingEventsRef.current.length > 0) {
-      pendingEventsRef.current.forEach((data) => {
-        addRecognitionBox(data);
-      });
-      pendingEventsRef.current = [];
-    }
-  }, [videoDimensions, addRecognitionBox]);
+  }, [pipelineStatus]);
 
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -108,19 +71,24 @@ export function CameraView() {
       ws.onmessage = (event) => {
         if (!isMounted) return;
         try {
-          const data = JSON.parse(event.data as string) as { event_type?: string };
+          const data = JSON.parse(event.data as string) as {
+            event_type?: string;
+            channel?: string;
+            payload?: Record<string, unknown>;
+          };
           if (data.event_type === "heartbeat") return;
-
-          const businessEvent = data as RecognitionRealtimeMessage;
-          if (
-            businessEvent.channel === "events.business" &&
-            (businessEvent.event_type === "recognition_event.detected" ||
-              businessEvent.event_type === "unknown_event.detected")
-          ) {
-            addRecognitionBox(businessEvent);
+          if (data.channel === "events.business") {
+            const p = data.payload;
+            const trackId = p?.track_id as string | undefined;
+            if (!trackId) return;
+            if (data.event_type === "recognition_event.detected") {
+              setIdentity(trackId, (p?.full_name as string | undefined) ?? (p?.person_id as string | undefined) ?? "Recognized", false);
+            } else if (data.event_type === "unknown_event.detected") {
+              setIdentity(trackId, "Unknown", true);
+            }
           }
-        } catch (error) {
-          console.error("[WS] Parse error:", error);
+        } catch {
+          // ignore parse errors
         }
       };
 
@@ -145,20 +113,7 @@ export function CameraView() {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       ws?.close();
     };
-  }, [addRecognitionBox]);
-
-  const overlayStatusBadge = useMemo(() => {
-    switch (wsStatus) {
-      case "connected":
-        return <Badge variant="success">WS Connected</Badge>;
-      case "connecting":
-        return <Badge variant="warning">WS Connecting</Badge>;
-      case "error":
-        return <Badge variant="danger">WS Error</Badge>;
-      default:
-        return <Badge variant="dark">WS Disconnected</Badge>;
-    }
-  }, [wsStatus]);
+  }, [setIdentity]);
 
   return (
     <section
@@ -181,7 +136,7 @@ export function CameraView() {
         }}
       />
 
-      <CameraOverlay boxes={renderBoxes} />
+      <CameraOverlay boxes={detectionBoxes} />
 
       <div
         className="absolute inset-8 z-20 rounded-xl border backdrop-blur-[1px]"
@@ -196,12 +151,13 @@ export function CameraView() {
           <Badge variant="dark">30 FPS</Badge>
           <Badge variant="dark">42 ms</Badge>
           {overlayStatusBadge}
+          {pipelineStatusBadge}
         </div>
         <div className="absolute right-5 top-5 font-mono text-xs text-white/55">CAM-ENTRY-01 · Main Gate</div>
         <div className="absolute bottom-5 left-5 max-w-md">
           <h1 className="text-2xl font-semibold">Realtime recognition monitor</h1>
           <p className="mt-2 text-sm text-white/70">
-            Bounding boxes only appear on the first recognition moment for each detected person.
+            Bounding boxes bám sát khuôn mặt theo thời gian thực, extrapolated 60fps.
           </p>
         </div>
       </div>

@@ -70,6 +70,9 @@ class PipelineService:
         # 3. Tracking — gán track_id cho mỗi detection
         context = self.face_tracker.process(context)
 
+        # 3.5 Broadcast bbox trực tiếp đến FE
+        await self._broadcast_bboxes(context)
+
         # 4. Quality filter — chạy SAU tracker để có track_id, set _filter_passed_track_ids
         context = self.face_quality_filter.process(context)
 
@@ -348,6 +351,10 @@ class PipelineService:
                 failure_message=str(exc),
                 source_media_asset_id=source_media_asset_id,
             )
+
+    async def _broadcast_bboxes(self, context: dict):
+        from app.websocket.bbox_broadcaster import bbox_broadcaster
+        await bbox_broadcaster.broadcast_detections(context)
 
     def _dispatch_background_upload(self, source_id, frame):
         safe_source_id = str(source_id).replace("://", "_").replace("/", "_").replace(":", "_").replace(".", "_")

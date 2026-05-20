@@ -37,6 +37,8 @@ env/
 # Node
 node_modules/
 apps/frontend/node_modules/
+.next/
+apps/frontend/.next/
 
 # Logs
 *.log
