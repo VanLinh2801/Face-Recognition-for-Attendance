@@ -10,6 +10,8 @@ ARG BACKEND_PROXY_TARGET=http://backend:8000
 ENV BACKEND_PROXY_TARGET=${BACKEND_PROXY_TARGET}
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/frontend ./
+# Copy .env.local so NEXT_PUBLIC_* variables are embedded at build time
+COPY apps/frontend/.env.local .env.local
 RUN npm run build
 
 FROM node:22-alpine AS runner

@@ -194,9 +194,9 @@ export default function LoginPage() {
                   width: star.size,
                   height: star.size,
                   animation: `heroRightStar ${star.duration} ease-in-out ${star.delay} infinite`,
-                  ["--hero-right-star-drift" as "--hero-right-star-drift"]: star.drift,
-                  ["--hero-right-star-glow" as "--hero-right-star-glow"]: star.glow,
-                }}
+                  "--hero-right-star-drift": star.drift,
+                  "--hero-right-star-glow": star.glow,
+                } as React.CSSProperties}
               >
                 <span
                   className={
@@ -227,8 +227,8 @@ export default function LoginPage() {
                   className="hero-meteor-arc absolute inset-0"
                   style={{
                     animation: `heroMeteorArc ${meteor.duration} ease-in-out ${meteor.delay} infinite`,
-                    ["--hero-meteor-glow" as "--hero-meteor-glow"]: meteor.glow,
-                  }}
+                    "--hero-meteor-glow": meteor.glow,
+                  } as React.CSSProperties}
                 />
               </span>
             ))

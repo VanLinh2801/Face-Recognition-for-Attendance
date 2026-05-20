@@ -27,14 +27,19 @@ class FaceTracker(BaseProcessor):
 
         faces_to_emit = []
         current_track_ids = set()
+        tracked_for_broadcast = []
 
         for det in detections:
             bbox = det.get('bbox')
             score = det.get('score')
             kpss = det.get('kpss')
 
+            # Capture prev state TRƯỚC _match_track update centroid
+            existing_tid, prev_centroid, prev_time = self._find_track_candidate(bbox)
+
+            # _match_track sẽ update centroid cho track (nếu match)
             track_id = self._match_track(bbox)
-            is_new = track_id not in self.tracks
+            is_new = existing_tid is None
 
             if is_new:
                 x1, y1, x2, y2 = bbox
@@ -44,11 +49,29 @@ class FaceTracker(BaseProcessor):
                     "last_snapshot": 0.0,
                     "initial_count": 0,
                     "passed_photos": 0,
-                    "centroid": ((x1+x2)/2.0, (y1+y2)/2.0)
+                    "centroid": ((x1+x2)/2.0, (y1+y2)/2.0),
+                    "velocity": [0.0, 0.0],
                 }
                 logger.debug(f"[TRACKER] NEW track {track_id}")
             else:
                 self.tracks[track_id]["last_seen"] = current_time
+                # Tính velocity từ prev đã capture ở trên
+                curr = self.tracks[track_id]["centroid"]
+                dt = current_time - prev_time
+                if dt > 0.01:
+                    self.tracks[track_id]["velocity"] = [
+                        round((curr[0] - prev_centroid[0]) / dt, 1),
+                        round((curr[1] - prev_centroid[1]) / dt, 1),
+                    ]
+                else:
+                    self.tracks[track_id]["velocity"] = [0.0, 0.0]
+                # Chỉ broadcast track đã tồn tại ≥1 frame (tránh jitter frame đầu)
+                tracked_for_broadcast.append({
+                    "track_id": track_id,
+                    "bbox": bbox,
+                    "score": score,
+                    "velocity": self.tracks[track_id]["velocity"],
+                })
 
             current_track_ids.add(track_id)
 
@@ -104,6 +127,7 @@ class FaceTracker(BaseProcessor):
         self._cleanup_tracks(current_time)
 
         context['faces_to_emit'] = faces_to_emit
+        context['all_tracked_detections'] = tracked_for_broadcast
         return context
 
     def sync_filter_passed(self, filter_result: dict):
@@ -123,6 +147,25 @@ class FaceTracker(BaseProcessor):
                     track["last_snapshot"] = current_time
                 
                 logger.debug(f"[TRACKER] {track_id} passed. Total passed={track['passed_photos']}")
+
+    def _find_track_candidate(self, bbox):
+        """Tìm track candidate gần nhất — không update centroid. Trả về (track_id, prev_centroid, prev_time) hoặc (None, None, None)."""
+        x1, y1, x2, y2 = bbox
+        cx = (x1 + x2) / 2.0
+        cy = (y1 + y2) / 2.0
+        best_track_id = None
+        best_prev = None
+        best_prev_time = None
+        min_dist = float('inf')
+        for tid, t_data in self.tracks.items():
+            lc = t_data.get('centroid', (0, 0))
+            dist = np.sqrt((cx - lc[0])**2 + (cy - lc[1])**2)
+            if dist < min_dist and dist < 200.0:
+                min_dist = dist
+                best_track_id = tid
+                best_prev = lc
+                best_prev_time = t_data.get('last_seen')
+        return best_track_id, best_prev, best_prev_time
 
     def _match_track(self, bbox):
         x1, y1, x2, y2 = bbox

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { OverlayRenderBox } from "@/lib/types";
 
@@ -10,22 +9,13 @@ interface CameraOverlayProps {
 }
 
 export function CameraOverlay({ boxes, className }: CameraOverlayProps) {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 200);
-    return () => clearInterval(id);
-  }, []);
-
-  const active = boxes.filter((box) => !box.expiresAt || now < box.expiresAt);
-
-  if (active.length === 0) {
+  if (boxes.length === 0) {
     return null;
   }
 
   return (
     <div className={cn("absolute inset-0 pointer-events-none z-10", className)}>
-      {active.map((box) => (
+      {boxes.map((box) => (
         <div
           key={box.track_id}
           className={cn(

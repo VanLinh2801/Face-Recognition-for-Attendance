@@ -1,0 +1,506 @@
+# 🎯 Plan: Direct BBox Streaming + Client-Side Extrapolation
+
+## Tổng Quan
+
+**Mục tiêu**: Bbox bám sát mặt người trên video live, giảm lag từ ~2s xuống gần 0.
+
+**Nguyên lý**:
+- **Pipeline** detect face → gán `track_id` → gửi bbox + velocity trực tiếp đến FE qua WebSocket
+- **FE** dùng velocity để **extrapolate** vị trí bbox giữa các lần nhận (60fps mượt)
+- **Backend WS** chỉ cung cấp **tên người** (identity) → FE gắn tên vào detection box cùng `track_id`
+
+```
+Pipeline WS (mỗi 100ms) → Vị trí + tốc độ → FE extrapolate 60fps → bbox bám sát
+Backend WS  (sau ~1-2s)  → track_id + tên   → FE lookup → gắn label vào box
+```
+
+**Thông số**: 1920×1080, Pipeline 10 FPS, WebRTC video real-time.
+
+---
+
+## Danh Sách Task
+
+### PIPELINE (Python)
+
+#### Task P1: `face_tracker.py` — Thêm velocity + `all_tracked_detections`
+
+**Vấn đề**: `faces_to_emit` chỉ chứa faces cần gửi AI (NEW/INITIAL/PERIODIC). Faces đã gửi đủ ảnh bị loại → bbox biến mất trên FE.
+
+**⚠ Lưu ý quan trọng — Thứ tự lưu prev_centroid:**
+`_match_track(bbox)` đã tự động update `tracks[track_id]['centroid']` sang vị trí mới TRƯỚC khi return. Nếu lưu `prev_centroid` sau khi gọi `_match_track`, centroid đã là giá trị mới rồi → velocity luôn = 0. Phải capture trước `_match_track`.
+
+**Thay đổi:**
+
+```python
+# Thêm list tạm trước vòng for:
+tracked_for_broadcast = []
+
+for det in detections:
+    bbox = det.get('bbox')
+    score = det.get('score')
+    kpss = det.get('kpss')
+
+    # Capture prev_centroid TRƯỚC KHI _match_track update centroid
+    prev_data = {}
+    if self.tracks:
+        for tid, t_data in self.tracks.items():
+            # Tìm centroid cũ của detection candidate gần nhất để estimate prev
+            pass  # (xem logic bên dưới cho approach chính xác hơn)
+
+    # Cách chính xác: gọi _match_track để lấy track_id, sau đó check xem có match không
+    # Nếu match (= track đã tồn tại), _match_track đã update centroid → phải đọc centroid cũ
+    # trước khi _match_track chạy.
+    #
+    # Cách tốt nhất: đọc centroid cũ từ track hiện tại (nếu có), rồi mới gọi _match_track.
+    existing_track_id = None
+    prev_centroid = None
+    prev_time = None
+    # Tìm track candidate gần nhất trước
+    x1, y1, x2, y2 = bbox
+    cx, cy = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+    best_dist = float('inf')
+    for tid, t_data in self.tracks.items():
+        lc = t_data.get('centroid', (0, 0))
+        dist = np.sqrt((cx - lc[0])**2 + (cy - lc[1])**2)
+        if dist < best_dist and dist < 200.0:
+            best_dist = dist
+            existing_track_id = tid
+            prev_centroid = lc
+            prev_time = t_data.get('last_seen')
+
+    # Gọi _match_track để tạo/gán track (sẽ update centroid)
+    track_id = self._match_track(bbox)
+    is_new = existing_track_id is None
+
+    if is_new:
+        self.tracks[track_id] = {
+            "first_seen": current_time,
+            "last_seen": current_time,
+            "last_snapshot": 0.0,
+            "initial_count": 0,
+            "passed_photos": 0,
+            "centroid": (cx, cy),
+            "velocity": [0.0, 0.0],
+        }
+    else:
+        self.tracks[track_id]["last_seen"] = current_time
+        # Tính velocity từ prev đã capture ở trên
+        curr = self.tracks[track_id]["centroid"]
+        dt = current_time - prev_time
+        if dt > 0.01:
+            self.tracks[track_id]["velocity"] = [
+                round((curr[0] - prev_centroid[0]) / dt, 1),
+                round((curr[1] - prev_centroid[1]) / dt, 1),
+            ]
+        else:
+            self.tracks[track_id]["velocity"] = [0.0, 0.0]
+
+    current_track_ids.add(track_id)
+
+    # Chỉ broadcast track đã có ít nhất 1 frame trước (tránh jitter ở frame đầu tiên)
+    if prev_centroid is not None:
+        tracked_for_broadcast.append({
+            "track_id": track_id,
+            "bbox": bbox,
+            "score": score,
+            "velocity": self.tracks[track_id]["velocity"],
+        })
+
+    # ... face_type logic giữ nguyên ...
+
+# Cuối process(), thêm:
+context['all_tracked_detections'] = tracked_for_broadcast
+```
+
+**⚠ Lưu ý về logic trên:** Vòng for tìm `existing_track_id` gần giống với logic trong `_match_track`. Cách cleaner là refactor để `_match_track` không update centroid ngay, mà trả về cả track_id và prev_centroid. Hoặc giữ nguyên và dùng approach trên — hoạt động đúng vì cả 2 đều dùng cùng threshold 200.0 và centroid distance.
+
+---
+
+#### Task P2: `app/websocket/bbox_broadcaster.py` — File mới
+
+WebSocket broadcaster gửi bbox đã scale ×1.3 đến tất cả FE clients.
+
+```python
+import asyncio
+import json
+from typing import Set
+from fastapi import WebSocket
+from app.utils.logger import logger
+
+SCALE_FACTOR = 1.3
+
+class BBoxBroadcaster:
+    def __init__(self):
+        self._clients: Set[WebSocket] = set()
+        self._lock = asyncio.Lock()
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        async with self._lock:
+            self._clients.add(ws)
+        logger.info(f"[BBOX_WS] +client total={len(self._clients)}")
+
+    async def disconnect(self, ws: WebSocket):
+        async with self._lock:
+            self._clients.discard(ws)
+        logger.info(f"[BBOX_WS] -client total={len(self._clients)}")
+
+    async def broadcast_detections(self, context: dict):
+        """Broadcast scaled bboxes + velocity to all FE clients."""
+        if not self._clients:
+            return
+        all_tracked = context.get('all_tracked_detections', [])
+        if not all_tracked:
+            return
+
+        fw = context.get('frame_width', 1920)
+        fh = context.get('frame_height', 1080)
+        tracks = []
+        for det in all_tracked:
+            x1, y1, x2, y2 = det['bbox']
+            cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+            bw = (x2 - x1) * SCALE_FACTOR
+            bh = (y2 - y1) * SCALE_FACTOR
+            sx = max(0, cx - bw / 2)
+            sy = max(0, cy - bh / 2)
+            sw = min(bw, fw - sx)
+            sh = min(bh, fh - sy)
+            tracks.append({
+                "t": det['track_id'],                          # track_id
+                "b": [round(sx,1), round(sy,1), round(sw,1), round(sh,1)],  # bbox [x,y,w,h]
+                "v": det.get('velocity', [0, 0]),              # velocity [vx,vy] px/s
+                "c": round(det.get('score', 0), 2),            # confidence
+            })
+
+        data = json.dumps({
+            "e": "d",
+            "seq": context.get('frame_sequence', 0),
+            "fw": fw, "fh": fh,
+            "tr": tracks,
+        })
+
+        dead = []
+        async with self._lock:
+            for ws in self._clients:
+                try:
+                    await asyncio.wait_for(ws.send_text(data), timeout=0.05)
+                except Exception:
+                    dead.append(ws)
+        for ws in dead:
+            await self.disconnect(ws)
+
+bbox_broadcaster = BBoxBroadcaster()
+```
+
+---
+
+#### Task P3: `pipeline_service.py` — Gọi broadcast sau tracker
+
+Thêm 1 dòng sau bước Tracking (line 71):
+
+```python
+# 3. Tracking — gán track_id cho mỗi detection
+context = self.face_tracker.process(context)
+
+# 3.5 Broadcast bbox trực tiếp đến FE
+await self._broadcast_bboxes(context)
+
+# 4. Quality filter (giữ nguyên)
+```
+
+Thêm method:
+
+```python
+async def _broadcast_bboxes(self, context: dict):
+    from app.websocket.bbox_broadcaster import bbox_broadcaster
+    await bbox_broadcaster.broadcast_detections(context)
+```
+
+---
+
+#### Task P4: `main.py` — WebSocket endpoint
+
+```python
+from fastapi import WebSocket, WebSocketDisconnect
+from app.websocket.bbox_broadcaster import bbox_broadcaster
+
+@app.websocket("/ws/bbox")
+async def bbox_ws_endpoint(websocket: WebSocket):
+    await bbox_broadcaster.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        await bbox_broadcaster.disconnect(websocket)
+```
+
+---
+
+### FRONTEND (TypeScript)
+
+#### Task F1: `src/hooks/usePipelineBBoxStream.ts` — File mới
+
+Hook kết nối Pipeline WS + extrapolation engine chạy 60fps.
+
+**Cơ chế chính:**
+- Nhận bbox + velocity từ Pipeline WS mỗi ~100ms
+- `requestAnimationFrame` chạy 60fps: `predicted = lastPos + velocity × elapsed`
+- `lerp(renderedPos, predicted, 0.35)` để smooth, không giật
+- Clamp extrapolation tối đa 250ms
+- Hỗ trợ `identityMap`: khi có recognition result, đổi color + gắn label
+- **Track expiry**: tự động xóa track không cập nhật > 3s (phòng trường hợp WS disconnect mà track không được dọn)
+- **Orphan identity cleanup**: dọn identity không còn track tương ứng
+
+```typescript
+"use client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { transformBBox } from "@/lib/overlay-utils";
+import type { OverlayRenderBox, BoundingBox } from "@/lib/types";
+import type { VideoDimensions } from "@/components/dashboard/webrtc-player";
+
+const WS_URL = process.env.NEXT_PUBLIC_PIPELINE_WS_URL ?? "ws://localhost:8000/ws/bbox";
+const MAX_EXTRAP_MS = 250;
+const LERP = 0.35;
+const TRACK_EXPIRY_MS = 3000;
+
+type Sample = { x: number; y: number; w: number; h: number; vx: number; vy: number; at: number };
+type Track = { cur: Sample; prev: { x: number; y: number; w: number; h: number } | null; conf: number; lastSeen: number };
+type Identity = { name: string; color: string };
+
+export function usePipelineBBoxStream(dims: VideoDimensions | null, enabled = true) {
+  const [boxes, setBoxes] = useState<OverlayRenderBox[]>([]);
+  const [status, setStatus] = useState<"connecting"|"connected"|"disconnected">("disconnected");
+  const tracks = useRef<Map<string, Track>>(new Map());
+  const identities = useRef<Map<string, Identity>>(new Map());
+  const frame = useRef({ fw: 1920, fh: 1080 });
+  const raf = useRef(0);
+  const alive = useRef(true);
+
+  const setIdentity = useCallback((trackId: string, name: string, isUnknown: boolean) => {
+    identities.current.set(trackId, {
+      name,
+      color: isUnknown ? "border-amber-400" : "border-emerald-400",
+    });
+  }, []);
+
+  const onMsg = useCallback((ev: MessageEvent) => {
+    try {
+      const m = JSON.parse(ev.data);
+      if (m.e !== "d") return;
+      frame.current = { fw: m.fw, fh: m.fh };
+      const now = performance.now();
+      const seen = new Set<string>();
+      for (const t of m.tr) {
+        seen.add(t.t);
+        const s: Sample = { x: t.b[0], y: t.b[1], w: t.b[2], h: t.b[3], vx: t.v[0], vy: t.v[1], at: now };
+        const ex = tracks.current.get(t.t);
+        if (ex) { ex.cur = s; ex.conf = t.c; ex.lastSeen = now; }
+        else tracks.current.set(t.t, { cur: s, prev: null, conf: t.c, lastSeen: now });
+      }
+      for (const k of tracks.current.keys()) {
+        if (!seen.has(k)) { tracks.current.delete(k); }
+      }
+      // Dọn orphan identities (identity không có track tương ứng)
+      for (const k of identities.current.keys()) {
+        if (!tracks.current.has(k)) { identities.current.delete(k); }
+      }
+    } catch {}
+  }, []);
+
+  const animate = useCallback(() => {
+    if (!alive.current) return;
+    if (dims) {
+      const now = performance.now();
+      const { fw, fh } = frame.current;
+      const out: OverlayRenderBox[] = [];
+      for (const [id, tr] of tracks.current) {
+        // Expire stale tracks (WS disconnect or track lost)
+        if (now - tr.lastSeen > TRACK_EXPIRY_MS) {
+          tracks.current.delete(id);
+          identities.current.delete(id);
+          continue;
+        }
+        const s = tr.cur;
+        const dt = Math.min(now - s.at, MAX_EXTRAP_MS) / 1000;
+        let px = s.x + s.vx * dt, py = s.y + s.vy * dt;
+        px = Math.max(0, Math.min(px, fw - s.w));
+        py = Math.max(0, Math.min(py, fh - s.h));
+        let fx: number, fy: number, fww: number, fhh: number;
+        if (tr.prev) {
+          fx = lerp(tr.prev.x, px, LERP); fy = lerp(tr.prev.y, py, LERP);
+          fww = lerp(tr.prev.w, s.w, LERP); fhh = lerp(tr.prev.h, s.h, LERP);
+        } else { fx = px; fy = py; fww = s.w; fhh = s.h; }
+        tr.prev = { x: fx, y: fy, w: fww, h: fhh };
+        const b: BoundingBox = { x: fx, y: fy, width: fww, height: fhh };
+        const t = transformBBox(b, fw, fh, dims);
+        const ident = identities.current.get(id);
+        out.push({
+          track_id: id, left: t.left, top: t.top, width: t.width, height: t.height,
+          color: ident?.color ?? "border-cyan-400",
+          label: ident?.name ?? "",
+          tracking_state: "tracking", analysis_status: "detected", expiresAt: 0,
+        });
+      }
+      setBoxes(out);
+    }
+    raf.current = requestAnimationFrame(animate);
+  }, [dims]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    alive.current = true;
+    let ws: WebSocket | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const connect = () => {
+      if (!alive.current) return;
+      setStatus("connecting");
+      const wsUrl = `${WS_URL}?token=${process.env.NEXT_PUBLIC_PIPELINE_WS_TOKEN ?? ""}`;
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => { if (alive.current) setStatus("connected"); else ws?.close(); };
+      ws.onmessage = onMsg;
+      ws.onclose = () => { if (alive.current) { setStatus("disconnected"); timer = setTimeout(connect, 2000); } };
+      ws.onerror = () => setStatus("disconnected");
+    };
+    connect();
+    return () => { alive.current = false; if (timer) clearTimeout(timer); ws?.close(); };
+  }, [enabled, onMsg]);
+
+  useEffect(() => {
+    alive.current = true;
+    raf.current = requestAnimationFrame(animate);
+    return () => { alive.current = false; cancelAnimationFrame(raf.current); };
+  }, [animate]);
+
+  return { boxes, status, setIdentity };
+}
+
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
+```
+
+---
+
+#### Task F2: `camera-view.tsx` — Tích hợp hook mới + identity merge
+
+```diff
++ import { usePipelineBBoxStream } from "@/hooks/usePipelineBBoxStream";
+
+  export function CameraView() {
+    const [videoDimensions, setVideoDimensions] = useState<VideoDimensions | null>(null);
+-   const [renderBoxes, setRenderBoxes] = useState<OverlayRenderBox[]>([]);
+    const [wsStatus, setWsStatus] = useState<...>("disconnected");
+
++   // Detection overlay từ Pipeline (low-latency, extrapolated)
++   const { boxes: detectionBoxes, status: pipelineStatus, setIdentity } =
++     usePipelineBBoxStream(videoDimensions);
+
+-   // ======= COMMENT LẠI TOÀN BỘ RECOGNITION OVERLAY CŨ =======
+-   // const pendingEventsRef = useRef<...>([]);
+-   // const addRecognitionBox = useCallback((data) => { ... }, []);
+-   // useEffect(() => { ... pending events ... }, []);
+-   // useEffect(() => { ... backend WS connect ... }, []);
+
++   // Backend WS — chỉ lấy identity info, KHÔNG lấy bbox
++   useEffect(() => {
++     let ws: WebSocket | null = null;
++     let timer: ReturnType<typeof setTimeout> | null = null;
++     let mounted = true;
++     const connect = () => {
++       if (!mounted) return;
++       const token = getAccessToken();
++       if (!token) return;
++       ws = new WebSocket(buildRealtimeWebSocketUrl({ token, channels: ["events.business"] }));
++       ws.onmessage = (event) => {
++         try {
++           const data = JSON.parse(event.data);
++           if (data.event_type === "heartbeat") return;
++           if (data.channel === "events.business") {
++             const p = data.payload;
++             const trackId = p?.track_id;
++             if (!trackId) return;
++             if (data.event_type === "recognition_event.detected") {
++               setIdentity(trackId, p.full_name ?? p.person_id ?? "Recognized", false);
++             } else if (data.event_type === "unknown_event.detected") {
++               setIdentity(trackId, "Unknown", true);
++             }
++           }
++         } catch {}
++       };
++       ws.onclose = () => { if (mounted) timer = setTimeout(connect, 3000); };
++     };
++     connect();
++     return () => { mounted = false; if (timer) clearTimeout(timer); ws?.close(); };
++   }, [setIdentity]);
+
+    return (
+      <section ...>
+        <WebRTCPlayer url="..." onVideoDimensionsChange={setVideoDimensions} />
+-       <CameraOverlay boxes={renderBoxes} />
++       <CameraOverlay boxes={detectionBoxes} />
+        ...
++       <Badge variant={pipelineStatus === "connected" ? "success" : "dark"}>
++         Pipeline {pipelineStatus}
++       </Badge>
+      </section>
+    );
+  }
+```
+
+---
+
+#### Task F3: `camera-overlay.tsx` — Bỏ expiry timer
+
+```diff
+  export function CameraOverlay({ boxes, className }: CameraOverlayProps) {
+-   const [now, setNow] = useState(() => Date.now());
+-   useEffect(() => {
+-     const id = setInterval(() => setNow(Date.now()), 200);
+-     return () => clearInterval(id);
+-   }, []);
+-   const active = boxes.filter((box) => !box.expiresAt || now < box.expiresAt);
++   const active = boxes;  // Managed bởi hook, tự xóa khi track biến mất
+
+    // ... render giữ nguyên
+  }
+```
+
+---
+
+#### Task F4: `.env` — Config
+
+```env
+# Frontend .env.local
+NEXT_PUBLIC_PIPELINE_WS_URL=ws://localhost:8000/ws/bbox
+```
+
+---
+
+## Thứ Tự Triển Khai
+
+```mermaid
+graph LR
+    P1[P1: Tracker<br/>velocity (FIXED)] --> P2[P2: BBoxBroadcaster<br/>file mới]
+    P2 --> P3[P3: pipeline_service<br/>gọi broadcast]
+    P3 --> P4[P4: main.py<br/>WS endpoint + auth]
+    P4 --> F1[F1: usePipelineBBoxStream<br/>hook mới + expiry]
+    F1 --> F2[F2: camera-view<br/>tích hợp + identity]
+    F2 --> F3[F3: camera-overlay<br/>bỏ timer]
+    F3 --> F4[F4: .env config]
+```
+
+| Bước | Task | File | Loại | Ghi chú |
+|---|---|---|---|---|
+| 1 | **P1** | `face_tracker.py` | Sửa | Fix: capture prev_centroid TRƯỚC `_match_track` |
+| 2 | **P2** | `app/websocket/bbox_broadcaster.py` | **Mới** | |
+| 3 | **P3** | `pipeline_service.py` | Sửa (2 dòng) | |
+| 4 | **P4** | `main.py` | Sửa | WS endpoint |
+| 5 | **F1** | `src/hooks/usePipelineBBoxStream.ts` | **Mới** | Fix: thêm track expiry + orphan cleanup |
+| 6 | **F2** | `camera-view.tsx` | Sửa | |
+| 7 | **F3** | `camera-overlay.tsx` | Sửa nhỏ | |
+| 8 | **F4** | `.env` | Config | |
+
+## Các Fix Đã Áp Dụng
+
+1. **P1 prev_centroid**: Capture centroid cũ bằng vòng for tìm track candidate TRƯỚC khi `_match_track` update centroid.
+2. **P1 velocity storage**: Velocity được ghi trực tiếp vào `self.tracks[track_id]["velocity"]` sau khi tính, thay vì qua hàm `_compute_velocity` không đọc được dữ liệu.
+3. **F1 expiry**: Per-track expiry (3s) để tự dọn track khi WS disconnect.
+4. **F1 orphan cleanup**: Dọn orphan identities khi track bị xóa.
