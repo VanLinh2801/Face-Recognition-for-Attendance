@@ -22,6 +22,25 @@ from env_utils import bootstrap_env, env_bool, env_float  # noqa: E402
 DEFAULT_ENV_FILE = BENCHMARKS_ROOT / ".env.benchmark"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
+# Mirror the pipeline defaults so frame-based accuracy uses the same quality
+# gates as registration/recognition when the env file does not override them.
+_PIPELINE_DEFAULTS: dict[str, str] = {
+    "FACE_DETECTION_THRESHOLD": "0.65",
+    "MIN_FACE_SIZE_PX": "90",
+    "REQUIRE_FULL_KPS": "true",
+    "MIN_KPS_DIST_PX": "2.0",
+    "FACE_OVERLAP_IOU_THRESHOLD": "0.5",
+    "MAX_FACE_YAW_DEG": "45.0",
+    "MIN_FACE_SHARPNESS": "150.0",
+    "MIN_FACE_DETECTION_CONFIDENCE": "0.70",
+    "MIN_FACE_BRIGHTNESS": "65.0",
+}
+
+
+def _apply_pipeline_defaults() -> None:
+    for key, value in _PIPELINE_DEFAULTS.items():
+        os.environ.setdefault(key, value)
+
 
 def percentile(values: list[float], pct: float) -> float:
     if not values:
@@ -78,6 +97,16 @@ def parse_args() -> argparse.Namespace:
         default=env_bool("BENCH_ACCURACY_KEEP_COLLECTION", False),
         help="Keep temp Qdrant collection after run. Env: BENCH_ACCURACY_KEEP_COLLECTION.",
     )
+    parser.add_argument(
+        "--apply-quality-filter",
+        action="store_true",
+        default=env_bool("BENCH_ACCURACY_APPLY_QUALITY_FILTER", False),
+        help=(
+            "Apply pipeline FaceQualityFilter to frame inputs. Keep false when "
+            "accuracy data was already selected from quality-passed frames. "
+            "Env: BENCH_ACCURACY_APPLY_QUALITY_FILTER."
+        ),
+    )
     parser.add_argument("--output", default=os.environ.get("BENCH_ACCURACY_SUMMARY_OUTPUT"))
     parser.add_argument(
         "--samples-output", default=os.environ.get("BENCH_ACCURACY_SAMPLES_OUTPUT")
@@ -122,42 +151,93 @@ def find_images(directory: Path) -> list[Path]:
     )
 
 
-def detect_and_crop(
-    image_path: Path, detector: Any, cropper: Any
-) -> tuple[bytes | None, list[list[float]] | None, float | None]:
+def detect_and_crop_frame(
+    image_path: Path,
+    detector: Any,
+    quality_filter: Any | None,
+    cropper: Any,
+    *,
+    track_id: str,
+    face_type: str,
+    require_single_face: bool = False,
+) -> dict[str, Any]:
     """
-    Detect the largest face in image_path, crop it.
-    Returns (jpeg_bytes, kpss, detection_score) or (None, None, None) on failure.
+    Detect faces from a full frame, optionally apply the pipeline quality filter,
+    crop the selected face, and return crop bytes plus crop-relative landmarks.
+
+    For query frames without annotations, the selected face is the largest
+    selected/passed face. Keep query frames single-subject when possible.
     """
     frame = cv2.imread(str(image_path))
     if frame is None:
-        return None, None, None
+        return {"status": "read_failed"}
 
-    context = detector.process({"frame": frame})
+    h, w = frame.shape[:2]
+    context = detector.process({
+        "frame": frame,
+        "frame_width": w,
+        "frame_height": h,
+        "frame_sequence": 0,
+        "source_id": "accuracy_benchmark",
+    })
     detections = context.get("detections", [])
     if not detections:
-        return None, None, None
+        return {"status": "no_detection", "faces_detected": 0, "faces_passed": 0}
+
+    if require_single_face and len(detections) != 1:
+        return {
+            "status": "multiple_faces",
+            "faces_detected": len(detections),
+            "faces_passed": 0,
+        }
+
+    faces = [
+        {
+            "track_id": f"{track_id}_{idx}",
+            "bbox": detection["bbox"],
+            "score": detection["score"],
+            "kpss": detection.get("kpss"),
+            "type": face_type,
+        }
+        for idx, detection in enumerate(detections)
+    ]
+    context["faces_to_emit"] = faces
+    if quality_filter is not None:
+        context = quality_filter.process(context)
+        selected_faces = context.get("filtered_faces", [])
+        if not selected_faces:
+            return {
+                "status": "quality_failed",
+                "faces_detected": len(detections),
+                "faces_passed": 0,
+            }
+    else:
+        selected_faces = faces
 
     best = max(
-        detections,
+        selected_faces,
         key=lambda d: (d["bbox"][2] - d["bbox"][0]) * (d["bbox"][3] - d["bbox"][1]),
     )
-    context["faces_to_emit"] = [
-        {
-            "track_id": "bench",
-            "bbox": best["bbox"],
-            "score": best["score"],
-            "kpss": best.get("kpss"),
-        }
-    ]
-    context["frame"] = frame
+    context["faces_to_emit"] = [best]
     crop_ctx = cropper.process(context)
     processed = crop_ctx.get("processed_faces", [])
     if not processed:
-        return None, None, None
+        return {
+            "status": "crop_failed",
+            "faces_detected": len(detections),
+            "faces_passed": len(selected_faces),
+        }
 
     face = processed[0]
-    return base64.b64decode(face["image_b64"]), face.get("kpss"), best["score"]
+    return {
+        "status": "ok",
+        "image_bytes": base64.b64decode(face["image_b64"]),
+        "kpss": face.get("kpss"),
+        "detection_score": best["score"],
+        "faces_detected": len(detections),
+        "faces_passed": len(selected_faces),
+        "selected_bbox": best.get("bbox"),
+    }
 
 
 async def embed(
@@ -184,6 +264,7 @@ def normalize(vector: np.ndarray) -> np.ndarray:
 async def enroll_persons(
     enrolled_dir: Path,
     detector: Any,
+    quality_filter: Any | None,
     cropper: Any,
     embedder: Any,
     FaceInput: Any,
@@ -220,11 +301,28 @@ async def enroll_persons(
 
         vectors: list[np.ndarray] = []
         for img_path in images:
-            img_bytes, kpss, _ = detect_and_crop(img_path, detector, cropper)
-            if img_bytes is None:
-                print(f"  [WARN] No face detected: enrolled/{identity}/{img_path.name}")
+            prepared = detect_and_crop_frame(
+                img_path,
+                detector,
+                quality_filter,
+                cropper,
+                track_id=f"{identity}_{img_path.stem}",
+                face_type="REGISTRATION",
+                require_single_face=True,
+            )
+            if prepared["status"] != "ok":
+                print(
+                    f"  [WARN] Enrollment frame rejected: "
+                    f"enrolled/{identity}/{img_path.name} status={prepared['status']}"
+                )
                 continue
-            vec = await embed(img_bytes, kpss, f"{identity}_{img_path.stem}", embedder, FaceInput)
+            vec = await embed(
+                prepared["image_bytes"],
+                prepared["kpss"],
+                f"{identity}_{img_path.stem}",
+                embedder,
+                FaceInput,
+            )
             if vec is not None:
                 vectors.append(vec)
 
@@ -259,6 +357,7 @@ async def run_queries(
     split: str,
     enrolled: dict[str, str] | None,
     detector: Any,
+    quality_filter: Any | None,
     cropper: Any,
     embedder: Any,
     FaceInput: Any,
@@ -266,7 +365,7 @@ async def run_queries(
     collection: str,
     threshold: float,
 ) -> list[dict[str, Any]]:
-    """Detect+crop+embed every image in query_dir and compare against Qdrant."""
+    """Embed every query image and compare against Qdrant."""
     samples: list[dict[str, Any]] = []
     identity_dirs = sorted(d for d in query_dir.iterdir() if d.is_dir())
 
@@ -289,23 +388,51 @@ async def run_queries(
                 "is_fp": False,
                 "is_tn": False,
                 "is_fn": False,
+                "query_mode": (
+                    "frame_detect_quality_crop"
+                    if quality_filter is not None
+                    else "frame_detect_crop"
+                ),
             }
 
-            img_bytes, kpss, det_score = detect_and_crop(img_path, detector, cropper)
-            if img_bytes is None:
-                # No face detected
+            prepared = detect_and_crop_frame(
+                img_path,
+                detector,
+                quality_filter,
+                cropper,
+                track_id=f"{expected}_{img_path.stem}",
+                face_type="RECOGNITION",
+            )
+            sample["faces_detected"] = prepared.get("faces_detected", 0)
+            sample["faces_passed_quality"] = prepared.get("faces_passed", 0)
+
+            if prepared["status"] != "ok":
                 if split == "genuine":
-                    sample.update({"is_fn": True, "decision": "fn_no_detection", "match_score": 0.0})
+                    sample.update({
+                        "is_fn": True,
+                        "decision": f"fn_{prepared['status']}",
+                        "match_score": 0.0,
+                    })
                 else:
-                    # Impostor not detected → correctly rejected
-                    sample.update({"is_tn": True, "decision": "tn_no_detection", "match_score": 0.0})
+                    sample.update({
+                        "is_tn": True,
+                        "decision": f"tn_{prepared['status']}",
+                        "match_score": 0.0,
+                    })
                 samples.append(sample)
                 continue
 
             sample["detected"] = True
-            sample["detection_score"] = det_score
+            sample["detection_score"] = prepared["detection_score"]
+            sample["selected_bbox"] = prepared.get("selected_bbox")
+            vec = await embed(
+                prepared["image_bytes"],
+                prepared["kpss"],
+                f"{expected}_{img_path.stem}",
+                embedder,
+                FaceInput,
+            )
 
-            vec = await embed(img_bytes, kpss, f"{expected}_{img_path.stem}", embedder, FaceInput)
             if vec is None:
                 if split == "genuine":
                     sample.update({"is_fn": True, "decision": "fn_embed_failed", "match_score": 0.0})
@@ -331,7 +458,6 @@ async def run_queries(
                     if score >= threshold and predicted == expected:
                         sample.update({"is_tp": True, "decision": "tp"})
                     elif score >= threshold:
-                        # Matched but wrong person
                         sample.update({"is_fn": True, "decision": "fn_wrong_person"})
                     else:
                         sample.update({"is_fn": True, "decision": "fn_below_threshold"})
@@ -385,6 +511,7 @@ def compute_auc(roc: list[dict]) -> float:
 
 async def run() -> None:
     args = parse_args()
+    _apply_pipeline_defaults()
     apply_env_overrides(args)
 
     def _resolve(p: str) -> Path:
@@ -407,6 +534,7 @@ async def run() -> None:
     sys.path.insert(0, str(repo_root / "apps" / "pipeline"))
     from app.processors.face_cropper import FaceCropper  # noqa: PLC0415
     from app.processors.face_detector import SCRFDFaceDetector  # noqa: PLC0415
+    from app.processors.face_quality_filter import FaceQualityFilter  # noqa: PLC0415
 
     # Save pipeline's app.* modules then evict so ai_service can register its own
     _pipeline_modules = {k: v for k, v in sys.modules.items() if k == "app" or k.startswith("app.")}
@@ -421,6 +549,7 @@ async def run() -> None:
 
     print("[INIT] Loading models...")
     detector = SCRFDFaceDetector()
+    quality_filter = FaceQualityFilter() if args.apply_quality_filter else None
     cropper = FaceCropper()
     embedder = InsightFaceEmbedder()
     qdrant = AsyncQdrantClient(url=args.qdrant_url)
@@ -429,7 +558,7 @@ async def run() -> None:
         # ---- Phase 1: Enroll ----
         print(f"\n[PHASE 1] Enrolling from {enrolled_dir} ...")
         enrolled = await enroll_persons(
-            enrolled_dir, detector, cropper, embedder, FaceInput,
+            enrolled_dir, detector, quality_filter, cropper, embedder, FaceInput,
             qdrant, args.qdrant_collection,
         )
         if not enrolled:
@@ -441,7 +570,7 @@ async def run() -> None:
         print(f"\n[PHASE 2] Genuine queries from {genuine_dir} ...")
         genuine_samples = await run_queries(
             genuine_dir, "genuine", enrolled,
-            detector, cropper, embedder, FaceInput,
+            detector, quality_filter, cropper, embedder, FaceInput,
             qdrant, args.qdrant_collection, args.threshold,
         )
         print(f"[PHASE 2] Done — {len(genuine_samples)} query image(s)")
@@ -450,7 +579,7 @@ async def run() -> None:
         print(f"\n[PHASE 3] Impostor queries from {impostor_dir} ...")
         impostor_samples = await run_queries(
             impostor_dir, "impostor", None,
-            detector, cropper, embedder, FaceInput,
+            detector, quality_filter, cropper, embedder, FaceInput,
             qdrant, args.qdrant_collection, args.threshold,
         )
         print(f"[PHASE 3] Done — {len(impostor_samples)} query image(s)")
@@ -499,6 +628,7 @@ async def run() -> None:
     summary = {
         "model_name": os.environ.get("INSIGHTFACE_MODEL_NAME", "unknown"),
         "threshold": args.threshold,
+        "apply_quality_filter": args.apply_quality_filter,
         "enrolled_persons": len(enrolled),
         "genuine_queries": len(genuine_samples),
         "impostor_queries": len(impostor_samples),
