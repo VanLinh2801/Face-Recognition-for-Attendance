@@ -23,6 +23,7 @@ import { useTheme } from "@/components/theme/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DialogPortal } from "@/components/ui/dialog-portal";
 import { Input } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { getAccessToken } from "@/lib/auth-client";
@@ -658,8 +659,9 @@ function EventDetailDrawer({
   }, [event.snapshot_media_asset_id, t]);
 
   return (
-    <div className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
-      <div className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(visible)}`} onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}>
+    <DialogPortal>
+      <div className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
+        <div className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(visible)}`} onMouseDown={(mouseEvent) => mouseEvent.stopPropagation()}>
         <div className="flex items-start justify-between border-b border-slate-200 p-5">
           <div className="flex items-start gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-md bg-slate-100">
@@ -737,8 +739,9 @@ function EventDetailDrawer({
           ) : null}
           <Button onClick={onClose}>{t("events.detail.close")}</Button>
         </div>
+        </div>
       </div>
-    </div>
+    </DialogPortal>
   );
 }
 

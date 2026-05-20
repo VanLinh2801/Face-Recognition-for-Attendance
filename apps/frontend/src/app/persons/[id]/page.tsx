@@ -16,6 +16,7 @@ import { useTheme } from "@/components/theme/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DialogPortal } from "@/components/ui/dialog-portal";
 import { Input, Textarea } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { getLatestIndexedProfileAssetId } from "@/lib/person-profile-image";
@@ -328,17 +329,18 @@ export default function PersonDetailPage() {
       </div>
 
       {visibleEditForm ? (
-        <div
-          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(editDialog.visible)}`}
-          onMouseDown={() => {
-            if (!saving) closeEditForm();
-          }}
-        >
-          <form
-            className={`flex max-h-[90vh] w-full max-w-3xl flex-col overflow-visible rounded-lg bg-white shadow-2xl ${dialogPanelClass(editDialog.visible)}`}
-            onSubmit={saveProfile}
-            onMouseDown={(event) => event.stopPropagation()}
+        <DialogPortal>
+          <div
+            className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(editDialog.visible)}`}
+            onMouseDown={() => {
+              if (!saving) closeEditForm();
+            }}
           >
+            <form
+              className={`flex max-h-[90vh] w-full max-w-3xl flex-col overflow-visible rounded-lg bg-white shadow-2xl ${dialogPanelClass(editDialog.visible)}`}
+              onSubmit={saveProfile}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
               <div>
                 <h2 className="text-lg font-semibold">{t("persons.detail.editTitle")}</h2>
@@ -425,8 +427,9 @@ export default function PersonDetailPage() {
                 {saving ? t("persons.detail.saving") : t("persons.detail.save")}
               </Button>
             </div>
-          </form>
-        </div>
+            </form>
+          </div>
+        </DialogPortal>
       ) : null}
 
       {toast ? (

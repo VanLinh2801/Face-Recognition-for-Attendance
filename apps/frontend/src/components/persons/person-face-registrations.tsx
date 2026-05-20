@@ -9,6 +9,7 @@ import { RegistrationStatusBadge } from "@/components/data/status-badge";
 import { useTheme } from "@/components/theme/theme-provider";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DialogPortal } from "@/components/ui/dialog-portal";
 import { apiFetch } from "@/lib/api-client";
 import { dialogOverlayClass, dialogPanelClass, useDialogTransition } from "@/lib/use-dialog-transition";
 import type { FaceRegistration } from "@/lib/types";
@@ -174,14 +175,15 @@ export function PersonFaceRegistrations({
       </Card>
 
       {visibleRegistration ? (
-        <div
-          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(registrationDialog.visible)}`}
-          onMouseDown={() => setSelectedRegistration(null)}
-        >
+        <DialogPortal>
           <div
-            className={`flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(registrationDialog.visible)}`}
-            onMouseDown={(event) => event.stopPropagation()}
+            className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(registrationDialog.visible)}`}
+            onMouseDown={() => setSelectedRegistration(null)}
           >
+            <div
+              className={`flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(registrationDialog.visible)}`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
               <div>
                 <h2 className="text-lg font-semibold">{t("persons.registrations.detailTitle")}</h2>
@@ -259,8 +261,9 @@ export function PersonFaceRegistrations({
                 </div>
               </div>
             </div>
+            </div>
           </div>
-        </div>
+        </DialogPortal>
       ) : null}
     </>
   );

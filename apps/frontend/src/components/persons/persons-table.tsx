@@ -27,6 +27,7 @@ import { PersonStatusBadge } from "@/components/data/status-badge";
 import { useTheme } from "@/components/theme/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DialogPortal } from "@/components/ui/dialog-portal";
 import { Input, Textarea } from "@/components/ui/input";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { validatePersonProfileFields } from "@/lib/person-validation";
@@ -676,14 +677,15 @@ export function PersonsTable({
         : null}
 
       {visibleEditingPerson ? (
-        <div
-          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(editingDialog.visible)}`}
-          onMouseDown={() => setEditingPerson(null)}
-        >
+        <DialogPortal>
           <div
-            className={`flex max-h-[90vh] w-full max-w-3xl flex-col overflow-visible rounded-lg bg-white shadow-2xl ${dialogPanelClass(editingDialog.visible)}`}
-            onMouseDown={(event) => event.stopPropagation()}
+            className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(editingDialog.visible)}`}
+            onMouseDown={() => setEditingPerson(null)}
           >
+            <div
+              className={`flex max-h-[90vh] w-full max-w-3xl flex-col overflow-visible rounded-lg bg-white shadow-2xl ${dialogPanelClass(editingDialog.visible)}`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
               <div>
                 <h2 className="text-lg font-semibold">{t("persons.editDialog.title")}</h2>
@@ -780,19 +782,21 @@ export function PersonsTable({
                 {savingEdit ? t("persons.editDialog.saving") : t("persons.editDialog.save")}
               </Button>
             </div>
+            </div>
           </div>
-        </div>
+        </DialogPortal>
       ) : null}
 
       {visibleDeleteRequest ? (
-        <div
-          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
-          onMouseDown={() => setDeleteRequest(null)}
-        >
+        <DialogPortal>
           <div
-            className={`w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(deleteDialog.visible)}`}
-            onMouseDown={(event) => event.stopPropagation()}
+            className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
+            onMouseDown={() => setDeleteRequest(null)}
           >
+            <div
+              className={`w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(deleteDialog.visible)}`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
             <div className="border-b border-slate-200 p-5">
               <div className="flex items-start gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-700">
@@ -813,8 +817,9 @@ export function PersonsTable({
                 {deleting ? t("persons.deleteDialog.deleting") : t("persons.deleteDialog.confirm")}
               </Button>
             </div>
+            </div>
           </div>
-        </div>
+        </DialogPortal>
       ) : null}
 
       {toast ? (

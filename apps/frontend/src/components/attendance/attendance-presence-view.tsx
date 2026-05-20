@@ -10,6 +10,7 @@ import {
   ChevronsRight,
   Clock,
   Eye,
+  FileText,
   ImageIcon,
   Loader2,
   Printer,
@@ -26,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListTableAccent } from "@/components/data/list-table-accent";
 import { useTheme } from "@/components/theme/theme-provider";
 import { Input } from "@/components/ui/input";
+import { DialogPortal } from "@/components/ui/dialog-portal";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { getAccessToken } from "@/lib/auth-client";
 import {
@@ -62,6 +64,13 @@ type PresenceRow = {
   recognition_count: number;
   status: PresenceStatus;
 };
+type EmployeePresenceReportRow = {
+  date: string;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  recognition_count: number;
+  status: PresenceStatus;
+};
 
 export function AttendancePresenceView({
   persons,
@@ -93,9 +102,12 @@ export function AttendancePresenceView({
   const [reportError, setReportError] = useState("");
   const [reportRows, setReportRows] = useState<PresenceReportRow[] | null>(null);
   const [selectedPresenceRow, setSelectedPresenceRow] = useState<PresenceRow | null>(null);
+  const [employeeReportPerson, setEmployeeReportPerson] = useState<PersonWithDepartment | null>(null);
   const reportDialog = useDialogTransition(reportDialogOpen ? true : null);
   const presenceDialog = useDialogTransition(selectedPresenceRow);
+  const employeeReportDialog = useDialogTransition(employeeReportPerson);
   const visiblePresenceRow = presenceDialog.value;
+  const visibleEmployeeReportPerson = employeeReportDialog.value;
   const pageSize = 5;
   const normalizedReportRange = useMemo(
     () => normalizeAttendanceRange({ fromDate: reportFromDate, toDate: reportToDate }, filterPolicy, "from"),
@@ -398,7 +410,7 @@ export function AttendancePresenceView({
                   <th className="w-40">{t("attendance.table.lastSeen")}</th>
                   <th className="w-32">{t("attendance.table.recognitionCount")}</th>
                   <th className="w-28">{t("attendance.table.status")}</th>
-                  <th className="w-28 text-right">{t("attendance.table.action")}</th>
+                  <th className="w-44 text-right">{t("attendance.table.action")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -412,10 +424,16 @@ export function AttendancePresenceView({
                     <td>{row.recognition_count}</td>
                     <td><PresenceStatusBadge status={row.status} /></td>
                     <td className="text-right">
-                      <Button variant="outline" size="sm" onClick={() => setSelectedPresenceRow(row)}>
-                        <Eye className="h-4 w-4" />
-                        {t("attendance.table.view")}
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setEmployeeReportPerson(row.person)}>
+                          <FileText className="h-4 w-4" />
+                          {t("attendance.table.report")}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setSelectedPresenceRow(row)}>
+                          <Eye className="h-4 w-4" />
+                          {t("attendance.table.view")}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -484,23 +502,24 @@ export function AttendancePresenceView({
       </Card>
 
       {reportDialog.value ? (
-        <div
-          className={`fixed inset-0 z-[120] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(reportDialog.visible)}`}
-          onMouseDown={() => setReportDialogOpen(false)}
-        >
+        <DialogPortal>
           <div
-            className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-elevated)] text-[var(--foreground)] shadow-[var(--shadow-md)] ${dialogPanelClass(reportDialog.visible)}`}
-            onMouseDown={(event) => event.stopPropagation()}
+            className={`fixed inset-0 z-[120] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(reportDialog.visible)}`}
+            onMouseDown={() => setReportDialogOpen(false)}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-6 py-5">
-              <div>
-                <h2 className="text-xl font-semibold text-[var(--foreground)]">{t("attendance.report.title")}</h2>
-                <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[var(--foreground-soft)]">{t("attendance.report.description")}</p>
+            <div
+              className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-elevated)] text-[var(--foreground)] shadow-[var(--shadow-md)] ${dialogPanelClass(reportDialog.visible)}`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-6 py-5">
+                <div>
+                  <h2 className="text-xl font-semibold text-[var(--foreground)]">{t("attendance.report.title")}</h2>
+                  <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[var(--foreground-soft)]">{t("attendance.report.description")}</p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setReportDialogOpen(false)} aria-label={t("attendance.report.close")}>
+                  <X className="h-5 w-5" />
+                </Button>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setReportDialogOpen(false)} aria-label={t("attendance.report.close")}>
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
 
             <div className="thin-scrollbar flex-1 space-y-6 overflow-y-auto bg-[var(--background-muted)] p-6">
               <section className="rounded-xl border border-[var(--border)] bg-[var(--background-elevated)] p-5 shadow-[var(--shadow-sm)]">
@@ -603,14 +622,259 @@ export function AttendancePresenceView({
                 {t("attendance.report.cancel")}
               </Button>
             </div>
+            </div>
           </div>
-        </div>
+        </DialogPortal>
       ) : null}
 
       {visiblePresenceRow ? (
         <PresenceDetailDialog row={visiblePresenceRow} workDate={workDate} visible={presenceDialog.visible} onClose={() => setSelectedPresenceRow(null)} />
       ) : null}
+      {visibleEmployeeReportPerson ? (
+        <EmployeeAttendanceReportDialog
+          key={visibleEmployeeReportPerson.id}
+          person={visibleEmployeeReportPerson}
+          filterPolicy={filterPolicy}
+          visible={employeeReportDialog.visible}
+          defaultFromDate={defaultRange.reportFromDate}
+          defaultToDate={defaultRange.reportToDate}
+          onClose={() => setEmployeeReportPerson(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function EmployeeAttendanceReportDialog({
+  person,
+  filterPolicy,
+  visible,
+  defaultFromDate,
+  defaultToDate,
+  onClose,
+}: {
+  person: PersonWithDepartment;
+  filterPolicy: FilterPolicy;
+  visible: boolean;
+  defaultFromDate: string;
+  defaultToDate: string;
+  onClose: () => void;
+}) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const attendanceBoundaries = useMemo(() => getAttendanceBoundaryValues(filterPolicy), [filterPolicy]);
+  const [fromDate, setFromDate] = useState(defaultFromDate);
+  const [toDate, setToDate] = useState(defaultToDate);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [rows, setRows] = useState<EmployeePresenceReportRow[] | null>(null);
+  const normalizedRange = useMemo(
+    () => normalizeAttendanceRange({ fromDate, toDate }, filterPolicy, "from"),
+    [filterPolicy, fromDate, toDate],
+  );
+
+  async function handleGenerate() {
+    if (!normalizedRange) return;
+    setLoading(true);
+    setError("");
+    setRows(null);
+
+    try {
+      const apiRange = buildAttendanceApiRange(filterPolicy, normalizedRange);
+      if (!apiRange) return;
+      const events = await fetchAllPersonAttendanceEvents(person.id, apiRange.fromAt, apiRange.toAt);
+      setRows(buildEmployeePresenceReport(events, apiRange.fromDate, apiRange.toDate));
+    } catch (err) {
+      setError(err instanceof ApiError ? getTranslatedBackendError(t, err, "attendance") : t("errors.system.requestFailed"));
+      setRows(buildEmployeePresenceReport([], normalizedRange.fromDate, normalizedRange.toDate));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handlePrint() {
+    if (!rows || rows.length === 0) return;
+    const printWindow = window.open("", "_blank", "width=1100,height=800");
+    if (!printWindow) return;
+
+    const rowsHtml = rows
+      .map(
+        (row, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(formatDateLocalized(row.date, locale))}</td>
+            <td>${escapeHtml(t(`attendance.status.${row.status}`))}</td>
+            <td>${escapeHtml(row.first_seen_at ? formatTimeLocalized(row.first_seen_at, locale) : t("attendance.table.na"))}</td>
+            <td>${escapeHtml(row.last_seen_at ? formatTimeLocalized(row.last_seen_at, locale) : t("attendance.table.na"))}</td>
+            <td>${row.recognition_count}</td>
+          </tr>
+        `,
+      )
+      .join("");
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>${escapeHtml(t("attendance.employeeReport.printTitle"))}</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #0f172a; margin: 32px; }
+            h1 { margin: 0 0 8px; font-size: 24px; }
+            .meta { color: #475569; margin-bottom: 24px; line-height: 1.6; }
+            table { width: 100%; border-collapse: collapse; font-size: 13px; }
+            th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
+            th { background: #f8fafc; text-transform: uppercase; font-size: 11px; color: #64748b; }
+            td:nth-child(1), td:nth-child(6) { text-align: center; }
+          </style>
+        </head>
+        <body>
+          <h1>${escapeHtml(t("attendance.employeeReport.printTitle"))}</h1>
+          <div class="meta">
+            ${escapeHtml(t("attendance.employeeReport.employee"))}: ${escapeHtml(person.full_name)}<br />
+            ${escapeHtml(t("attendance.employeeReport.employeeCode"))}: ${escapeHtml(person.employee_code)}<br />
+            ${escapeHtml(t("attendance.employeeReport.department"))}: ${escapeHtml(person.department_name || t("common.notAssigned"))}<br />
+            ${escapeHtml(t("attendance.employeeReport.printRange"))}: ${escapeHtml(fromDate)} - ${escapeHtml(toDate)}
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>${escapeHtml(t("attendance.employeeReport.index"))}</th>
+                <th>${escapeHtml(t("attendance.employeeReport.date"))}</th>
+                <th>${escapeHtml(t("attendance.employeeReport.status"))}</th>
+                <th>${escapeHtml(t("attendance.employeeReport.firstSeen"))}</th>
+                <th>${escapeHtml(t("attendance.employeeReport.lastSeen"))}</th>
+                <th>${escapeHtml(t("attendance.employeeReport.recognitionCount"))}</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  }
+
+  return (
+    <DialogPortal>
+      <div className={`fixed inset-0 z-[120] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
+        <div
+          className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-elevated)] text-[var(--foreground)] shadow-[var(--shadow-md)] ${dialogPanelClass(visible)}`}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-6 py-5">
+          <div>
+            <h2 className="text-xl font-semibold text-[var(--foreground)]">{t("attendance.employeeReport.title")}</h2>
+            <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[var(--foreground-soft)]">{t("attendance.employeeReport.description")}</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("attendance.employeeReport.close")}>
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+
+        <div className="thin-scrollbar flex-1 space-y-6 overflow-y-auto bg-[var(--background-muted)] p-6">
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--background-elevated)] p-5 shadow-[var(--shadow-sm)]">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <DetailItem label={t("attendance.employeeReport.employee")} value={person.full_name} tone="themed" />
+              <DetailItem label={t("attendance.employeeReport.employeeCode")} value={person.employee_code} tone="themed" />
+              <DetailItem label={t("attendance.employeeReport.department")} value={person.department_name || t("common.notAssigned")} tone="themed" />
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--background-elevated)] p-5 shadow-[var(--shadow-sm)]">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+              <label className="space-y-2 text-sm font-medium text-[var(--foreground)]">
+                {t("attendance.employeeReport.fromDate")}
+                <DatePicker
+                  value={fromDate}
+                  minDate={attendanceBoundaries.minAttendanceDate}
+                  maxDate={attendanceBoundaries.maxAttendanceDate}
+                  onChange={(value) => {
+                    const nextRange = normalizeAttendanceRange({ fromDate: value, toDate }, filterPolicy, "from");
+                    if (!nextRange) return;
+                    setFromDate(nextRange.fromDate);
+                    setToDate(nextRange.toDate);
+                  }}
+                />
+              </label>
+              <label className="space-y-2 text-sm font-medium text-[var(--foreground)]">
+                {t("attendance.employeeReport.toDate")}
+                <DatePicker
+                  value={toDate}
+                  minDate={attendanceBoundaries.minAttendanceDate}
+                  maxDate={attendanceBoundaries.maxAttendanceDate}
+                  onChange={(value) => {
+                    const nextRange = normalizeAttendanceRange({ fromDate, toDate: value }, filterPolicy, "to");
+                    if (!nextRange) return;
+                    setFromDate(nextRange.fromDate);
+                    setToDate(nextRange.toDate);
+                  }}
+                />
+              </label>
+              <Button className="ui-button-link ui-button-link-primary w-full lg:w-auto" onClick={() => void handleGenerate()} disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarSearch className="h-4 w-4" />}
+                {loading ? t("attendance.employeeReport.generating") : t("attendance.employeeReport.generate")}
+              </Button>
+            </div>
+          </section>
+
+          {error ? (
+            <div className="rounded-md border border-[var(--danger)] bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">{error}</div>
+          ) : null}
+
+          <section className="list-table-corner-accent overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-elevated)] shadow-[var(--shadow-sm)]">
+            <ListTableAccent />
+            <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="font-medium text-[var(--foreground)]">{t("attendance.employeeReport.resultTitle")}</div>
+              <Button variant="outline" size="sm" onClick={handlePrint} disabled={!rows || rows.length === 0}>
+                <Printer className="h-4 w-4" />
+                {t("attendance.employeeReport.print")}
+              </Button>
+            </div>
+            <div className="overflow-x-auto px-5 pb-5 pt-2">
+              {rows && rows.length > 0 ? (
+                <table className="w-full min-w-[760px] table-fixed text-left text-sm">
+                  <thead className="text-xs uppercase text-[var(--foreground-soft)]">
+                    <tr className="border-b border-[var(--border)]">
+                      <th className="w-12 py-3">{t("attendance.employeeReport.index")}</th>
+                      <th className="w-32">{t("attendance.employeeReport.date")}</th>
+                      <th className="w-28">{t("attendance.employeeReport.status")}</th>
+                      <th>{t("attendance.employeeReport.firstSeen")}</th>
+                      <th>{t("attendance.employeeReport.lastSeen")}</th>
+                      <th className="w-28">{t("attendance.employeeReport.recognitionCount")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, index) => (
+                      <tr key={row.date} className="border-b border-[var(--border)]/60">
+                        <td className="py-3 font-mono text-xs text-[var(--foreground-muted)]">{index + 1}</td>
+                        <td className="font-medium text-[var(--foreground)]">{formatDateLocalized(row.date, locale)}</td>
+                        <td><PresenceStatusBadge status={row.status} /></td>
+                        <td className="font-mono text-xs text-[var(--foreground-soft)]">{row.first_seen_at ? formatTimeLocalized(row.first_seen_at, locale) : t("attendance.table.na")}</td>
+                        <td className="font-mono text-xs text-[var(--foreground-soft)]">{row.last_seen_at ? formatTimeLocalized(row.last_seen_at, locale) : t("attendance.table.na")}</td>
+                        <td>{row.recognition_count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="rounded-lg border border-dashed border-[var(--border-strong)] px-6 py-10 text-center text-sm text-[var(--foreground-soft)]">
+                  {t("attendance.employeeReport.empty")}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <div className="flex justify-end border-t border-[var(--border)] bg-[var(--background-elevated)] px-6 py-4">
+          <Button variant="outline" onClick={onClose}>
+            {t("attendance.employeeReport.cancel")}
+          </Button>
+        </div>
+        </div>
+      </div>
+    </DialogPortal>
   );
 }
 
@@ -631,11 +895,12 @@ function PresenceDetailDialog({
   const threshold = `${String(LATE_AFTER_HOUR).padStart(2, "0")}:${String(LATE_AFTER_MINUTE).padStart(2, "0")}`;
 
   return (
-    <div className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
-      <div
-        className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(visible)}`}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
+    <DialogPortal>
+      <div className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(visible)}`} onMouseDown={onClose}>
+        <div
+          className={`flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(visible)}`}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
         <div className="flex items-start justify-between border-b border-slate-200 p-5">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -683,8 +948,9 @@ function PresenceDetailDialog({
         <div className="flex justify-end border-t border-slate-200 p-5">
           <Button onClick={onClose}>{t("attendance.dialog.close")}</Button>
         </div>
+        </div>
       </div>
-    </div>
+    </DialogPortal>
   );
 }
 
@@ -827,7 +1093,16 @@ function StatusFilterSelect({
   );
 }
 
-function DetailItem({ label, value }: { label: string; value: string }) {
+function DetailItem({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "themed" }) {
+  if (tone === "themed") {
+    return (
+      <div className="rounded-md border border-[var(--border)] bg-[var(--background-elevated)] p-3">
+        <div className="text-xs text-[var(--foreground-soft)]">{label}</div>
+        <div className="mt-1 truncate text-sm font-medium text-[var(--foreground)]">{value}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-md border border-slate-200 p-3">
       <div className="text-xs text-slate-500">{label}</div>
@@ -870,6 +1145,59 @@ function buildPresenceReport(
       total_recognitions: dailyStatuses.reduce((sum, day) => sum + day.recognition_count, 0),
     };
   });
+}
+
+function buildEmployeePresenceReport(events: AttendanceEvent[], fromDate: string, toDate: string): EmployeePresenceReportRow[] {
+  return getDateRange(fromDate, toDate).map((date) => {
+    const personEvents = events
+      .filter((event) => event.recognized_at.slice(0, 10) === date)
+      .sort((a, b) => new Date(a.recognized_at).getTime() - new Date(b.recognized_at).getTime());
+
+    if (personEvents.length === 0) {
+      return {
+        date,
+        first_seen_at: null,
+        last_seen_at: null,
+        recognition_count: 0,
+        status: "absent",
+      };
+    }
+
+    const firstEvent = personEvents[0];
+    const lastEvent = personEvents.at(-1) ?? null;
+    const lateThreshold = new Date(
+      `${date}T${String(LATE_AFTER_HOUR).padStart(2, "0")}:${String(LATE_AFTER_MINUTE).padStart(2, "0")}:00Z`,
+    );
+
+    return {
+      date,
+      first_seen_at: firstEvent.recognized_at,
+      last_seen_at: lastEvent?.recognized_at ?? null,
+      recognition_count: personEvents.length,
+      status: new Date(firstEvent.recognized_at).getTime() > lateThreshold.getTime() ? "late" : "present",
+    };
+  });
+}
+
+async function fetchAllPersonAttendanceEvents(personId: string, fromAt: string, toAt: string) {
+  const pageSize = 100;
+  let page = 1;
+  let total = 0;
+  let fetchedCount = 0;
+  const items: AttendanceEvent[] = [];
+
+  do {
+    const response = await apiFetch<PageResult<AttendanceEvent>>(
+      `/attendance/persons/${personId}/history?page=${page}&page_size=${pageSize}&from_at=${encodeURIComponent(fromAt)}&to_at=${encodeURIComponent(toAt)}`,
+      { withAuth: true },
+    );
+    items.push(...response.items.filter((event) => event.is_valid));
+    total = response.total;
+    fetchedCount += response.items.length;
+    page += 1;
+  } while (fetchedCount < total);
+
+  return items;
 }
 
 function getVisiblePageNumbers(currentPage: number, totalPages: number) {

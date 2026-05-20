@@ -314,13 +314,12 @@ body {
   opacity: 0.78;
 }
 
-body.face-recognition-dialog-open .app-shell-sidebar,
-body.face-recognition-dialog-open .app-shell-topbar {
-  opacity: 0.58;
-  filter: blur(8px) saturate(0.92);
-  transition:
-    opacity 220ms ease,
-    filter 220ms ease;
+body.face-recognition-dialog-open {
+  overflow: hidden;
+}
+
+body.face-recognition-dialog-open .app-shell-frame {
+  pointer-events: none;
 }
 
 .list-table-corner-accent,

@@ -10,6 +10,7 @@ import { useTheme } from "@/components/theme/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DialogPortal } from "@/components/ui/dialog-portal";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api-client";
 import { normalizeBackendError } from "@/lib/backend-error-normalizer";
@@ -359,14 +360,15 @@ export function DepartmentDetailView({
       </div>
 
       {visibleEditDraft ? (
-        <div
-          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(editDialog.visible)}`}
-          onMouseDown={() => setEditDraft(null)}
-        >
+        <DialogPortal>
           <div
-            className={`w-full max-w-xl overflow-visible rounded-lg bg-white shadow-2xl ${dialogPanelClass(editDialog.visible)}`}
-            onMouseDown={(event) => event.stopPropagation()}
+            className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(editDialog.visible)}`}
+            onMouseDown={() => setEditDraft(null)}
           >
+            <div
+              className={`w-full max-w-xl overflow-visible rounded-lg bg-white shadow-2xl ${dialogPanelClass(editDialog.visible)}`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
               <div className="flex items-start gap-3">
                 <div className="grid h-10 w-10 place-items-center rounded-md bg-slate-100">
@@ -440,19 +442,21 @@ export function DepartmentDetailView({
                 {savingDepartment ? t("departments.form.saving") : t("departments.form.saveChanges")}
               </Button>
             </div>
+            </div>
           </div>
-        </div>
+        </DialogPortal>
       ) : null}
 
       {visibleDeleteTarget ? (
-        <div
-          className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
-          onMouseDown={() => setDeleteTarget(null)}
-        >
+        <DialogPortal>
           <div
-            className={`w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(deleteDialog.visible)}`}
-            onMouseDown={(event) => event.stopPropagation()}
+            className={`fixed inset-0 z-[120] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm ${dialogOverlayClass(deleteDialog.visible)}`}
+            onMouseDown={() => setDeleteTarget(null)}
           >
+            <div
+              className={`w-full max-w-md overflow-hidden rounded-lg bg-white shadow-2xl ${dialogPanelClass(deleteDialog.visible)}`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
               <div className="flex items-start gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-50 text-red-700">
@@ -478,8 +482,9 @@ export function DepartmentDetailView({
                 {deleting ? t("departments.personActions.deleting") : t("departments.personActions.confirmDelete")}
               </Button>
             </div>
+            </div>
           </div>
-        </div>
+        </DialogPortal>
       ) : null}
 
       {toast ? (

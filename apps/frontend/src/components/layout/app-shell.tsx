@@ -24,6 +24,7 @@ import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { NotificationCenter, NotificationToastsLayer } from "@/components/notifications/notification-center";
 import { ThemeSwitcher } from "@/components/theme/theme-switcher";
 import { Button } from "@/components/ui/button";
+import { DialogPortal } from "@/components/ui/dialog-portal";
 import { Input } from "@/components/ui/input";
 import { PageHeaderContext, type PageHeaderState } from "@/components/layout/page-header-context";
 import { apiFetch, SESSION_EXPIRED_EVENT } from "@/lib/api-client";
@@ -221,16 +222,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <aside
-        className={cn(
-          "app-shell-sidebar group/sidebar",
-          "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-all duration-300",
-          "before:pointer-events-none before:absolute before:left-6 before:right-6 before:top-[92px] before:h-px before:bg-[var(--sidebar-divider)]",
-          "after:pointer-events-none after:absolute after:left-8 after:top-20 after:h-14 after:w-28 after:rounded-full after:bg-[var(--sidebar-brand-glow)] after:blur-3xl",
-          collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH,
-        )}
-      >
+    <div className="app-shell-root min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+      <div className="app-shell-frame">
+        <aside
+          className={cn(
+            "app-shell-sidebar group/sidebar",
+            "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-all duration-300",
+            "before:pointer-events-none before:absolute before:left-6 before:right-6 before:top-[92px] before:h-px before:bg-[var(--sidebar-divider)]",
+            "after:pointer-events-none after:left-8 after:top-20 after:absolute after:h-14 after:w-28 after:rounded-full after:bg-[var(--sidebar-brand-glow)] after:blur-3xl",
+            collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH,
+          )}
+        >
         <div className={cn("relative px-4 pb-6 pt-6", collapsed ? "px-3" : "px-5")}>
           <div className={cn("flex items-start gap-3", collapsed ? "justify-center" : "justify-between")}>
             <Link href="/" className={cn("flex min-w-0 items-center gap-3", collapsed && "justify-center")}>
@@ -374,70 +376,76 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </div>
-      </aside>
+        </aside>
 
-      <PageHeaderContext.Provider value={{ setHeader: setPageHeader }}>
-        <main className={cn("min-h-screen transition-all duration-300", collapsed ? MAIN_COLLAPSED_PADDING : MAIN_EXPANDED_PADDING)}>
-          <div className="app-shell-topbar sticky top-0 z-20 flex min-h-20 items-center gap-4 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--background-panel)_76%,transparent)] px-6 py-4 backdrop-blur-xl">
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[1.45rem] font-semibold tracking-[-0.03em] text-[var(--foreground)]">
-                {pageHeader?.title ?? t("layout.appName")}
+        <PageHeaderContext.Provider value={{ setHeader: setPageHeader }}>
+          <main className={cn("app-shell-main min-h-screen transition-all duration-300", collapsed ? MAIN_COLLAPSED_PADDING : MAIN_EXPANDED_PADDING)}>
+            <div className="app-shell-topbar sticky top-0 z-20 flex min-h-20 items-center gap-4 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--background-panel)_76%,transparent)] px-6 py-4 backdrop-blur-xl">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[1.45rem] font-semibold tracking-[-0.03em] text-[var(--foreground)]">
+                  {pageHeader?.title ?? t("layout.appName")}
+                </div>
+                {pageHeader?.description ? (
+                  <div className="mt-1 truncate text-sm text-[var(--foreground-soft)]">{pageHeader.description}</div>
+                ) : null}
               </div>
-              {pageHeader?.description ? (
-                <div className="mt-1 truncate text-sm text-[var(--foreground-soft)]">{pageHeader.description}</div>
-              ) : null}
+              <div className="flex shrink-0 items-center justify-end gap-3">
+                <ThemeSwitcher compact />
+                <LanguageSwitcher compact />
+                <NotificationCenter />
+              </div>
             </div>
-            <div className="flex shrink-0 items-center justify-end gap-3">
-              <ThemeSwitcher compact />
-              <LanguageSwitcher compact />
-              <NotificationCenter />
+            <div className="app-shell-content">
+              {children}
             </div>
-          </div>
-          {children}
-        </main>
-      </PageHeaderContext.Provider>
+          </main>
+        </PageHeaderContext.Provider>
 
-      <NotificationToastsLayer />
+        <NotificationToastsLayer />
+      </div>
 
       {visibleSessionExpiredMessage ? (
-        <div
-          className={`fixed inset-0 z-[120] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(sessionExpiredDialog.visible)}`}
-        >
-          <div className={`w-full max-w-md overflow-hidden rounded-lg bg-[var(--background-elevated)] shadow-[var(--shadow-md)] ${dialogPanelClass(sessionExpiredDialog.visible)}`}>
-            <div className="border-b border-[var(--border)] p-5">
-              <div className="flex items-start gap-3">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--warning-soft)] text-[var(--warning)]">
-                  <AlertTriangle className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold">{t("layout.sessionExpiredTitle")}</h2>
-                  <p className="mt-2 text-sm text-[var(--foreground-soft)]">{visibleSessionExpiredMessage}</p>
+        <DialogPortal>
+          <div
+            className={`fixed inset-0 z-[120] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(sessionExpiredDialog.visible)}`}
+          >
+            <div className={`w-full max-w-md overflow-hidden rounded-lg bg-[var(--background-elevated)] shadow-[var(--shadow-md)] ${dialogPanelClass(sessionExpiredDialog.visible)}`}>
+              <div className="border-b border-[var(--border)] p-5">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--warning-soft)] text-[var(--warning)]">
+                    <AlertTriangle className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold">{t("layout.sessionExpiredTitle")}</h2>
+                    <p className="mt-2 text-sm text-[var(--foreground-soft)]">{visibleSessionExpiredMessage}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex justify-end p-5">
-              <Button onClick={confirmSessionExpired}>OK</Button>
+              <div className="flex justify-end p-5">
+                <Button onClick={confirmSessionExpired}>OK</Button>
+              </div>
             </div>
           </div>
-        </div>
+        </DialogPortal>
       ) : null}
 
       {visibleChangePasswordDialog ? (
-        <div
-          className={`fixed inset-0 z-[120] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(changePasswordDialog.visible)}`}
-          onMouseDown={closeChangePasswordDialog}
-        >
+        <DialogPortal>
           <div
-            className={`w-full max-w-md overflow-hidden rounded-lg bg-[var(--background-elevated)] shadow-[var(--shadow-md)] ${dialogPanelClass(changePasswordDialog.visible)}`}
-            onMouseDown={(event) => event.stopPropagation()}
+            className={`fixed inset-0 z-[120] grid place-items-center bg-[var(--overlay)] p-4 backdrop-blur-sm ${dialogOverlayClass(changePasswordDialog.visible)}`}
+            onMouseDown={closeChangePasswordDialog}
           >
-            <div className="border-b border-[var(--border)] p-5">
-              <h2 className="text-lg font-semibold">{t("layout.changePassword")}</h2>
-              <p className="mt-2 text-sm text-[var(--foreground-soft)]">
-                {t("layout.changePasswordDescription")}
-              </p>
-            </div>
-            <form className="space-y-4 p-5" autoComplete="off">
+            <div
+              className={`w-full max-w-md overflow-hidden rounded-lg bg-[var(--background-elevated)] shadow-[var(--shadow-md)] ${dialogPanelClass(changePasswordDialog.visible)}`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="border-b border-[var(--border)] p-5">
+                <h2 className="text-lg font-semibold">{t("layout.changePassword")}</h2>
+                <p className="mt-2 text-sm text-[var(--foreground-soft)]">
+                  {t("layout.changePasswordDescription")}
+                </p>
+              </div>
+              <form className="space-y-4 p-5" autoComplete="off">
               <input type="text" name="account_name" autoComplete="username" className="hidden" tabIndex={-1} />
               <input type="password" name="account_password" autoComplete="new-password" className="hidden" tabIndex={-1} />
               <label className="block space-y-2">
@@ -510,17 +518,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {changePasswordError}
                 </div>
               ) : null}
-            </form>
-            <div className="flex justify-end gap-2 border-t border-[var(--border)] p-5">
-              <Button type="button" variant="outline" onClick={closeChangePasswordDialog} disabled={submittingPasswordChange}>
-                {t("common.cancel")}
-              </Button>
-              <Button className="ui-button-link ui-button-link-primary" type="button" onClick={handleChangePassword} disabled={submittingPasswordChange}>
-                {submittingPasswordChange ? t("layout.updatingPassword") : t("layout.updatePassword")}
-              </Button>
+              </form>
+              <div className="flex justify-end gap-2 border-t border-[var(--border)] p-5">
+                <Button type="button" variant="outline" onClick={closeChangePasswordDialog} disabled={submittingPasswordChange}>
+                  {t("common.cancel")}
+                </Button>
+                <Button className="ui-button-link ui-button-link-primary" type="button" onClick={handleChangePassword} disabled={submittingPasswordChange}>
+                  {submittingPasswordChange ? t("layout.updatingPassword") : t("layout.updatePassword")}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
+        </DialogPortal>
       ) : null}
     </div>
   );
