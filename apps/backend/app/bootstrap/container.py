@@ -96,6 +96,7 @@ from app.infrastructure.persistence.repositories import (
     SqlAlchemyUserRepository,
 )
 from app.infrastructure.integrations.pipeline_client import PipelineEventPublisher
+from app.infrastructure.integrations.ai_service_client import AIServiceEventPublisher
 from app.infrastructure.integrations.dashboard_health_state import DashboardHealthState
 from app.infrastructure.realtime import HubRealtimeEventBus, WebSocketHub
 from app.infrastructure.persistence.session import SessionProvider
@@ -135,10 +136,16 @@ class Container:
         return UpdatePersonUseCase(SqlAlchemyPersonRepository(session))
 
     def build_delete_person_use_case(self, session: Session) -> DeletePersonUseCase:
-        return DeletePersonUseCase(SqlAlchemyPersonRepository(session))
+        return DeletePersonUseCase(
+            SqlAlchemyPersonRepository(session),
+            SqlAlchemyFaceRegistrationRepository(session),
+        )
 
     def build_bulk_delete_persons_use_case(self, session: Session) -> BulkDeletePersonsUseCase:
-        return BulkDeletePersonsUseCase(SqlAlchemyPersonRepository(session))
+        return BulkDeletePersonsUseCase(
+            SqlAlchemyPersonRepository(session),
+            SqlAlchemyFaceRegistrationRepository(session),
+        )
 
     def build_list_departments_use_case(self, session: Session) -> ListDepartmentsUseCase:
         return ListDepartmentsUseCase(SqlAlchemyDepartmentRepository(session))
@@ -280,6 +287,9 @@ class Container:
 
     def build_pipeline_event_publisher(self) -> PipelineEventPublisher:
         return PipelineEventPublisher(self.settings)
+
+    def build_ai_service_event_publisher(self) -> AIServiceEventPublisher:
+        return AIServiceEventPublisher(self.settings)
 
     def build_object_storage_gateway(self) -> MinioStorageGateway:
         return MinioStorageGateway(self.settings)

@@ -74,6 +74,25 @@ class SqlAlchemyFaceRegistrationRepository(FaceRegistrationRepository):
         self._session.flush()
         return True
 
+    def deactivate_registrations_by_person(
+        self,
+        person_id: UUID,
+        *,
+        exclude_registration_id: UUID | None = None,
+    ) -> int:
+        stmt = select(FaceRegistrationModel).where(FaceRegistrationModel.person_id == person_id)
+        stmt = stmt.where(FaceRegistrationModel.is_active.is_(True))
+        if exclude_registration_id is not None:
+            stmt = stmt.where(FaceRegistrationModel.id != exclude_registration_id)
+
+        items = self._session.execute(stmt).scalars().all()
+        now = datetime.now(timezone.utc)
+        for item in items:
+            item.is_active = False
+            item.updated_at = now
+        self._session.flush()
+        return len(items)
+
     def update_registration_processing_result(
         self,
         registration_id: UUID,

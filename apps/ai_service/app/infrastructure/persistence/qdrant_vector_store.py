@@ -5,6 +5,11 @@ import numpy as np
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
     Distance,
+    FieldCondition,
+    Filter,
+    FilterSelector,
+    HasIdCondition,
+    MatchValue,
     PointStruct,
     VectorParams,
 )
@@ -62,6 +67,7 @@ class QdrantVectorStore(IVectorStore):
     async def upsert(
         self, registration_id: str, person_id: str, vector: np.ndarray
     ) -> None:
+        await self.ensure_collection()
         vector = self._normalize(vector)
         await self._client.upsert(
             collection_name=self._collection,
@@ -83,11 +89,37 @@ class QdrantVectorStore(IVectorStore):
     async def delete(self, registration_id: str) -> None:
         from qdrant_client.models import PointIdsList  # noqa: PLC0415
 
+        await self.ensure_collection()
         await self._client.delete(
             collection_name=self._collection,
             points_selector=PointIdsList(points=[registration_id]),
         )
         logger.info("Deleted vector registration_id=%s", registration_id)
+
+    async def delete_by_person(self, person_id: str, *, exclude_registration_id: str | None = None) -> None:
+        await self.ensure_collection()
+        person_filter = Filter(
+            must=[
+                FieldCondition(
+                    key="person_id",
+                    match=MatchValue(value=person_id),
+                )
+            ],
+            must_not=(
+                [HasIdCondition(has_id=[exclude_registration_id])]
+                if exclude_registration_id is not None
+                else None
+            ),
+        )
+        await self._client.delete(
+            collection_name=self._collection,
+            points_selector=FilterSelector(filter=person_filter),
+        )
+        logger.info(
+            "Deleted vectors person_id=%s exclude_registration_id=%s",
+            person_id,
+            exclude_registration_id,
+        )
 
     @staticmethod
     def _normalize(vector: np.ndarray) -> np.ndarray:

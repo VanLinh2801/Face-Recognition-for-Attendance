@@ -96,6 +96,15 @@ class FakePersonRepository:
         return count
 
 
+class FakeRegistrationRepository:
+    def __init__(self):
+        self.deactivate_calls = []
+
+    def deactivate_registrations_by_person(self, person_id, *, exclude_registration_id=None):
+        self.deactivate_calls.append((person_id, exclude_registration_id))
+        return 1
+
+
 def test_create_person_use_case_raises_on_duplicate_employee_code():
     repo = FakePersonRepository()
     use_case = CreatePersonUseCase(repo)
@@ -379,6 +388,27 @@ def test_delete_person_use_case_raises_for_missing_person():
     use_case = DeletePersonUseCase(repo)
     with pytest.raises(NotFoundError):
         use_case.execute(uuid4())
+
+
+def test_delete_person_use_case_deactivates_face_registrations():
+    person_repo = FakePersonRepository()
+    registration_repo = FakeRegistrationRepository()
+    person = CreatePersonUseCase(person_repo).execute(
+        CreatePersonCommand(
+            employee_code="E008",
+            full_name="Delete User",
+            department_id=None,
+            title=None,
+            email=None,
+            phone=None,
+            joined_at=None,
+            notes=None,
+        )
+    )
+
+    DeletePersonUseCase(person_repo, registration_repo).execute(person.id)
+
+    assert registration_repo.deactivate_calls == [(person.id, None)]
 
 
 def test_create_person_use_case_accepts_optional_status():

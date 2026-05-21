@@ -79,6 +79,7 @@ from app.core.security import AuthenticatedPrincipal, extract_bearer_token, veri
 from app.core.exceptions import ValidationError
 from app.domain.auth.entities import User
 from app.infrastructure.integrations.pipeline_client import PipelineEventPublisher
+from app.infrastructure.integrations.ai_service_client import AIServiceEventPublisher
 from app.infrastructure.realtime.websocket_hub import WebSocketHub
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from app.application.interfaces.realtime_event_bus import RealtimeEventBus
@@ -325,6 +326,12 @@ def get_pipeline_event_publisher(
     container: Container = Depends(get_container),
 ) -> PipelineEventPublisher:
     return container.build_pipeline_event_publisher()
+
+
+def get_ai_service_event_publisher(
+    container: Container = Depends(get_container),
+) -> AIServiceEventPublisher:
+    return container.build_ai_service_event_publisher()
 
 
 def get_object_storage_gateway(

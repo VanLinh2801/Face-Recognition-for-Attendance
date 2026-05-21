@@ -7,6 +7,7 @@ from datetime import date, datetime
 from uuid import UUID
 
 from app.application.dtos.pagination import PageQuery, PageResult
+from app.application.interfaces.repositories.face_registration_repository import FaceRegistrationRepository
 from app.application.interfaces.repositories.person_repository import PersonRepository
 from app.core.exceptions import NotFoundError, ValidationError
 from app.domain.persons.entities import Person
@@ -152,22 +153,38 @@ class UpdatePersonUseCase:
 
 
 class DeletePersonUseCase:
-    def __init__(self, repository: PersonRepository) -> None:
+    def __init__(
+        self,
+        repository: PersonRepository,
+        registration_repository: FaceRegistrationRepository | None = None,
+    ) -> None:
         self._repository = repository
+        self._registration_repository = registration_repository
 
     def execute(self, person_id: UUID) -> None:
         if not self._repository.soft_delete_person(person_id):
             raise NotFoundError("Person not found")
+        if self._registration_repository is not None:
+            self._registration_repository.deactivate_registrations_by_person(person_id)
 
 
 class BulkDeletePersonsUseCase:
-    def __init__(self, repository: PersonRepository) -> None:
+    def __init__(
+        self,
+        repository: PersonRepository,
+        registration_repository: FaceRegistrationRepository | None = None,
+    ) -> None:
         self._repository = repository
+        self._registration_repository = registration_repository
 
     def execute(self, person_ids: list[UUID]) -> int:
         if not person_ids:
             raise ValidationError("person_ids cannot be empty")
-        return self._repository.bulk_soft_delete_persons(person_ids)
+        deleted_count = self._repository.bulk_soft_delete_persons(person_ids)
+        if self._registration_repository is not None:
+            for person_id in person_ids:
+                self._registration_repository.deactivate_registrations_by_person(person_id)
+        return deleted_count
 
 
 def _ensure_status_is_not_inactive(status: PersonStatus | None) -> None:

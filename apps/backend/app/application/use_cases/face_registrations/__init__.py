@@ -155,6 +155,11 @@ class CompleteFaceRegistrationUseCase:
         )
         if registration is None:
             raise NotFoundError("Registration not found")
+        if command.status == RegistrationStatus.INDEXED:
+            self._registration_repository.deactivate_registrations_by_person(
+                registration.person_id,
+                exclude_registration_id=registration.id,
+            )
         return registration
 
 

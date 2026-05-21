@@ -61,6 +61,7 @@ class FakeMediaRepo:
 class FakeRegistrationRepo:
     def __init__(self):
         self.registration = None
+        self.deactivate_calls = []
 
     def create_registration(self, *, person_id, source_media_asset_id, validation_notes=None):
         self.registration = PersonFaceRegistration(
@@ -101,6 +102,18 @@ class FakeRegistrationRepo:
         if face_image_media_asset_id is not None:
             self.registration.face_image_media_asset_id = face_image_media_asset_id
         return self.registration
+
+    def deactivate_registrations_by_person(self, person_id, *, exclude_registration_id=None):
+        self.deactivate_calls.append((person_id, exclude_registration_id))
+        if (
+            self.registration is not None
+            and self.registration.person_id == person_id
+            and self.registration.id != exclude_registration_id
+            and self.registration.is_active
+        ):
+            self.registration.is_active = False
+            return 1
+        return 0
 
 
 def test_create_face_registration_use_case_returns_registration_and_media_ref():
@@ -147,6 +160,7 @@ def test_complete_face_registration_use_case_updates_status():
 
     assert updated.registration_status == RegistrationStatus.INDEXED
     assert updated.embedding_model == "facenet"
+    assert reg_repo.deactivate_calls == [(created.person_id, created.id)]
 
 
 def test_apply_registration_input_validation_use_case_marks_failed_when_rejected():

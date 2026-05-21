@@ -38,6 +38,10 @@ class RegisterFaceUseCase:
             person_id=person_id,
             vector=embedding.vector,
         )
+        await self._vector_store.delete_by_person(
+            person_id,
+            exclude_registration_id=registration_id,
+        )
 
         indexed_at = datetime.now(timezone.utc).isoformat()
         logger.info(

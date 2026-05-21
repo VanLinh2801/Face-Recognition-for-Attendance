@@ -6,6 +6,7 @@ then builds use cases and event handlers.
 All objects are singletons within the container instance.
 """
 from app.application.use_cases.identify_faces import IdentifyFacesUseCase
+from app.application.use_cases.delete_person_vectors import DeletePersonVectorsUseCase
 from app.application.use_cases.register_face import RegisterFaceUseCase
 from app.infrastructure.ai_models.insightface_embedder import InsightFaceEmbedder
 from app.infrastructure.integration.minio_client import MinioImageClient
@@ -18,6 +19,9 @@ from app.presentation.event_handlers.recognition_requested_handler import (
 )
 from app.presentation.event_handlers.registration_requested_handler import (
     RegistrationRequestedHandler,
+)
+from app.presentation.event_handlers.person_face_vectors_delete_requested_handler import (
+    PersonFaceVectorsDeleteRequestedHandler,
 )
 from app.core.config import settings
 
@@ -44,6 +48,9 @@ class Container:
             embedder=self.embedder,
             vector_store=self.vector_store,
         )
+        self.delete_person_vectors_use_case = DeletePersonVectorsUseCase(
+            vector_store=self.vector_store,
+        )
 
         # ── Event handlers ────────────────────────────────────────────────
         self.recognition_handler = RecognitionRequestedHandler(
@@ -56,6 +63,9 @@ class Container:
             use_case=self.register_face_use_case,
             minio_client=self.minio_client,
             publisher=self.publisher,
+        )
+        self.person_face_vectors_delete_handler = PersonFaceVectorsDeleteRequestedHandler(
+            use_case=self.delete_person_vectors_use_case,
         )
 
         # ── Redis consumers ───────────────────────────────────────────────

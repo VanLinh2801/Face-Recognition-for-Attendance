@@ -31,6 +31,13 @@ class FaceRegistrationRepository(Protocol):
 
     def deactivate_registration(self, registration_id: UUID) -> bool: ...
 
+    def deactivate_registrations_by_person(
+        self,
+        person_id: UUID,
+        *,
+        exclude_registration_id: UUID | None = None,
+    ) -> int: ...
+
     def update_registration_processing_result(
         self,
         registration_id: UUID,

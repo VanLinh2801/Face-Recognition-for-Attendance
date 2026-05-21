@@ -37,6 +37,8 @@ def _route_pipeline_ai_event(event: dict):
         return container.recognition_handler.handle(event)
     elif event_name == "registration.requested":
         return container.registration_handler.handle(event)
+    elif event_name == "person_face_vectors.delete_requested":
+        return container.person_face_vectors_delete_handler.handle(event)
     else:
         logger.warning("Unhandled event_name='%s' — skipping", event_name)
         return asyncio.sleep(0)  # no-op coroutine

@@ -51,6 +51,11 @@ class IVectorStore(ABC):
         ...
 
     @abstractmethod
+    async def delete_by_person(self, person_id: str, *, exclude_registration_id: str | None = None) -> None:
+        """Remove vectors that belong to a person_id, optionally keeping one registration."""
+        ...
+
+    @abstractmethod
     async def ensure_collection(self) -> None:
         """Create the collection if it does not yet exist."""
         ...

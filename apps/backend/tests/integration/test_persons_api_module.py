@@ -25,6 +25,15 @@ class _FakePublisher:
         return None
 
 
+class _FakeAIServicePublisher:
+    async def publish_person_face_vectors_delete_requested(self, **kwargs):
+        _ = kwargs
+        return {"stream_id": "1-0", "message_id": str(uuid4()), "correlation_id": str(uuid4())}
+
+    async def close(self):
+        return None
+
+
 def _build_person(status: PersonStatus = PersonStatus.ACTIVE):
     now = datetime.now(timezone.utc)
     return Person(
@@ -164,6 +173,7 @@ def test_persons_module_endpoints(monkeypatch):
     app_main.app.dependency_overrides[dependencies.get_delete_face_registration_use_case] = lambda: _UseCaseDeleteRegistration()
     app_main.app.dependency_overrides[dependencies.get_complete_face_registration_use_case] = lambda: _UseCaseCompleteRegistration()
     app_main.app.dependency_overrides[dependencies.get_pipeline_event_publisher] = lambda: _FakePublisher()
+    app_main.app.dependency_overrides[dependencies.get_ai_service_event_publisher] = lambda: _FakeAIServicePublisher()
     app_main.app.dependency_overrides[dependencies.get_unit_of_work] = lambda: _FakeUow()
 
     person_id = str(uuid4())

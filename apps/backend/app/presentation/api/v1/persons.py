@@ -18,6 +18,7 @@ from app.application.use_cases.persons import (
     UpdatePersonUseCase,
 )
 from app.core.dependencies import (
+    get_ai_service_event_publisher,
     get_admin_user,
     get_bulk_delete_persons_use_case,
     get_create_person_use_case,
@@ -29,6 +30,7 @@ from app.core.dependencies import (
 )
 from app.core.exceptions import ValidationError
 from app.domain.shared.enums import PersonStatus
+from app.infrastructure.integrations.ai_service_client import AIServiceEventPublisher
 from app.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from app.presentation.schemas.persons import (
     BulkDeletePersonsRequest,
@@ -129,24 +131,35 @@ def update_person(
 
 
 @router.delete("/{person_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_person(
+async def delete_person(
     person_id: UUID,
     use_case: DeletePersonUseCase = Depends(get_delete_person_use_case),
+    ai_publisher: AIServiceEventPublisher = Depends(get_ai_service_event_publisher),
     uow: SqlAlchemyUnitOfWork = Depends(get_unit_of_work),
 ) -> Response:
     use_case.execute(person_id)
     uow.commit()
+    try:
+        await ai_publisher.publish_person_face_vectors_delete_requested(person_id=person_id)
+    finally:
+        await ai_publisher.close()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/bulk-delete", response_model=BulkDeletePersonsResponse)
-def bulk_delete_persons(
+async def bulk_delete_persons(
     request: BulkDeletePersonsRequest,
     use_case: BulkDeletePersonsUseCase = Depends(get_bulk_delete_persons_use_case),
+    ai_publisher: AIServiceEventPublisher = Depends(get_ai_service_event_publisher),
     uow: SqlAlchemyUnitOfWork = Depends(get_unit_of_work),
 ) -> BulkDeletePersonsResponse:
     deleted_count = use_case.execute(request.person_ids)
     uow.commit()
+    try:
+        for person_id in request.person_ids:
+            await ai_publisher.publish_person_face_vectors_delete_requested(person_id=person_id)
+    finally:
+        await ai_publisher.close()
     return BulkDeletePersonsResponse(deleted_count=deleted_count)
 
 

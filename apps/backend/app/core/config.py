@@ -45,6 +45,7 @@ class Settings(BaseSettings):
         default="pipeline_backend",
         alias="REDIS_STREAM_BACKEND_PIPELINE",
     )
+    redis_stream_pipeline_ai: str = Field(default="pipeline_ai", alias="REDIS_STREAM_PIPELINE_AI")
     redis_consumer_group: str = Field(default="backend-consumers", alias="REDIS_CONSUMER_GROUP")
     redis_consumer_name: str = Field(default="backend-1", alias="REDIS_CONSUMER_NAME")
     redis_block_ms: int = Field(default=5000, alias="REDIS_BLOCK_MS")

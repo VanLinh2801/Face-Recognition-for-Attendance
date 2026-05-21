@@ -43,6 +43,7 @@ PIPELINE_MINIO_BUCKET=face-recognition
 LOG_LEVEL=INFO
 ENV=production
 CORS_ALLOW_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+REDIS_STREAM_PIPELINE_AI=pipeline_ai
 
 # ---- Admin Seed ----
 AUTH_SEED_ADMIN_USERNAME=admin
