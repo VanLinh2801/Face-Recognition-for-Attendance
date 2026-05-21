@@ -113,9 +113,11 @@ export function WebRTCPlayer({ url, className, onVideoDimensionsChange }: WebRTC
 
   const updateDimensions = useCallback(() => {
     if (videoRef.current && videoRef.current.videoWidth > 0) {
+      const renderedWidth = videoRef.current.clientWidth || videoRef.current.videoWidth;
+      const renderedHeight = videoRef.current.clientHeight || videoRef.current.videoHeight;
       onVideoDimensionsChange?.({
-        width: videoRef.current.videoWidth,
-        height: videoRef.current.videoHeight,
+        width: renderedWidth,
+        height: renderedHeight,
       });
     } else {
       onVideoDimensionsChange?.(null);
@@ -217,13 +219,19 @@ export function WebRTCPlayer({ url, className, onVideoDimensionsChange }: WebRTC
 
     const handleLoadedMetadata = () => updateDimensions();
     const handleResize = () => updateDimensions();
+    const resizeObserver = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => updateDimensions())
+      : null;
 
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
     video.addEventListener("resize", handleResize);
+    resizeObserver?.observe(video);
+    updateDimensions();
 
     return () => {
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
       video.removeEventListener("resize", handleResize);
+      resizeObserver?.disconnect();
     };
   }, [updateDimensions]);
 
@@ -233,7 +241,7 @@ export function WebRTCPlayer({ url, className, onVideoDimensionsChange }: WebRTC
       autoPlay
       muted
       playsInline
-      className={`h-full w-full object-cover ${className}`}
+      className={`h-full w-full object-contain ${className ?? ""}`}
     />
   );
 }

@@ -117,48 +117,56 @@ export function CameraView() {
 
   return (
     <section
-      className="relative min-h-0 flex-1 overflow-hidden text-white"
+      className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3 text-white sm:p-4 lg:p-6"
       style={{
         background: "linear-gradient(180deg, var(--background-panel) 0%, var(--background) 100%)",
       }}
     >
-      <div className="absolute inset-0 z-0">
-        <WebRTCPlayer
-          url="http://localhost:8889/mystream/whep"
-          onVideoDimensionsChange={setVideoDimensions}
-        />
-      </div>
-
       <div
-        className="absolute inset-0 z-10"
+        className="relative aspect-video w-full max-w-[1920px] overflow-hidden bg-slate-950 shadow-[0_18px_50px_rgb(2_6_23/0.28)]"
         style={{
-          background: "radial-gradient(circle at center, transparent 30%, rgba(15, 23, 42, 0.4) 100%)",
-        }}
-      />
-
-      <CameraOverlay boxes={detectionBoxes} />
-
-      <div
-        className="absolute inset-8 z-20 rounded-xl border backdrop-blur-[1px]"
-        style={{
-          borderColor: "rgb(255 255 255 / 0.1)",
-          backgroundColor: "rgb(15 23 42 / 0.12)",
+          maxHeight: "min(1080px, 100%)",
         }}
       >
-        <div className="absolute left-5 top-5 flex flex-wrap items-center gap-2">
-          <Badge variant="danger">Live</Badge>
-          <Badge variant="success">Camera online</Badge>
-          <Badge variant="dark">30 FPS</Badge>
-          <Badge variant="dark">42 ms</Badge>
-          {overlayStatusBadge}
-          {pipelineStatusBadge}
+        <div className="absolute inset-0 z-0">
+          <WebRTCPlayer
+            url="http://localhost:8889/mystream/whep"
+            onVideoDimensionsChange={setVideoDimensions}
+          />
         </div>
-        <div className="absolute right-5 top-5 font-mono text-xs text-white/55">CAM-ENTRY-01 · Main Gate</div>
-        <div className="absolute bottom-5 left-5 max-w-md">
-          <h1 className="text-2xl font-semibold">Realtime recognition monitor</h1>
-          <p className="mt-2 text-sm text-white/70">
-            Bounding boxes bám sát khuôn mặt theo thời gian thực, extrapolated 60fps.
-          </p>
+
+        <div
+          className="absolute inset-0 z-10"
+          style={{
+            background: "radial-gradient(circle at center, transparent 30%, rgba(15, 23, 42, 0.4) 100%)",
+          }}
+        />
+
+        <CameraOverlay boxes={detectionBoxes} />
+
+        <div
+          className="absolute inset-4 z-20 rounded-xl border backdrop-blur-[1px] sm:inset-6 lg:inset-8"
+          style={{
+            borderColor: "rgb(255 255 255 / 0.1)",
+            backgroundColor: "rgb(15 23 42 / 0.12)",
+          }}
+        >
+          <div className="absolute left-3 top-3 flex flex-wrap items-center gap-2 sm:left-5 sm:top-5">
+            <Badge variant="danger">Live</Badge>
+            <Badge variant="success">Camera online</Badge>
+            <Badge variant="dark">1920 x 1080</Badge>
+            <Badge variant="dark">30 FPS</Badge>
+            <Badge variant="dark">42 ms</Badge>
+            {overlayStatusBadge}
+            {pipelineStatusBadge}
+          </div>
+          <div className="absolute right-3 top-3 font-mono text-xs text-white/55 sm:right-5 sm:top-5">CAM-ENTRY-01 - Main Gate</div>
+          <div className="absolute bottom-3 left-3 max-w-md sm:bottom-5 sm:left-5">
+            <h1 className="text-xl font-semibold sm:text-2xl">Realtime recognition monitor</h1>
+            <p className="mt-2 hidden text-sm text-white/70 sm:block">
+              Bounding boxes bam sat khuon mat theo thoi gian thuc, extrapolated 60fps.
+            </p>
+          </div>
         </div>
       </div>
     </section>

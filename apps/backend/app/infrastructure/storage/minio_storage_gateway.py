@@ -10,6 +10,7 @@ from minio import Minio
 from minio.error import S3Error
 
 from app.core.config import Settings
+from app.application.interfaces.storage_gateway import ObjectStorageStat
 
 
 class MinioStorageGateway:
@@ -28,6 +29,13 @@ class MinioStorageGateway:
         finally:
             response.close()
             response.release_conn()
+
+    def stat_object(self, *, bucket_name: str, object_key: str) -> ObjectStorageStat:
+        stat = self._client.stat_object(bucket_name, object_key)
+        return ObjectStorageStat(
+            size=stat.size or 0,
+            content_type=stat.content_type,
+        )
 
     def put_object(
         self,

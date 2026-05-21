@@ -53,7 +53,13 @@ class FaceQualityFilter(BaseProcessor):
 
         # Feedback cho tracker: track_id → frame_sequence của các face đã pass
         passed_track_ids = {f["track_id"]: context.get("frame_sequence") for f in filtered}
+        rejected_track_ids = {
+            f["track_id"]: context.get("frame_sequence")
+            for f in faces
+            if f not in filtered and f.get("track_id")
+        }
         context["_filter_passed_track_ids"] = passed_track_ids
+        context["_filter_rejected_track_ids"] = rejected_track_ids
 
         # Measure filter latency and record metrics
         end_time = time.perf_counter()

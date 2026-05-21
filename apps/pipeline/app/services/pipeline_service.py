@@ -37,6 +37,7 @@ class PipelineService:
 
         # Record input frame
         metrics_collector.record_input_frame()
+        self.face_tracker.prune_expired()
 
         if self.frame_count % 100 == 0:
             logger.info(f"[PIPELINE] ♥ Heartbeat frame={self.frame_count} res={w}x{h}")
@@ -88,6 +89,7 @@ class PipelineService:
 
         # Tracker đọc filter feedback để biết frame nào đã pass
         self.face_tracker.sync_filter_passed(context.get('_filter_passed_track_ids', {}))
+        self.face_tracker.sync_filter_rejected(context.get('_filter_rejected_track_ids', {}))
 
         filtered_faces = context.get('filtered_faces', [])
 

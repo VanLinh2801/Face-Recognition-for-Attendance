@@ -190,20 +190,28 @@ class SqlAlchemyRecognitionEventRepository(RecognitionEventRepository):
         file_size: int,
         checksum: str | None,
     ) -> UUID:
-        media_asset_id = uuid4()
-        media_asset = MediaAssetModel(
-            id=media_asset_id,
-            storage_provider=StorageProvider(storage_provider),
-            bucket_name=bucket_name,
-            object_key=object_key,
-            original_filename=original_filename,
-            mime_type=mime_type,
-            file_size=file_size,
-            checksum=checksum,
-            asset_type=MediaAssetType.RECOGNITION_SNAPSHOT,
-            created_at=datetime.now(timezone.utc),
-        )
-        self._session.add(media_asset)
+        existing = self._session.execute(
+            select(MediaAssetModel).where(
+                MediaAssetModel.bucket_name == bucket_name,
+                MediaAssetModel.object_key == object_key,
+            )
+        ).scalar_one_or_none()
+        media_asset_id = existing.id if existing is not None else uuid4()
+
+        if existing is None:
+            media_asset = MediaAssetModel(
+                id=media_asset_id,
+                storage_provider=StorageProvider(storage_provider),
+                bucket_name=bucket_name,
+                object_key=object_key,
+                original_filename=original_filename,
+                mime_type=mime_type,
+                file_size=file_size,
+                checksum=checksum,
+                asset_type=MediaAssetType.RECOGNITION_SNAPSHOT,
+                created_at=datetime.now(timezone.utc),
+            )
+            self._session.add(media_asset)
 
         stmt = (
             select(RecognitionEventModel)

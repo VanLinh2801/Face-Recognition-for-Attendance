@@ -14,6 +14,7 @@ class FaceTracker(BaseProcessor):
         self.tracks = {}
         self.cooldown = settings.FACE_TRACKER_COOLDOWN
         self.max_age = settings.FACE_TRACKER_MAX_AGE
+        self.no_pass_max_age = settings.FACE_TRACKER_NO_PASS_MAX_AGE
         self.max_initial = settings.MAX_INITIAL_SNAPSHOTS
         # {track_id: [frame_sequence_1, frame_sequence_2, ...]} — các frame đã pass quality
         self._filter_passed = {}
@@ -24,6 +25,7 @@ class FaceTracker(BaseProcessor):
         detections = context.get('detections', [])
         frame = context.get('frame')
         current_time = time.time()
+        self._cleanup_tracks(current_time)
 
         faces_to_emit = []
         current_track_ids = set()
@@ -49,6 +51,8 @@ class FaceTracker(BaseProcessor):
                     "last_snapshot": 0.0,
                     "initial_count": 0,
                     "passed_photos": 0,
+                    "rejected_photos": 0,
+                    "first_rejected_at": None,
                     "centroid": ((x1+x2)/2.0, (y1+y2)/2.0),
                     "velocity": [0.0, 0.0],
                 }
@@ -130,6 +134,9 @@ class FaceTracker(BaseProcessor):
         context['all_tracked_detections'] = tracked_for_broadcast
         return context
 
+    def prune_expired(self):
+        self._cleanup_tracks(time.time())
+
     def sync_filter_passed(self, filter_result: dict):
         """
         Được gọi SAU quality filter.
@@ -141,12 +148,42 @@ class FaceTracker(BaseProcessor):
                 track = self.tracks[track_id]
                 track["passed_photos"] += 1
                 track["initial_count"] += 1
+                track["rejected_photos"] = 0
+                track["first_rejected_at"] = None
                 
                 # Update snapshot time for NEW or PERIODIC
                 if track["passed_photos"] == 1 or track["passed_photos"] > self.max_initial:
                     track["last_snapshot"] = current_time
                 
                 logger.debug(f"[TRACKER] {track_id} passed. Total passed={track['passed_photos']}")
+
+    def sync_filter_rejected(self, filter_result: dict):
+        current_time = time.time()
+        expired_track_ids = []
+        for track_id in filter_result.keys():
+            if track_id not in self.tracks:
+                continue
+
+            track = self.tracks[track_id]
+            track["rejected_photos"] = track.get("rejected_photos", 0) + 1
+            if track.get("first_rejected_at") is None:
+                track["first_rejected_at"] = current_time
+
+            rejected_age = current_time - track["first_rejected_at"]
+            if track.get("passed_photos", 0) == 0 and rejected_age >= self.no_pass_max_age:
+                expired_track_ids.append(track_id)
+
+        for track_id in expired_track_ids:
+            track = self.tracks.pop(track_id, None)
+            if track is None:
+                continue
+            self._previous_track_ids.discard(track_id)
+            logger.info(
+                "[TRACKER] Dropped no-pass track %s after %.1fs rejected=%s",
+                track_id,
+                current_time - track.get("first_rejected_at", current_time),
+                track.get("rejected_photos", 0),
+            )
 
     def _find_track_candidate(self, bbox):
         """Tìm track candidate gần nhất — không update centroid. Trả về (track_id, prev_centroid, prev_time) hoặc (None, None, None)."""

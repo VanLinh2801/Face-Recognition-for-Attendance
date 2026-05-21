@@ -40,7 +40,7 @@ class Settings(BaseSettings):
 
     # ── Thresholds (env-configurable, do NOT hardcode in logic) ───────────
     # Cosine similarity >= RECOGNITION_THRESHOLD → known person
-    RECOGNITION_THRESHOLD: float = 0.65
+    RECOGNITION_THRESHOLD: float = 0.60
     # Real-face score >= SPOOF_THRESHOLD → pass anti-spoof (lower = spoof)
     SPOOF_THRESHOLD: float = 0.70
 
