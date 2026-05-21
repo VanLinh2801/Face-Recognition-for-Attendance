@@ -84,7 +84,7 @@ export function CameraView() {
             if (data.event_type === "recognition_event.detected") {
               setIdentity(trackId, (p?.full_name as string | undefined) ?? (p?.person_id as string | undefined) ?? "Recognized", false);
             } else if (data.event_type === "unknown_event.detected") {
-              setIdentity(trackId, "Unknown", true);
+              setIdentity(trackId, "Người lạ", true);
             }
           }
         } catch {

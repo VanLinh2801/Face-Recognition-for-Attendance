@@ -30,6 +30,10 @@ ffmpeg -f dshow -rtbufsize 100M -thread_queue_size 512 -i video="Integrated Webc
 -f rtsp -rtsp_transport tcp rtsp://localhost:8554/mystream
 ```
 
+ffmpeg -f dshow -rtbufsize 1024M -thread_queue_size 4096 -i video="HD Camera" `
+-c:v libx264 -preset ultrafast -tune zerolatency -crf 18 -maxrate 8000k -bufsize 16000k -g 20 `
+-f rtsp -rtsp_transport tcp rtsp://localhost:8554/mystream
+
 --- rtx 4070
 
 ```bash

@@ -169,21 +169,12 @@ class FaceTracker(BaseProcessor):
             if track.get("first_rejected_at") is None:
                 track["first_rejected_at"] = current_time
 
-            rejected_age = current_time - track["first_rejected_at"]
-            if track.get("passed_photos", 0) == 0 and rejected_age >= self.no_pass_max_age:
-                expired_track_ids.append(track_id)
-
-        for track_id in expired_track_ids:
-            track = self.tracks.pop(track_id, None)
-            if track is None:
-                continue
-            self._previous_track_ids.discard(track_id)
-            logger.info(
-                "[TRACKER] Dropped no-pass track %s after %.1fs rejected=%s",
-                track_id,
-                current_time - track.get("first_rejected_at", current_time),
-                track.get("rejected_photos", 0),
-            )
+            # Disabled: do NOT auto-drop tracks due to quality rejections.
+            # The pipeline uses _incomplete_track_ids to force detector runs
+            # until a track reaches MAX_INITIAL_SNAPSHOTS. A track that
+            # repeatedly fails quality will keep being detected until it
+            # either passes or disappears from the camera (natural expiry
+            # via _cleanup_tracks / max_age).
 
     def _find_track_candidate(self, bbox):
         """Tìm track candidate gần nhất — không update centroid. Trả về (track_id, prev_centroid, prev_time) hoặc (None, None, None)."""

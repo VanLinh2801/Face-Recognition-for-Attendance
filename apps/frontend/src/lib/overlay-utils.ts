@@ -163,8 +163,8 @@ export function transformRecognitionToRenderBox(
     videoDimensions
   );
 
-  const color = source.is_unknown ? "border-amber-400" : "border-emerald-400";
-  const label = source.full_name || (source.is_unknown ? "Unknown" : source.person_id || "Detected");
+  const color = source.is_unknown ? "border-red-500" : "border-emerald-400";
+  const label = source.full_name || (source.is_unknown ? "Người lạ" : source.person_id || "Detected");
 
   return {
     track_id: source.track_id,

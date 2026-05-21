@@ -11,7 +11,7 @@ const WS_URL = process.env.NEXT_PUBLIC_PIPELINE_WS_URL ?? "ws://localhost:8002/w
 const MAX_EXTRAP_MS = 150;
 const POSITION_LERP = 1;
 const SIZE_LERP = 0.75;
-const TRACK_EXPIRY_MS = 3000;
+const TRACK_EXPIRY_MS = 60000;
 
 type Sample = {
   x: number;
@@ -36,7 +36,10 @@ type Track = {
     captureToReceiveMs?: number;
   };
 };
-type Identity = { name: string; color: string };
+type Identity = {
+  name: string;
+  color: string;
+};
 
 export function usePipelineBBoxStream(dims: VideoDimensions | null, enabled = true) {
   const [boxes, setBoxes] = useState<OverlayRenderBox[]>([]);
@@ -53,7 +56,7 @@ export function usePipelineBBoxStream(dims: VideoDimensions | null, enabled = tr
   const setIdentity = useCallback((trackId: string, name: string, isUnknown: boolean) => {
     identities.current.set(trackId, {
       name,
-      color: isUnknown ? "border-amber-400" : "border-emerald-400",
+      color: isUnknown ? "border-red-500" : "border-emerald-400",
     });
   }, []);
 

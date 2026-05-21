@@ -30,6 +30,7 @@ class PipelineService:
         self._no_face_streak = 0
         self._last_detector_scan = 0.0
         self._motion_skip_streak = 0
+        self._incomplete_track_ids: set = set()
 
     async def handle_realtime_frame(self, source_id: str, frame):
         capture_perf = time.perf_counter()
@@ -62,9 +63,10 @@ class PipelineService:
         context = self.motion_processor.process(context)
         motion = context.get('motion_detected')
         has_active_tracks = len(self.face_tracker.tracks) > 0
+        incomplete_tracks_exist = bool(self._incomplete_track_ids)
         now = time.time()
         idle_scan_due = (now - self._last_detector_scan) >= settings.DETECTOR_IDLE_SCAN_INTERVAL
-        if not motion and not has_active_tracks and not idle_scan_due:
+        if not motion and not has_active_tracks and not incomplete_tracks_exist and not idle_scan_due:
             self._motion_skip_streak += 1
             if self._motion_skip_streak % 100 == 1:
                 logger.debug(
@@ -102,7 +104,22 @@ class PipelineService:
 
         # Tracker đọc filter feedback để biết frame nào đã pass
         self.face_tracker.sync_filter_passed(context.get('_filter_passed_track_ids', {}))
+
+        # Cập nhật incomplete tracks TRƯỚC sync_filter_rejected (vì nó có thể pop tracks)
+        for track_id, track in list(self.face_tracker.tracks.items()):
+            passed = track.get("passed_photos", 0)
+            if passed >= settings.MAX_INITIAL_SNAPSHOTS:
+                if track_id in self._incomplete_track_ids:
+                    self._incomplete_track_ids.discard(track_id)
+                    logger.info(f"[PIPELINE] Track {track_id} completed {passed} frames")
+            elif track_id not in self._incomplete_track_ids:
+                self._incomplete_track_ids.add(track_id)
+                logger.debug(f"[PIPELINE] Tracking incomplete: {track_id}")
+
         self.face_tracker.sync_filter_rejected(context.get('_filter_rejected_track_ids', {}))
+
+        # Dọn _incomplete_track_ids cho tracks đã bị drop bởi sync_filter_rejected
+        self._incomplete_track_ids &= set(self.face_tracker.tracks.keys())
 
         filtered_faces = context.get('filtered_faces', [])
 

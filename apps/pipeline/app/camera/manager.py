@@ -29,16 +29,15 @@ class CameraManager:
 
         try:
             while self.is_running:
-                # Đọc frame trong thread riêng để không block event loop
-                # Lưu ý: FRAME_INTERVAL không áp dụng ở đây vì RTSP đã tự điều tiết tốc độ
                 frame = await asyncio.to_thread(reader.read_frame)
                 if frame is not None and (processing_task is None or processing_task.done()):
                     if processing_task is not None:
                         _on_task_done(processing_task)
                     processing_task = asyncio.create_task(self.process_callback(source, frame))
-                # Throttle: chỉ lấy frame để xử lý theo FRAME_INTERVAL
-                # Background thread vẫn đọc 30fps để giữ _latest_frame luôn mới
-                await asyncio.sleep(settings.FRAME_INTERVAL)
+                # No sleep here — incomplete tracks must be detected every frame.
+                # The background thread in StreamReader continuously reads frames
+                # so _latest_frame is always fresh. Removing throttle ensures
+                # detector runs on every camera frame until tracks complete.
         except asyncio.CancelledError:
             logger.info(f"Camera loop for {source} cancelled.")
         finally:
