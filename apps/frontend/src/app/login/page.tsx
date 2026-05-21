@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import type { CSSProperties } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, Fingerprint, LockKeyhole, UserRound } from "lucide-react";
@@ -20,6 +21,8 @@ type LoginResponse = {
   token_type: string;
   expires_in: number;
 };
+
+type CssVariableStyle = CSSProperties & Record<`--${string}`, string | number>;
 
 const heroSparkles = [
   { left: "8%", top: "18%", size: "10px", delay: "0s", duration: "4.2s" },
@@ -196,7 +199,7 @@ export default function LoginPage() {
                   animation: `heroRightStar ${star.duration} ease-in-out ${star.delay} infinite`,
                   "--hero-right-star-drift": star.drift,
                   "--hero-right-star-glow": star.glow,
-                } as React.CSSProperties}
+                } as CssVariableStyle}
               >
                 <span
                   className={
@@ -228,7 +231,7 @@ export default function LoginPage() {
                   style={{
                     animation: `heroMeteorArc ${meteor.duration} ease-in-out ${meteor.delay} infinite`,
                     "--hero-meteor-glow": meteor.glow,
-                  } as React.CSSProperties}
+                  } as CssVariableStyle}
                 />
               </span>
             ))

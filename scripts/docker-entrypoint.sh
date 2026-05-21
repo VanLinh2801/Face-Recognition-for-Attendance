@@ -62,11 +62,15 @@ echo "[entrypoint] Starting face_attend service: ${SERVICE_NAME:-unknown}"
 case "$SERVICE_NAME" in
     ai-service)
         set_ai_provider
-        install_cpu_packages
+        if ! detect_gpu; then
+            install_cpu_packages
+        fi
         ;;
     pipeline)
         set_pipeline_provider
-        install_cpu_packages
+        if ! detect_gpu; then
+            install_cpu_packages
+        fi
         ;;
     *)
         # Fallback: just detect and set

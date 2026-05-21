@@ -30,6 +30,8 @@ class PipelineService:
         self._no_face_streak = 0
 
     async def handle_realtime_frame(self, source_id: str, frame):
+        capture_perf = time.perf_counter()
+        captured_at_ms = time.time() * 1000.0
         self.frame_count += 1
         h, w = frame.shape[:2]
 
@@ -46,6 +48,10 @@ class PipelineService:
             "frame_height": h,
             "frame_sequence": self.frame_count,
             "captured_at": datetime.utcnow().isoformat(),
+            "captured_at_ms": captured_at_ms,
+            "latency": {
+                "capture_to_detector_done_ms": None,
+            },
             "full_frame_ref": None
         }
 
@@ -58,6 +64,10 @@ class PipelineService:
 
         # 2. Phát hiện khuôn mặt
         context = self.face_detector.process(context)
+        context["latency"]["capture_to_detector_done_ms"] = round(
+            (time.perf_counter() - capture_perf) * 1000.0,
+            2,
+        )
         detections = context.get('detections', [])
         if not detections:
             self._no_face_streak += 1

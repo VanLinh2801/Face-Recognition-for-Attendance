@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     
     # Thresholds & AI Settings
     MOTION_THRESHOLD: float = 0.005  # 0.5% pixel thay đổi → có chuyển động thực sự
-    FRAME_INTERVAL: float = 0.1     # Giây giữa các lần đọc frame (10 FPS)
+    FRAME_INTERVAL: float = 0.033   # Giây giữa các lần đọc frame (~30 FPS)
     
     # SCRFD & Tracking
     SCRFD_MODEL_PATH: str = r"app\models\scrfd_2.5g_bnkps.onnx"
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     FACE_OVERLAP_IOU_THRESHOLD: float = 0.5  # IoU > 0.5 → reject face nhỏ hơn
     MAX_FACE_YAW_DEG: float = 45.0   # Góc nghiêng tối đa
     MIN_FACE_SHARPNESS: float = 150.0 # Ngưỡng phương sai Laplacian để lọc ảnh mờ
-    MIN_FACE_DETECTION_CONFIDENCE: float = 0.70 # SCRFD confidence tối thiểu để gửi AI
+    MIN_FACE_DETECTION_CONFIDENCE: float = 0.65 # SCRFD confidence tối thiểu để gửi AI
     MIN_FACE_BRIGHTNESS: float = 65.0 # Mean grayscale tối thiểu trên bbox mặt
 
     class Config:

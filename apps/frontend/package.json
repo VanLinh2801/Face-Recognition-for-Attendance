@@ -10,24 +10,25 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@tailwindcss/postcss": "latest",
-    "class-variance-authority": "latest",
-    "clsx": "latest",
-    "lucide-react": "latest",
-    "next": "latest",
-    "next-intl": "^4.12.0",
-    "react": "latest",
-    "react-dom": "latest",
-    "recharts": "latest",
-    "tailwind-merge": "latest",
-    "tailwindcss": "latest"
+    "@tailwindcss/postcss": "4.2.4",
+    "@swc/helpers": "0.5.21",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.14.0",
+    "next": "16.2.4",
+    "next-intl": "4.12.0",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "recharts": "3.8.1",
+    "tailwind-merge": "3.5.0",
+    "tailwindcss": "4.2.4"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "eslint": "latest",
-    "eslint-config-next": "latest",
-    "typescript": "latest"
+    "@types/node": "25.6.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.4",
+    "typescript": "6.0.3"
   }
 }

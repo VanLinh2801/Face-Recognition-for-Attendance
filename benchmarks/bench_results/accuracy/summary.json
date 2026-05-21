@@ -1,39 +1,39 @@
 {
   "model_name": "antelopev2",
   "threshold": 0.7,
-  "query_images_are_crops": true,
+  "apply_quality_filter": false,
   "enrolled_persons": 3,
-  "genuine_queries": 24,
-  "impostor_queries": 11,
+  "genuine_queries": 22,
+  "impostor_queries": 8,
   "confusion": {
-    "tp": 2,
+    "tp": 16,
     "fp": 0,
-    "tn": 11,
-    "fn": 22
+    "tn": 8,
+    "fn": 6
   },
-  "tpr": 0.0833,
+  "tpr": 0.7273,
   "far": 0.0,
-  "frr": 0.9167,
-  "accuracy": 0.3714,
+  "frr": 0.2727,
+  "accuracy": 0.8,
   "precision": 1.0,
-  "f1": 0.1538,
-  "eer_threshold": 0.24,
+  "f1": 0.8421,
+  "eer_threshold": 0.3,
   "eer_rate": 0.0,
-  "auc": 0.9545,
+  "auc": 0.9375,
   "genuine_score_stats": {
-    "count": 24,
-    "avg": 0.6146,
-    "p50": 0.6385,
-    "p5": 0.4935,
-    "min": 0.357,
-    "max": 0.708
+    "count": 22,
+    "avg": 0.7264,
+    "p50": 0.7316,
+    "p5": 0.6233,
+    "min": 0.5543,
+    "max": 0.8497
   },
   "impostor_score_stats": {
-    "count": 11,
-    "avg": 0.1,
-    "p50": 0.0756,
-    "p95": 0.2313,
-    "min": 0.0256,
-    "max": 0.2313
+    "count": 8,
+    "avg": 0.1113,
+    "p50": 0.1151,
+    "p95": 0.2931,
+    "min": 0.008,
+    "max": 0.2931
   }
 }

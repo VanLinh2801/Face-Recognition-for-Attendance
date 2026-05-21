@@ -86,9 +86,28 @@ class FaceQualityFilter(BaseProcessor):
 
         # Pre-filter: reject face nhỏ trước để giảm overlap check
         candidates = [f for f in faces if self._check_min_size(f)]
+        registration_faces = [f for f in candidates if f.get("type") == "REGISTRATION"]
+        realtime_faces = [f for f in candidates if f.get("type") != "REGISTRATION"]
+
+        if not realtime_faces:
+            for face in faces:
+                if face in registration_faces:
+                    continue
+                reasons = self._collect_reasons(face, mode="registration")
+                logger.warning(
+                    f"[QUALITY] REJECTED {face.get('track_id', '?')} | "
+                    f"type={face.get('type', '?')} | reasons=[{', '.join(reasons)}]"
+                )
+                rejected.append(face)
+            logger.info(
+                f"[QUALITY] {len(registration_faces)}/{total} faces passed | "
+                f"mode=registration_min_size_only | rejected={len(rejected)} | "
+                f"min_size={self.min_face_size}px"
+            )
+            return registration_faces
 
         # Check 2: DETECTION_CONFIDENCE — reject detector results with weak confidence
-        candidates = [f for f in candidates if self._check_detection_confidence(f)]
+        candidates = [f for f in realtime_faces if self._check_detection_confidence(f)]
 
         # Check 3: BRIGHTNESS + SHARPNESS — reject dark or blurry faces
         if frame is not None:
@@ -105,7 +124,7 @@ class FaceQualityFilter(BaseProcessor):
         candidates = [f for f in candidates if self._check_face_angle(f)]
 
         # Overlap check: nếu 2 bbox IoU > threshold → reject face nhỏ hơn
-        survivors = self._resolve_overlaps(candidates)
+        survivors = registration_faces + self._resolve_overlaps(candidates)
 
         for face in faces:
             if face in survivors:
@@ -316,11 +335,17 @@ class FaceQualityFilter(BaseProcessor):
         if not bbox or len(bbox) != 4:
             return False
         x1, y1, x2, y2 = bbox
+        bw = float(x2 - x1)
+        bh = float(y2 - y1)
+        if bw <= 0 or bh <= 0:
+            return False
+        margin_x = max(2.0, bw * 0.08)
+        margin_y = max(2.0, bh * 0.08)
 
         for idx, kp in enumerate(kps):
             kx, ky = kp
-            if kx < x1 or kx > x2 or ky < y1 or ky > y2:
-                logger.debug(f"[QUALITY] {face.get('track_id')} missing_kps: kp[{idx}]=({kx:.1f},{ky:.1f}) out of bbox [{x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f}]")
+            if kx < x1 - margin_x or kx > x2 + margin_x or ky < y1 - margin_y or ky > y2 + margin_y:
+                logger.debug(f"[QUALITY] {face.get('track_id')} invalid_kps: kp[{idx}]=({kx:.1f},{ky:.1f}) out of bbox margin [{x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f}]")
                 return False
 
         for i in range(5):
@@ -329,9 +354,6 @@ class FaceQualityFilter(BaseProcessor):
                 if dist < self.min_kps_dist:
                     logger.debug(f"[QUALITY] {face.get('track_id')} missing_kps: dist({i},{j})={dist:.1f} < {self.min_kps_dist}")
                     return False
-
-        if not self._check_kps_geometry(face, kps):
-            return False
 
         return True
 
@@ -534,7 +556,7 @@ class FaceQualityFilter(BaseProcessor):
     # Helpers                                                              #
     # ------------------------------------------------------------------ #
 
-    def _collect_reasons(self, face: dict) -> list:
+    def _collect_reasons(self, face: dict, mode: str = "recognition") -> list:
         reasons = []
         bbox = face.get("bbox")
         if not bbox:
@@ -544,6 +566,12 @@ class FaceQualityFilter(BaseProcessor):
         side = min(float(bbox[2] - bbox[0]), float(bbox[3] - bbox[1]))
         if side < self.min_face_size:
             reasons.append(f"min_size({side:.0f}px<{self.min_face_size}px)")
+
+        if mode == "registration":
+            detail = self._format_quality_detail(face)
+            if detail:
+                reasons.append(detail)
+            return reasons
 
         confidence = face.get("_quality_detection_confidence")
         if confidence is None:

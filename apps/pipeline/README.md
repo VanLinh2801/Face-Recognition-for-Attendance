@@ -34,9 +34,9 @@ ffmpeg -f dshow -rtbufsize 100M -thread_queue_size 512 -i video="Integrated Webc
 
 ```bash
 ffmpeg -f dshow -rtbufsize 1024M -thread_queue_size 4096 `
--framerate 10 -video_size 1280x720 -i video="HD Camera" `
+-framerate 30 -video_size 1280x720 -i video="HD Camera" `
 -vf "format=yuv420p" `
--c:v libx264 -preset ultrafast -tune zerolatency -crf 18 -maxrate 4000k -bufsize 8000k -g 20 `
+-c:v h264_nvenc -preset p1 -tune ull -rc cbr -b:v 4000k -maxrate 4000k -bufsize 1000k -g 30 -bf 0 `
 -f rtsp -rtsp_transport tcp rtsp://localhost:8554/mystream
 
 ```

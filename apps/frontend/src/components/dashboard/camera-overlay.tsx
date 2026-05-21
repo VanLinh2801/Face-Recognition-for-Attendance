@@ -19,7 +19,7 @@ export function CameraOverlay({ boxes, className }: CameraOverlayProps) {
         <div
           key={box.track_id}
           className={cn(
-            "absolute rounded-md border-2 transition-all duration-100",
+            "absolute rounded-md border-[3px] shadow-[0_0_0_1px_rgba(15,23,42,0.9),0_0_18px_rgba(255,255,255,0.35)]",
             box.color,
             box.tracking_state === "new" && "animate-pulse"
           )}

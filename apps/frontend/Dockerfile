@@ -7,11 +7,13 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG BACKEND_PROXY_TARGET=http://backend:8000
+ARG NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+ARG NEXT_PUBLIC_PIPELINE_WS_URL=ws://localhost:8002/ws/bbox
 ENV BACKEND_PROXY_TARGET=${BACKEND_PROXY_TARGET}
+ENV NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
+ENV NEXT_PUBLIC_PIPELINE_WS_URL=${NEXT_PUBLIC_PIPELINE_WS_URL}
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/frontend ./
-# Copy .env.local so NEXT_PUBLIC_* variables are embedded at build time
-COPY apps/frontend/.env.local .env.local
 RUN npm run build
 
 FROM node:22-alpine AS runner

@@ -163,9 +163,10 @@ export function PersonsTable({
       return;
     }
 
+    const actionId = currentId;
+
     function updateActionMenuPosition() {
-      if (!currentId) return;
-      const trigger = actionButtonRefs.current[currentId];
+      const trigger = actionButtonRefs.current[actionId];
       if (!trigger) {
         setActionMenuPosition(null);
         return;
@@ -188,7 +189,7 @@ export function PersonsTable({
     function handlePointerDown(event: PointerEvent) {
       if (!currentId) return;
       const menu = actionMenuRef.current;
-      const trigger = actionButtonRefs.current[currentId];
+      const trigger = actionButtonRefs.current[actionId];
       const target = event.target as Node;
       if (menu?.contains(target) || trigger?.contains(target)) return;
       setOpenActionId(null);

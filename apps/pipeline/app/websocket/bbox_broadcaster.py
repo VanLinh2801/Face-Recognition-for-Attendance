@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from typing import Set
 from fastapi import WebSocket
 from app.utils.logger import logger
@@ -55,6 +56,9 @@ class BBoxBroadcaster:
             "seq": context.get('frame_sequence', 0),
             "fw": fw,
             "fh": fh,
+            "cap": context.get('captured_at_ms'),
+            "det": (context.get('latency') or {}).get('capture_to_detector_done_ms'),
+            "send": time.time() * 1000.0,
             "tr": tracks,
         })
 

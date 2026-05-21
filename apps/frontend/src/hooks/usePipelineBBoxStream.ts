@@ -1,13 +1,16 @@
 "use client";
 
+/* eslint-disable react-hooks/immutability */
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { transformBBox } from "@/lib/overlay-utils";
 import type { OverlayRenderBox, BoundingBox } from "@/lib/types";
 import type { VideoDimensions } from "@/components/dashboard/webrtc-player";
 
-const WS_URL = process.env.NEXT_PUBLIC_PIPELINE_WS_URL ?? "ws://localhost:8000/ws/bbox";
-const MAX_EXTRAP_MS = 250;
-const LERP = 0.35;
+const WS_URL = process.env.NEXT_PUBLIC_PIPELINE_WS_URL ?? "ws://localhost:8002/ws/bbox";
+const MAX_EXTRAP_MS = 150;
+const POSITION_LERP = 1;
+const SIZE_LERP = 0.75;
 const TRACK_EXPIRY_MS = 3000;
 
 type Sample = {
@@ -24,6 +27,14 @@ type Track = {
   prev: { x: number; y: number; w: number; h: number } | null;
   conf: number;
   lastSeen: number;
+  latency?: {
+    seq?: number;
+    capturedAtMs?: number;
+    captureToDetectorMs?: number;
+    captureToWsSendMs?: number;
+    wsTransitMs?: number;
+    captureToReceiveMs?: number;
+  };
 };
 type Identity = { name: string; color: string };
 
@@ -35,6 +46,9 @@ export function usePipelineBBoxStream(dims: VideoDimensions | null, enabled = tr
   const frame = useRef({ fw: 1920, fh: 1080 });
   const raf = useRef(0);
   const alive = useRef(true);
+  const lastLatencyLogAt = useRef(0);
+  const reportedMissingLatency = useRef(false);
+  const lastSeq = useRef(-1);
 
   const setIdentity = useCallback((trackId: string, name: string, isUnknown: boolean) => {
     identities.current.set(trackId, {
@@ -47,8 +61,28 @@ export function usePipelineBBoxStream(dims: VideoDimensions | null, enabled = tr
     try {
       const m = JSON.parse(ev.data as string);
       if (m.e !== "d") return;
+      const seq = typeof m.seq === "number" ? m.seq : undefined;
+      if (seq !== undefined && seq <= lastSeq.current) {
+        return;
+      }
+      if (seq !== undefined) {
+        lastSeq.current = seq;
+      }
       frame.current = { fw: m.fw, fh: m.fh };
       const now = performance.now();
+      const receivedAtMs = Date.now();
+      const capturedAtMs = typeof m.cap === "number" ? m.cap : undefined;
+      const sentAtMs = typeof m.send === "number" ? m.send : undefined;
+      const latency = capturedAtMs
+        ? {
+            seq,
+            capturedAtMs,
+            captureToDetectorMs: typeof m.det === "number" ? m.det : undefined,
+            captureToWsSendMs: sentAtMs ? sentAtMs - capturedAtMs : undefined,
+            wsTransitMs: sentAtMs ? receivedAtMs - sentAtMs : undefined,
+            captureToReceiveMs: receivedAtMs - capturedAtMs,
+          }
+        : undefined;
       const seen = new Set<string>();
       for (const t of m.tr) {
         seen.add(t.t);
@@ -66,8 +100,9 @@ export function usePipelineBBoxStream(dims: VideoDimensions | null, enabled = tr
           ex.cur = s;
           ex.conf = t.c;
           ex.lastSeen = now;
+          ex.latency = latency;
         } else {
-          tracks.current.set(t.t, { cur: s, prev: null, conf: t.c, lastSeen: now });
+          tracks.current.set(t.t, { cur: s, prev: null, conf: t.c, lastSeen: now, latency });
         }
       }
       for (const k of tracks.current.keys()) {
@@ -79,6 +114,10 @@ export function usePipelineBBoxStream(dims: VideoDimensions | null, enabled = tr
         if (!tracks.current.has(k)) {
           identities.current.delete(k);
         }
+      }
+      if (!latency && m.tr?.length && !reportedMissingLatency.current) {
+        reportedMissingLatency.current = true;
+        console.warn("[BBOX_LATENCY] Missing latency fields. Rebuild/restart the pipeline container so WS payload includes cap/det/send.");
       }
     } catch {
       // ignore parse errors
@@ -105,10 +144,10 @@ export function usePipelineBBoxStream(dims: VideoDimensions | null, enabled = tr
         py = Math.max(0, Math.min(py, fh - s.h));
         let fx: number, fy: number, fww: number, fhh: number;
         if (tr.prev) {
-          fx = lerp(tr.prev.x, px, LERP);
-          fy = lerp(tr.prev.y, py, LERP);
-          fww = lerp(tr.prev.w, s.w, LERP);
-          fhh = lerp(tr.prev.h, s.h, LERP);
+          fx = lerp(tr.prev.x, px, POSITION_LERP);
+          fy = lerp(tr.prev.y, py, POSITION_LERP);
+          fww = lerp(tr.prev.w, s.w, SIZE_LERP);
+          fhh = lerp(tr.prev.h, s.h, SIZE_LERP);
         } else {
           fx = px;
           fy = py;
@@ -133,6 +172,25 @@ export function usePipelineBBoxStream(dims: VideoDimensions | null, enabled = tr
         });
       }
       setBoxes(out);
+      if (now - lastLatencyLogAt.current >= 2000) {
+        lastLatencyLogAt.current = now;
+        const firstTrack = tracks.current.values().next().value as Track | undefined;
+        const latency = firstTrack?.latency;
+        if (latency?.captureToReceiveMs !== undefined && latency.capturedAtMs !== undefined) {
+          const captureToReceiveMs = latency.captureToReceiveMs;
+          const capturedAtMs = latency.capturedAtMs;
+          requestAnimationFrame(() => {
+            console.log("[BBOX_LATENCY]", {
+              seq: latency.seq,
+              capture_to_detector_ms: latency.captureToDetectorMs,
+              capture_to_ws_send_ms: latency.captureToWsSendMs?.toFixed(1),
+              ws_transit_ms: latency.wsTransitMs?.toFixed(1),
+              capture_to_fe_receive_ms: captureToReceiveMs.toFixed(1),
+              capture_to_render_ms: (Date.now() - capturedAtMs).toFixed(1),
+            });
+          });
+        }
+      }
     }
     raf.current = requestAnimationFrame(animate);
   }, [dims]);
@@ -147,13 +205,11 @@ export function usePipelineBBoxStream(dims: VideoDimensions | null, enabled = tr
       setStatus("connecting");
       const wsUrl = WS_URL;
       console.log("[PIPELINE_WS] Attempting to connect to:", wsUrl);
-      // #region agent_debug
-      fetch('http://127.0.0.1:7570/ingest/32dbe2b0-146b-4955-96b9-f649b087a041',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3cf718'},body:JSON.stringify({sessionId:'3cf718',location:'usePipelineBBoxStream.ts:149',message:'WS_URL being connected',data:{wsUrl,timestamp:Date.now()},runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
       ws = new WebSocket(wsUrl);
       ws.onopen = () => {
         if (alive.current) {
           console.log("[PIPELINE_WS] Connected successfully");
+          lastSeq.current = -1;
           setStatus("connected");
         } else {
           ws?.close();

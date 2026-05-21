@@ -14,6 +14,7 @@ class CameraManager:
 
     async def _camera_loop(self, source: str):
         reader = StreamReader(source)
+        processing_task: asyncio.Task | None = None
         logger.info(f"Starting loop for camera: {source}")
         
         # Thử kết nối ban đầu, nếu lỗi thì tiếp tục thử lại thay vì return (Auto-reconnect)
@@ -31,15 +32,22 @@ class CameraManager:
                 # Đọc frame trong thread riêng để không block event loop
                 # Lưu ý: FRAME_INTERVAL không áp dụng ở đây vì RTSP đã tự điều tiết tốc độ
                 frame = await asyncio.to_thread(reader.read_frame)
-                if frame is not None:
-                    task = asyncio.create_task(self.process_callback(source, frame))
-                    task.add_done_callback(_on_task_done)
+                if frame is not None and (processing_task is None or processing_task.done()):
+                    if processing_task is not None:
+                        _on_task_done(processing_task)
+                    processing_task = asyncio.create_task(self.process_callback(source, frame))
                 # Throttle: chỉ lấy frame để xử lý theo FRAME_INTERVAL
                 # Background thread vẫn đọc 30fps để giữ _latest_frame luôn mới
                 await asyncio.sleep(settings.FRAME_INTERVAL)
         except asyncio.CancelledError:
             logger.info(f"Camera loop for {source} cancelled.")
         finally:
+            if processing_task is not None:
+                if processing_task.done():
+                    _on_task_done(processing_task)
+                else:
+                    processing_task.cancel()
+                    await asyncio.gather(processing_task, return_exceptions=True)
             reader.release()
 
     async def start_all(self):
