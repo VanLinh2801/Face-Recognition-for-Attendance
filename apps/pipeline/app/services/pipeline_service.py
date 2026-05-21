@@ -28,6 +28,8 @@ class PipelineService:
         self.frame_count = 0
         self.track_frame_refs = {}
         self._no_face_streak = 0
+        self._last_detector_scan = 0.0
+        self._motion_skip_streak = 0
 
     async def handle_realtime_frame(self, source_id: str, frame):
         capture_perf = time.perf_counter()
@@ -60,8 +62,19 @@ class PipelineService:
         context = self.motion_processor.process(context)
         motion = context.get('motion_detected')
         has_active_tracks = len(self.face_tracker.tracks) > 0
-        if not motion and not has_active_tracks:
+        now = time.time()
+        idle_scan_due = (now - self._last_detector_scan) >= settings.DETECTOR_IDLE_SCAN_INTERVAL
+        if not motion and not has_active_tracks and not idle_scan_due:
+            self._motion_skip_streak += 1
+            if self._motion_skip_streak % 100 == 1:
+                logger.debug(
+                    "[PIPELINE] Detector skipped motion=False active_tracks=0 streak=%s motion_ratio=%.5f",
+                    self._motion_skip_streak,
+                    float(context.get('motion_ratio') or 0.0),
+                )
             return
+        self._motion_skip_streak = 0
+        self._last_detector_scan = now
 
         # 2. Phát hiện khuôn mặt
         context = self.face_detector.process(context)

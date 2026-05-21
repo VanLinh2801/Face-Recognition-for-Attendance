@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # Thresholds & AI Settings
     MOTION_THRESHOLD: float = 0.005  # 0.5% pixel thay đổi → có chuyển động thực sự
     FRAME_INTERVAL: float = 0.033   # Giây giữa các lần đọc frame (~30 FPS)
+    DETECTOR_IDLE_SCAN_INTERVAL: float = 1.0 # Vẫn chạy detector định kỳ khi motion=False và không có active track
     
     # SCRFD & Tracking
     SCRFD_MODEL_PATH: str = r"app\models\scrfd_2.5g_bnkps.onnx"
